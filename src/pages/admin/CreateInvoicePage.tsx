@@ -230,7 +230,7 @@ export default function CreateInvoicePage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <Label>Total Amount *</Label>
-              <Input required type="number" step="0.01" min="0" value={form.total_amount} onChange={e => setForm({ ...form, total_amount: e.target.value })} className="mt-1.5" />
+              <Input required type="number" step="0.01" min="0" value={form.total_amount} onChange={e => { setForm({ ...form, total_amount: e.target.value }); if (installmentCount) generateInstallments(installmentCount, e.target.value); }} className="mt-1.5" />
             </div>
             <div>
               <Label>Currency</Label>

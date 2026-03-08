@@ -14,6 +14,8 @@ interface Installment {
   due_date: string;
 }
 
+const INSTALLMENT_OPTIONS = [2, 3, 4, 6, 12];
+
 export default function CreateInvoicePage() {
   const navigate = useNavigate();
   const [programs, setPrograms] = useState<any[]>([]);

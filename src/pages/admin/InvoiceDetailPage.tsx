@@ -46,17 +46,12 @@ export default function InvoiceDetailPage() {
       if (invoice?.enrollment_id) {
         const { data: allInstallments } = await supabase
           .from('installments')
-          .select('amount, status')
-          .eq('invoice_id', id);
+          .select('id, amount, status')
+          .eq('invoice_id', id!);
 
-        const totalPaid = (allInstallments || [])
-          .filter(i => i.id === installment.id ? newStatus === 'paid' : i.status === 'paid')
-          .reduce((sum, i) => sum + Number(i.amount), 0);
-
-        // Adjust for the current toggle
         const adjustedPaid = (allInstallments || []).reduce((sum, i) => {
-          if (i === installment) return sum + (newStatus === 'paid' ? Number(i.amount) : 0);
-          return sum + (i.status === 'paid' ? Number(i.amount) : 0);
+          const isPaidAfterToggle = i.id === installment.id ? newStatus === 'paid' : i.status === 'paid';
+          return sum + (isPaidAfterToggle ? Number(i.amount) : 0);
         }, 0);
 
         await supabase.from('enrollments').update({
@@ -64,15 +59,11 @@ export default function InvoiceDetailPage() {
           last_payment_date: newStatus === 'paid' ? new Date().toISOString() : null,
         }).eq('id', invoice.enrollment_id);
 
-        // Check if all installments are now paid
         const allPaidAfter = (allInstallments || []).every(i =>
           i.id === installment.id ? newStatus === 'paid' : i.status === 'paid'
         );
-        const invoiceStatus = allPaidAfter ? 'paid' : 'active';
-        await supabase.from('invoices').update({ status: invoiceStatus }).eq('id', id);
-
-        const enrollmentStatus = allPaidAfter ? 'completed' : 'active';
-        await supabase.from('enrollments').update({ enrollment_status: enrollmentStatus }).eq('id', invoice.enrollment_id);
+        await supabase.from('invoices').update({ status: allPaidAfter ? 'paid' : 'active' }).eq('id', id!);
+        await supabase.from('enrollments').update({ enrollment_status: allPaidAfter ? 'completed' : 'active' }).eq('id', invoice.enrollment_id);
       }
 
       toast.success(`Installment marked as ${newStatus}`);

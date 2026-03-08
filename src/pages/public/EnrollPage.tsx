@@ -6,18 +6,15 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { CheckCircle, Upload, GraduationCap } from 'lucide-react';
-import { CustomFieldsForm } from '@/components/enrollment/CustomFieldsForm';
 
 export default function EnrollPage() {
   const [programs, setPrograms] = useState<any[]>([]);
   const [cohorts, setCohorts] = useState<any[]>([]);
-  const [customFields, setCustomFields] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [evidenceUrl, setEvidenceUrl] = useState('');
   const [evidenceFileName, setEvidenceFileName] = useState('');
-  const [customValues, setCustomValues] = useState<Record<string, string>>({});
 
   const [form, setForm] = useState({
     full_name: '',

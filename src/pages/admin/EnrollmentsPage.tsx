@@ -30,7 +30,37 @@ export default function EnrollmentsPage() {
     fetchEnrollments();
   }, [statusFilter]);
 
-  const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
+  const getPaymentStatus = (r: any) => {
+    const paid = Number(r.amount_paid);
+    const total = Number(r.total_amount);
+    if (total <= 0) return 'N/A';
+    if (paid >= total) return 'Fully Paid';
+    if (paid > 0) return 'Partially Paid';
+    return 'Unpaid';
+  };
+
+  const filteredEnrollments = useMemo(() => {
+    if (paymentFilter === 'all') return enrollments;
+    return enrollments.filter(e => getPaymentStatus(e) === paymentFilter);
+  }, [enrollments, paymentFilter]);
+
+  const groupedEnrollments = useMemo(() => {
+    if (!groupByPayment) return null;
+    const groups: Record<string, any[]> = {};
+    filteredEnrollments.forEach(e => {
+      const status = getPaymentStatus(e);
+      if (!groups[status]) groups[status] = [];
+      groups[status].push(e);
+    });
+    return groups;
+  }, [filteredEnrollments, groupByPayment]);
+
+  const paymentBadgeStyle: Record<string, string> = {
+    'Fully Paid': 'bg-success/15 text-success border-success/30',
+    'Partially Paid': 'bg-warning/15 text-warning border-warning/30',
+    'Unpaid': 'bg-destructive/15 text-destructive border-destructive/30',
+    'N/A': 'bg-muted text-muted-foreground border-muted',
+  };
 
   const columns = [
     { key: 'full_name', header: 'Student' },
@@ -39,6 +69,10 @@ export default function EnrollmentsPage() {
     { key: 'cohort', header: 'Cohort', render: (r: any) => r.cohorts?.cohort_label || '—' },
     { key: 'organization', header: 'Sponsor', render: (r: any) => r.organizations?.organization_name || '—' },
     { key: 'total_amount', header: 'Total', render: (r: any) => formatCurrency(Number(r.total_amount)) },
+    { key: 'payment_status', header: 'Payment', render: (r: any) => {
+      const ps = getPaymentStatus(r);
+      return <Badge variant="outline" className={`font-medium ${paymentBadgeStyle[ps] || ''}`}>{ps}</Badge>;
+    }},
     { key: 'verification_status', header: 'Verification', render: (r: any) => {
       const s = r.verification_status;
       if (!s || s === 'pending') return r.payment_evidence_url
@@ -54,11 +88,24 @@ export default function EnrollmentsPage() {
     )},
   ];
 
+  const renderTable = (data: any[]) => (
+    <DataTable
+      columns={columns}
+      data={data}
+      onRowClick={(r) => navigate(`/admin/enrollments/${r.id}`)}
+      emptyMessage="No enrollments found"
+      searchable
+      searchPlaceholder="Search by name or email..."
+      exportable
+      exportFilename="enrollments"
+    />
+  );
+
   return (
     <div>
       <PageHeader title="Enrollments" description="Manage all student enrollments" />
 
-      <div className="flex gap-3 mb-6">
+      <div className="flex flex-wrap gap-3 mb-6 items-end">
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-40"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>
@@ -70,21 +117,48 @@ export default function EnrollmentsPage() {
             <SelectItem value="cancelled">Cancelled</SelectItem>
           </SelectContent>
         </Select>
+
+        <Select value={paymentFilter} onValueChange={setPaymentFilter}>
+          <SelectTrigger className="w-44"><SelectValue placeholder="Payment Status" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Payments</SelectItem>
+            <SelectItem value="Fully Paid">Fully Paid</SelectItem>
+            <SelectItem value="Partially Paid">Partially Paid</SelectItem>
+            <SelectItem value="Unpaid">Unpaid</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Button
+          variant={groupByPayment ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setGroupByPayment(!groupByPayment)}
+          className="h-10"
+        >
+          {groupByPayment ? <List className="h-4 w-4 mr-2" /> : <LayoutGrid className="h-4 w-4 mr-2" />}
+          {groupByPayment ? 'Flat View' : 'Group by Payment'}
+        </Button>
       </div>
 
       {loading ? (
         <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>
+      ) : groupByPayment && groupedEnrollments ? (
+        <div className="space-y-8">
+          {['Fully Paid', 'Partially Paid', 'Unpaid', 'N/A'].map(status => {
+            const items = groupedEnrollments[status];
+            if (!items || items.length === 0) return null;
+            return (
+              <div key={status}>
+                <div className="flex items-center gap-3 mb-3">
+                  <Badge variant="outline" className={`text-sm px-3 py-1 ${paymentBadgeStyle[status]}`}>{status}</Badge>
+                  <span className="text-sm text-muted-foreground">{items.length} student{items.length !== 1 ? 's' : ''}</span>
+                </div>
+                {renderTable(items)}
+              </div>
+            );
+          })}
+        </div>
       ) : (
-        <DataTable
-          columns={columns}
-          data={enrollments}
-          onRowClick={(r) => navigate(`/admin/enrollments/${r.id}`)}
-          emptyMessage="No enrollments found"
-          searchable
-          searchPlaceholder="Search by name or email..."
-          exportable
-          exportFilename="enrollments"
-        />
+        renderTable(filteredEnrollments)
       )}
     </div>
   );

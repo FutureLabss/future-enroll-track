@@ -66,6 +66,26 @@ export default function InvoiceDetailPage() {
         await supabase.from('enrollments').update({ enrollment_status: allPaidAfter ? 'completed' : 'active' }).eq('id', invoice.enrollment_id);
       }
 
+      // Send notification to student
+      if (newStatus === 'paid') {
+        try {
+          const allPaid = (allInstallments || []).every(i =>
+            i.id === installment.id ? true : i.status === 'paid'
+          );
+          await supabase.functions.invoke('send-notification', {
+            body: {
+              type: allPaid ? 'invoice_settled' : 'payment_received',
+              channel: 'both',
+              enrollment_id: invoice.enrollment_id,
+              invoice_id: id,
+              extra: { amount_paid: Number(installment.amount) },
+            },
+          });
+        } catch (notifErr) {
+          console.error('Notification failed:', notifErr);
+        }
+      }
+
       toast.success(`Installment marked as ${newStatus}`);
       fetchData();
     } catch (err: any) {

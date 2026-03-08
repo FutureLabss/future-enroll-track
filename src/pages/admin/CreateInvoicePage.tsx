@@ -73,13 +73,7 @@ export default function CreateInvoicePage() {
 
   const filteredCohorts = cohorts.filter(c => c.program_id === form.program_id);
 
-  const addInstallment = () => {
-    setInstallments([...installments, { amount: '', due_date: '' }]);
-  };
 
-  const removeInstallment = (i: number) => {
-    setInstallments(installments.filter((_, idx) => idx !== i));
-  };
 
   const updateInstallment = (i: number, field: keyof Installment, value: string) => {
     const updated = [...installments];

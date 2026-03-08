@@ -6,8 +6,10 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { AppLayout } from "@/components/layout/AppLayout";
 import LoginPage from "@/pages/auth/LoginPage";
+import ResetPasswordPage from "@/pages/auth/ResetPasswordPage";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import EnrollmentsPage from "@/pages/admin/EnrollmentsPage";
+import EnrollmentDetailPage from "@/pages/admin/EnrollmentDetailPage";
 import InvoicesPage from "@/pages/admin/InvoicesPage";
 import InvoiceDetailPage from "@/pages/admin/InvoiceDetailPage";
 import CreateInvoicePage from "@/pages/admin/CreateInvoicePage";
@@ -18,12 +20,14 @@ import OrganizationsPage from "@/pages/admin/OrganizationsPage";
 import CustomFieldsPage from "@/pages/admin/CustomFieldsPage";
 import NotificationsPage from "@/pages/admin/NotificationsPage";
 import ReportsPage from "@/pages/admin/ReportsPage";
+import AuditLogPage from "@/pages/admin/AuditLogPage";
 import StudentDashboard from "@/pages/student/StudentDashboard";
 import StudentInvoicesPage from "@/pages/student/StudentInvoicesPage";
 import StudentPaymentsPage from "@/pages/student/StudentPaymentsPage";
 import OrgDashboard from "@/pages/org/OrgDashboard";
 import OrgEnrollmentsPage from "@/pages/org/OrgEnrollmentsPage";
 import OrgReportsPage from "@/pages/org/OrgReportsPage";
+import ProfilePage from "@/pages/profile/ProfilePage";
 import EnrollPage from "@/pages/public/EnrollPage";
 import NotFound from "./pages/NotFound";
 
@@ -53,6 +57,7 @@ const App = () => (
         <AuthProvider>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/enroll" element={<EnrollPage />} />
             <Route path="/" element={<ProtectedRoute><RoleRedirect /></ProtectedRoute>} />
             
@@ -60,6 +65,7 @@ const App = () => (
             <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
               <Route path="/admin" element={<AdminDashboard />} />
               <Route path="/admin/enrollments" element={<EnrollmentsPage />} />
+              <Route path="/admin/enrollments/:id" element={<EnrollmentDetailPage />} />
               <Route path="/admin/invoices" element={<InvoicesPage />} />
               <Route path="/admin/invoices/:id" element={<InvoiceDetailPage />} />
               <Route path="/admin/invoices/new" element={<CreateInvoicePage />} />
@@ -70,6 +76,7 @@ const App = () => (
               <Route path="/admin/custom-fields" element={<CustomFieldsPage />} />
               <Route path="/admin/notifications" element={<NotificationsPage />} />
               <Route path="/admin/reports" element={<ReportsPage />} />
+              <Route path="/admin/audit-logs" element={<AuditLogPage />} />
               
               {/* Student routes */}
               <Route path="/student" element={<StudentDashboard />} />
@@ -80,6 +87,9 @@ const App = () => (
               <Route path="/org" element={<OrgDashboard />} />
               <Route path="/org/enrollments" element={<OrgEnrollmentsPage />} />
               <Route path="/org/reports" element={<OrgReportsPage />} />
+              
+              {/* Shared routes */}
+              <Route path="/profile" element={<ProfilePage />} />
             </Route>
             
             <Route path="*" element={<NotFound />} />

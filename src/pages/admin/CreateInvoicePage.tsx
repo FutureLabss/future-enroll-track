@@ -100,11 +100,12 @@ export default function CreateInvoicePage() {
         .from('invoices')
         .insert({
           enrollment_id: enrollment.id,
+          invoice_number: '',
           total_amount: totalAmount,
           currency: form.currency,
           payment_plan_type: form.payment_plan_type,
           status: 'active',
-        })
+        } as any)
         .select()
         .single();
 

@@ -82,6 +82,13 @@ export default function PaymentsPage() {
       }
 
       if (invoice) {
+        // Fetch enrollment to get program name for receipt
+        const { data: enrollmentData } = await supabase
+          .from('enrollments')
+          .select('programs(program_name)')
+          .eq('id', invoice.enrollment_id)
+          .single();
+
         try {
           await supabase.functions.invoke('send-notification', {
             body: {
@@ -89,7 +96,12 @@ export default function PaymentsPage() {
               channel: 'both',
               enrollment_id: invoice.enrollment_id,
               invoice_id: form.invoice_id,
-              extra: { amount_paid: amount },
+              extra: {
+                amount_paid: amount,
+                payment_reference: form.payment_reference,
+                payment_method: form.payment_method || null,
+                program_name: (enrollmentData as any)?.programs?.program_name || '',
+              },
             },
           });
         } catch (notifErr) {

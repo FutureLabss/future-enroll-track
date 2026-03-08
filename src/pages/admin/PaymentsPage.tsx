@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable } from '@/components/shared/DataTable';
+import { PaymentReceipt } from '@/components/shared/PaymentReceipt';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus } from 'lucide-react';
+import { Plus, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function PaymentsPage() {
@@ -17,11 +18,13 @@ export default function PaymentsPage() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ invoice_id: '', installment_id: '', amount: '', payment_reference: '', payment_method: '' });
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
 
   const fetchPayments = async () => {
     const { data } = await supabase
       .from('payments')
-      .select('*, invoices(invoice_number, enrollments(full_name))')
+      .select('*, invoices(invoice_number, enrollments(full_name, programs(program_name)))')
       .order('created_at', { ascending: false });
     setPayments(data || []);
     setLoading(false);
@@ -52,12 +55,10 @@ export default function PaymentsPage() {
       });
       if (error) throw error;
 
-      // Update installment if selected
       if (form.installment_id) {
         await supabase.from('installments').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', form.installment_id);
       }
 
-      // Update enrollment amount_paid
       const { data: invoice } = await supabase.from('invoices').select('enrollment_id').eq('id', form.invoice_id).single();
       if (invoice) {
         const { data: enrollment } = await supabase.from('enrollments').select('amount_paid').eq('id', invoice.enrollment_id).single();
@@ -71,7 +72,6 @@ export default function PaymentsPage() {
         }
       }
 
-      // Check if all installments paid
       const { data: remaining } = await supabase.from('installments').select('id').eq('invoice_id', form.invoice_id).neq('status', 'paid');
       const isFullyPaid = remaining && remaining.length === 0;
       if (isFullyPaid) {
@@ -81,7 +81,6 @@ export default function PaymentsPage() {
         }
       }
 
-      // Send payment notification
       if (invoice) {
         try {
           await supabase.functions.invoke('send-notification', {
@@ -109,6 +108,19 @@ export default function PaymentsPage() {
 
   const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
 
+  const openReceipt = (r: any) => {
+    setSelectedReceipt({
+      payment_reference: r.payment_reference,
+      amount: Number(r.amount),
+      payment_method: r.payment_method,
+      created_at: r.created_at,
+      invoice_number: r.invoices?.invoice_number || '—',
+      student_name: r.invoices?.enrollments?.full_name || '—',
+      program_name: r.invoices?.enrollments?.programs?.program_name || '',
+    });
+    setReceiptOpen(true);
+  };
+
   const columns = [
     { key: 'payment_reference', header: 'Reference' },
     { key: 'student', header: 'Student', render: (r: any) => r.invoices?.enrollments?.full_name || '—' },
@@ -116,6 +128,11 @@ export default function PaymentsPage() {
     { key: 'amount', header: 'Amount', render: (r: any) => formatCurrency(Number(r.amount)) },
     { key: 'payment_method', header: 'Method', render: (r: any) => r.payment_method || '—' },
     { key: 'created_at', header: 'Date', render: (r: any) => new Date(r.created_at).toLocaleDateString() },
+    { key: 'receipt', header: '', render: (r: any) => (
+      <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openReceipt(r); }}>
+        <FileText className="h-4 w-4 mr-1" /> Receipt
+      </Button>
+    )},
   ];
 
   return (
@@ -187,6 +204,8 @@ export default function PaymentsPage() {
       ) : (
         <DataTable columns={columns} data={payments} />
       )}
+
+      <PaymentReceipt open={receiptOpen} onOpenChange={setReceiptOpen} receipt={selectedReceipt} />
     </div>
   );
 }

@@ -9,6 +9,7 @@ import LoginPage from "@/pages/auth/LoginPage";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import EnrollmentsPage from "@/pages/admin/EnrollmentsPage";
 import InvoicesPage from "@/pages/admin/InvoicesPage";
+import InvoiceDetailPage from "@/pages/admin/InvoiceDetailPage";
 import CreateInvoicePage from "@/pages/admin/CreateInvoicePage";
 import PaymentsPage from "@/pages/admin/PaymentsPage";
 import ProgramsPage from "@/pages/admin/ProgramsPage";

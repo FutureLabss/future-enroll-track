@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import {
   Table,
   TableBody,
@@ -20,14 +21,12 @@ interface DataTableProps<T> {
   emptyMessage?: string;
 }
 
-export function DataTable<T extends Record<string, any>>({
-  columns,
-  data,
-  onRowClick,
-  emptyMessage = 'No data found',
-}: DataTableProps<T>) {
+function DataTableInner<T extends Record<string, any>>(
+  { columns, data, onRowClick, emptyMessage = 'No data found' }: DataTableProps<T>,
+  ref: React.ForwardedRef<HTMLDivElement>
+) {
   return (
-    <div className="glass-card rounded-xl overflow-hidden">
+    <div ref={ref} className="glass-card rounded-xl overflow-hidden">
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent border-border/50">
@@ -65,3 +64,7 @@ export function DataTable<T extends Record<string, any>>({
     </div>
   );
 }
+
+export const DataTable = forwardRef(DataTableInner) as <T extends Record<string, any>>(
+  props: DataTableProps<T> & { ref?: React.ForwardedRef<HTMLDivElement> }
+) => React.ReactElement;

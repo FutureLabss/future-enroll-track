@@ -137,11 +137,14 @@ export type Database = {
           last_payment_date: string | null
           organization_id: string | null
           outstanding_balance: number | null
+          payment_evidence_url: string | null
+          payment_type: string
           phone: string | null
           program_id: string
           total_amount: number
           updated_at: string
           user_id: string | null
+          verification_status: string
         }
         Insert: {
           amount_paid?: number
@@ -155,11 +158,14 @@ export type Database = {
           last_payment_date?: string | null
           organization_id?: string | null
           outstanding_balance?: number | null
+          payment_evidence_url?: string | null
+          payment_type?: string
           phone?: string | null
           program_id: string
           total_amount?: number
           updated_at?: string
           user_id?: string | null
+          verification_status?: string
         }
         Update: {
           amount_paid?: number
@@ -173,11 +179,14 @@ export type Database = {
           last_payment_date?: string | null
           organization_id?: string | null
           outstanding_balance?: number | null
+          payment_evidence_url?: string | null
+          payment_type?: string
           phone?: string | null
           program_id?: string
           total_amount?: number
           updated_at?: string
           user_id?: string | null
+          verification_status?: string
         }
         Relationships: [
           {

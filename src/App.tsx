@@ -23,6 +23,7 @@ import StudentPaymentsPage from "@/pages/student/StudentPaymentsPage";
 import OrgDashboard from "@/pages/org/OrgDashboard";
 import OrgEnrollmentsPage from "@/pages/org/OrgEnrollmentsPage";
 import OrgReportsPage from "@/pages/org/OrgReportsPage";
+import EnrollPage from "@/pages/public/EnrollPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -51,6 +52,7 @@ const App = () => (
         <AuthProvider>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/enroll" element={<EnrollPage />} />
             <Route path="/" element={<ProtectedRoute><RoleRedirect /></ProtectedRoute>} />
             
             {/* Admin routes */}

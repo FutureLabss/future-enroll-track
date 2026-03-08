@@ -76,7 +76,7 @@ async function sendWhatsApp(to: string, body: string) {
 }
 
 function buildEmailContent(type: string, data: Record<string, any>): { subject: string; html: string } {
-  const { full_name, invoice_number, total_amount, currency, due_date, amount_paid } = data;
+  const { full_name, invoice_number, total_amount, currency, due_date, amount_paid, payment_reference, payment_method, program_name } = data;
   const currencySymbol = currency === "USD" ? "$" : "₦";
   const formattedAmount = `${currencySymbol}${Number(total_amount).toLocaleString()}`;
   const formattedPaid = amount_paid ? `${currencySymbol}${Number(amount_paid).toLocaleString()}` : "";
@@ -93,6 +93,20 @@ function buildEmailContent(type: string, data: Record<string, any>): { subject: 
         <p>FutureEnroll Payment Tracking System</p>
       </div>
     </div>`;
+
+  const receiptBlock = `
+    <div style="background: #f0fdf4; border-radius: 8px; padding: 20px; margin: 16px 0; border: 1px solid #bbf7d0;">
+      <h3 style="margin: 0 0 12px; color: #166534; font-size: 16px; text-align: center;">🧾 PAYMENT RECEIPT</h3>
+      <table style="width: 100%; font-size: 14px; border-collapse: collapse;">
+        ${payment_reference ? `<tr><td style="padding: 6px 0; color: #6b7280;">Reference</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${payment_reference}</td></tr>` : ""}
+        <tr><td style="padding: 6px 0; color: #6b7280;">Invoice</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${invoice_number}</td></tr>
+        ${program_name ? `<tr><td style="padding: 6px 0; color: #6b7280;">Program</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${program_name}</td></tr>` : ""}
+        ${payment_method ? `<tr><td style="padding: 6px 0; color: #6b7280;">Method</td><td style="padding: 6px 0; text-align: right; font-weight: 600; text-transform: capitalize;">${payment_method.replace(/_/g, " ")}</td></tr>` : ""}
+        <tr><td style="padding: 6px 0; color: #6b7280;">Date</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${new Date().toLocaleDateString("en-NG", { year: "numeric", month: "long", day: "numeric" })}</td></tr>
+        <tr style="border-top: 2px solid #166534;"><td style="padding: 10px 0; font-weight: 700; font-size: 16px;">Amount Paid</td><td style="padding: 10px 0; text-align: right; font-weight: 700; font-size: 18px; color: #166534;">${formattedPaid}</td></tr>
+      </table>
+    </div>
+    <p style="font-size: 11px; color: #9ca3af; text-align: center;">This is a system-generated receipt. No signature required.</p>`;
 
   switch (type) {
     case "invoice_created":
@@ -113,15 +127,12 @@ function buildEmailContent(type: string, data: Record<string, any>): { subject: 
 
     case "payment_received":
       return {
-        subject: `Payment Received - ${invoice_number}`,
+        subject: `Payment Receipt - ${invoice_number}`,
         html: wrapper(`
           <h2 style="color: #1a1a2e;">Payment Confirmed</h2>
           <p>Hello ${full_name},</p>
-          <p>We've received your payment:</p>
-          <div style="background: #f0fdf4; border-radius: 8px; padding: 16px; margin: 16px 0; border-left: 4px solid #22c55e;">
-            <p style="margin: 4px 0;"><strong>Invoice:</strong> ${invoice_number}</p>
-            <p style="margin: 4px 0;"><strong>Amount Paid:</strong> ${formattedPaid}</p>
-          </div>
+          <p>We've received your payment. Here is your receipt:</p>
+          ${receiptBlock}
           <p>Thank you for your payment!</p>
         `),
       };

@@ -90,23 +90,6 @@ export default function EnrollPage() {
       } as any).select().single();
 
       if (error) throw error;
-
-      // Save custom field values
-      if (enrollment && customFields.length > 0) {
-        const fieldValues = customFields
-          .filter(f => customValues[f.key])
-          .map(f => ({
-            enrollment_id: enrollment.id,
-            field_id: f.id,
-            value: customValues[f.key],
-          }));
-
-        if (fieldValues.length > 0) {
-          const { error: fvError } = await supabase.from('field_values').insert(fieldValues);
-          if (fvError) console.error('Field values error:', fvError);
-        }
-      }
-
       setSubmitted(true);
     } catch (err: any) {
       toast.error(err.message);

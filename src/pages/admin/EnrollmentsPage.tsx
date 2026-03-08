@@ -13,6 +13,8 @@ export default function EnrollmentsPage() {
   const [enrollments, setEnrollments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [paymentFilter, setPaymentFilter] = useState('all');
+  const [groupByPayment, setGroupByPayment] = useState(false);
 
   useEffect(() => {
     const fetchEnrollments = async () => {

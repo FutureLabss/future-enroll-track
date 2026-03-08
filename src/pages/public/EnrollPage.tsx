@@ -6,15 +6,18 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { CheckCircle, Upload, GraduationCap } from 'lucide-react';
+import { CustomFieldsForm } from '@/components/enrollment/CustomFieldsForm';
 
 export default function EnrollPage() {
   const [programs, setPrograms] = useState<any[]>([]);
   const [cohorts, setCohorts] = useState<any[]>([]);
+  const [customFields, setCustomFields] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [evidenceUrl, setEvidenceUrl] = useState('');
   const [evidenceFileName, setEvidenceFileName] = useState('');
+  const [customValues, setCustomValues] = useState<Record<string, string>>({});
 
   const [form, setForm] = useState({
     full_name: '',
@@ -28,6 +31,7 @@ export default function EnrollPage() {
   useEffect(() => {
     supabase.from('programs').select('*').eq('active', true).then(({ data }) => setPrograms(data || []));
     supabase.from('cohorts').select('*').then(({ data }) => setCohorts(data || []));
+    supabase.from('custom_fields').select('*').eq('active', true).eq('visible_to_student', true).order('sort_order').then(({ data }) => setCustomFields(data || []));
   }, []);
 
   const filteredCohorts = cohorts.filter(c => c.program_id === form.program_id);
@@ -69,13 +73,21 @@ export default function EnrollPage() {
       toast.error('Please upload your payment receipt');
       return;
     }
+
+    // Validate required custom fields
+    const missingFields = customFields.filter(f => f.required && !customValues[f.key]?.trim());
+    if (missingFields.length > 0) {
+      toast.error(`Please fill in: ${missingFields.map(f => f.label).join(', ')}`);
+      return;
+    }
+
     setLoading(true);
 
     try {
       const totalAmount = parseFloat(form.total_amount);
       if (isNaN(totalAmount) || totalAmount <= 0) throw new Error('Invalid amount');
 
-      const { error } = await supabase.from('enrollments').insert({
+      const { data: enrollment, error } = await supabase.from('enrollments').insert({
         full_name: form.full_name,
         email: form.email,
         phone: form.phone || null,
@@ -86,15 +98,40 @@ export default function EnrollPage() {
         payment_evidence_url: evidenceUrl,
         verification_status: 'pending',
         enrollment_status: 'pending',
-      } as any);
+      } as any).select().single();
 
       if (error) throw error;
+
+      // Save custom field values
+      if (enrollment && customFields.length > 0) {
+        const fieldValues = customFields
+          .filter(f => customValues[f.key])
+          .map(f => ({
+            enrollment_id: enrollment.id,
+            field_id: f.id,
+            value: customValues[f.key],
+          }));
+
+        if (fieldValues.length > 0) {
+          const { error: fvError } = await supabase.from('field_values').insert(fieldValues);
+          if (fvError) console.error('Field values error:', fvError);
+        }
+      }
+
       setSubmitted(true);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
       setLoading(false);
     }
+  };
+
+  const resetForm = () => {
+    setSubmitted(false);
+    setForm({ full_name: '', email: '', phone: '', program_id: '', cohort_id: '', total_amount: '' });
+    setCustomValues({});
+    setEvidenceUrl('');
+    setEvidenceFileName('');
   };
 
   if (submitted) {
@@ -112,9 +149,7 @@ export default function EnrollPage() {
           <p className="text-sm text-muted-foreground">
             You'll receive a confirmation email once verified.
           </p>
-          <Button onClick={() => { setSubmitted(false); setForm({ full_name: '', email: '', phone: '', program_id: '', cohort_id: '', total_amount: '' }); setEvidenceUrl(''); setEvidenceFileName(''); }}>
-            Submit Another Enrollment
-          </Button>
+          <Button onClick={resetForm}>Submit Another Enrollment</Button>
         </div>
       </div>
     );
@@ -173,6 +208,15 @@ export default function EnrollPage() {
               </div>
             </div>
           </div>
+
+          {/* Dynamic Custom Fields */}
+          {customFields.length > 0 && (
+            <CustomFieldsForm
+              fields={customFields}
+              values={customValues}
+              onChange={(key, value) => setCustomValues(prev => ({ ...prev, [key]: value }))}
+            />
+          )}
 
           <div className="border-t border-border pt-6">
             <h2 className="font-heading font-semibold text-lg text-foreground mb-4">Program Selection</h2>

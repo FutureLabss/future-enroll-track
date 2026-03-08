@@ -1,0 +1,2 @@
+ALTER TABLE custom_fields DROP CONSTRAINT custom_fields_field_type_check;
+ALTER TABLE custom_fields ADD CONSTRAINT custom_fields_field_type_check CHECK (field_type = ANY (ARRAY['text','number','select','date','checkbox','textarea']));

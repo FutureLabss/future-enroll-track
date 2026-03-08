@@ -80,7 +80,7 @@ export default function InvoicesPage() {
       {loading ? (
         <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>
       ) : (
-        <DataTable columns={columns} data={filtered} />
+        <DataTable columns={columns} data={filtered} onRowClick={(inv) => navigate(`/admin/invoices/${inv.id}`)} />
       )}
     </div>
   );

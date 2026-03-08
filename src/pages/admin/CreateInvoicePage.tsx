@@ -36,6 +36,28 @@ export default function CreateInvoicePage() {
   });
 
   const [installments, setInstallments] = useState<Installment[]>([]);
+  const [installmentCount, setInstallmentCount] = useState<number>(0);
+
+  const generateInstallments = (count: number, total: string) => {
+    const totalAmount = parseFloat(total);
+    if (!count || isNaN(totalAmount) || totalAmount <= 0) {
+      setInstallments([]);
+      return;
+    }
+    const perInstallment = Math.floor((totalAmount / count) * 100) / 100;
+    const remainder = Math.round((totalAmount - perInstallment * count) * 100) / 100;
+    const today = new Date();
+
+    const newInstallments: Installment[] = Array.from({ length: count }, (_, i) => {
+      const dueDate = new Date(today);
+      dueDate.setMonth(dueDate.getMonth() + i + 1);
+      return {
+        amount: (i === 0 ? perInstallment + remainder : perInstallment).toFixed(2),
+        due_date: dueDate.toISOString().split('T')[0],
+      };
+    });
+    setInstallments(newInstallments);
+  };
 
   useEffect(() => {
     Promise.all([

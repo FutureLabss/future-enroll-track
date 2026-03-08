@@ -101,7 +101,6 @@ export default function EnrollPage() {
   const resetForm = () => {
     setSubmitted(false);
     setForm({ full_name: '', email: '', phone: '', program_id: '', cohort_id: '', total_amount: '' });
-    setCustomValues({});
     setEvidenceUrl('');
     setEvidenceFileName('');
   };

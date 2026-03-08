@@ -22,7 +22,8 @@ export default function LoginPage() {
       if (isSignUp) {
         const { error } = await signUp(email, password, fullName);
         if (error) throw error;
-        toast.success('Account created! Check your email to confirm.');
+        toast.success('Account created successfully!');
+        navigate('/');
       } else {
         const { error } = await signIn(email, password);
         if (error) throw error;

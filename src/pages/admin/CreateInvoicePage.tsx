@@ -7,12 +7,14 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus } from 'lucide-react';
 
 interface Installment {
   amount: string;
   due_date: string;
 }
+
+const INSTALLMENT_OPTIONS = [2, 3, 4, 6, 12];
 
 export default function CreateInvoicePage() {
   const navigate = useNavigate();
@@ -34,6 +36,28 @@ export default function CreateInvoicePage() {
   });
 
   const [installments, setInstallments] = useState<Installment[]>([]);
+  const [installmentCount, setInstallmentCount] = useState<number>(0);
+
+  const generateInstallments = (count: number, total: string) => {
+    const totalAmount = parseFloat(total);
+    if (!count || isNaN(totalAmount) || totalAmount <= 0) {
+      setInstallments([]);
+      return;
+    }
+    const perInstallment = Math.floor((totalAmount / count) * 100) / 100;
+    const remainder = Math.round((totalAmount - perInstallment * count) * 100) / 100;
+    const today = new Date();
+
+    const newInstallments: Installment[] = Array.from({ length: count }, (_, i) => {
+      const dueDate = new Date(today);
+      dueDate.setMonth(dueDate.getMonth() + i + 1);
+      return {
+        amount: (i === 0 ? perInstallment + remainder : perInstallment).toFixed(2),
+        due_date: dueDate.toISOString().split('T')[0],
+      };
+    });
+    setInstallments(newInstallments);
+  };
 
   useEffect(() => {
     Promise.all([
@@ -49,13 +73,7 @@ export default function CreateInvoicePage() {
 
   const filteredCohorts = cohorts.filter(c => c.program_id === form.program_id);
 
-  const addInstallment = () => {
-    setInstallments([...installments, { amount: '', due_date: '' }]);
-  };
 
-  const removeInstallment = (i: number) => {
-    setInstallments(installments.filter((_, idx) => idx !== i));
-  };
 
   const updateInstallment = (i: number, field: keyof Installment, value: string) => {
     const updated = [...installments];
@@ -206,7 +224,7 @@ export default function CreateInvoicePage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <Label>Total Amount *</Label>
-              <Input required type="number" step="0.01" min="0" value={form.total_amount} onChange={e => setForm({ ...form, total_amount: e.target.value })} className="mt-1.5" />
+              <Input required type="number" step="0.01" min="0" value={form.total_amount} onChange={e => { setForm({ ...form, total_amount: e.target.value }); if (installmentCount) generateInstallments(installmentCount, e.target.value); }} className="mt-1.5" />
             </div>
             <div>
               <Label>Currency</Label>
@@ -220,7 +238,7 @@ export default function CreateInvoicePage() {
             </div>
             <div>
               <Label>Payment Plan</Label>
-              <Select value={form.payment_plan_type} onValueChange={(v: 'single' | 'installment') => { setForm({ ...form, payment_plan_type: v }); if (v === 'single') setInstallments([]); }}>
+              <Select value={form.payment_plan_type} onValueChange={(v: 'single' | 'installment') => { setForm({ ...form, payment_plan_type: v }); if (v === 'single') { setInstallments([]); setInstallmentCount(0); } }}>
                 <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="single">Single Payment</SelectItem>
@@ -235,12 +253,19 @@ export default function CreateInvoicePage() {
           <div className="border-t border-border pt-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-heading font-semibold">Installments</h3>
-              <Button type="button" variant="outline" size="sm" onClick={addInstallment}>
-                <Plus className="h-4 w-4 mr-1" /> Add
-              </Button>
+              <div className="flex items-center gap-2">
+                <Label className="text-sm">Split into</Label>
+                <Select value={installmentCount ? String(installmentCount) : ''} onValueChange={v => { const count = parseInt(v); setInstallmentCount(count); generateInstallments(count, form.total_amount); }}>
+                  <SelectTrigger className="w-24"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    {INSTALLMENT_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>{n} parts</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             {installments.map((inst, i) => (
               <div key={i} className="flex gap-3 mb-3 items-end">
+                <div className="w-12 flex items-center justify-center text-sm font-medium text-muted-foreground">{i + 1}.</div>
                 <div className="flex-1">
                   <Label>Amount</Label>
                   <Input type="number" step="0.01" value={inst.amount} onChange={e => updateInstallment(i, 'amount', e.target.value)} className="mt-1" />
@@ -249,13 +274,10 @@ export default function CreateInvoicePage() {
                   <Label>Due Date</Label>
                   <Input type="date" value={inst.due_date} onChange={e => updateInstallment(i, 'due_date', e.target.value)} className="mt-1" />
                 </div>
-                <Button type="button" variant="ghost" size="icon" onClick={() => removeInstallment(i)}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
               </div>
             ))}
             {installments.length === 0 && (
-              <p className="text-sm text-muted-foreground">Add installments to define the payment schedule.</p>
+              <p className="text-sm text-muted-foreground">Select the number of installments above. Amount will be split evenly with monthly due dates.</p>
             )}
           </div>
         )}

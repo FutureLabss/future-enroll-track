@@ -131,6 +131,20 @@ export default function CreateInvoicePage() {
         if (instError) throw instError;
       }
 
+      // Send invoice created notification
+      try {
+        await supabase.functions.invoke('send-notification', {
+          body: {
+            type: 'invoice_created',
+            channel: 'both',
+            enrollment_id: enrollment.id,
+            invoice_id: invoice.id,
+          },
+        });
+      } catch (notifErr) {
+        console.error('Notification failed:', notifErr);
+      }
+
       toast.success(`Invoice ${invoice.invoice_number} created!`);
       navigate('/admin/invoices');
     } catch (err: any) {

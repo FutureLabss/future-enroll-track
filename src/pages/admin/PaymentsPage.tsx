@@ -73,10 +73,28 @@ export default function PaymentsPage() {
 
       // Check if all installments paid
       const { data: remaining } = await supabase.from('installments').select('id').eq('invoice_id', form.invoice_id).neq('status', 'paid');
-      if (remaining && remaining.length === 0) {
+      const isFullyPaid = remaining && remaining.length === 0;
+      if (isFullyPaid) {
         await supabase.from('invoices').update({ status: 'paid' }).eq('id', form.invoice_id);
         if (invoice) {
           await supabase.from('enrollments').update({ enrollment_status: 'completed' }).eq('id', invoice.enrollment_id);
+        }
+      }
+
+      // Send payment notification
+      if (invoice) {
+        try {
+          await supabase.functions.invoke('send-notification', {
+            body: {
+              type: isFullyPaid ? 'invoice_settled' : 'payment_received',
+              channel: 'both',
+              enrollment_id: invoice.enrollment_id,
+              invoice_id: form.invoice_id,
+              extra: { amount_paid: amount },
+            },
+          });
+        } catch (notifErr) {
+          console.error('Notification failed:', notifErr);
         }
       }
 

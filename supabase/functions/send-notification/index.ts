@@ -175,11 +175,8 @@ function buildEmailContent(type: string, data: Record<string, any>): { subject: 
         html: wrapper(`
           <h2 style="color: #22c55e;">Invoice Settled!</h2>
           <p>Hello ${full_name},</p>
-          <p>Your invoice has been fully paid:</p>
-          <div style="background: #f0fdf4; border-radius: 8px; padding: 16px; margin: 16px 0; border-left: 4px solid #22c55e;">
-            <p style="margin: 4px 0;"><strong>Invoice:</strong> ${invoice_number}</p>
-            <p style="margin: 4px 0;"><strong>Total Paid:</strong> ${formattedAmount}</p>
-          </div>
+          <p>Your invoice has been fully paid. Here is your final payment receipt:</p>
+          ${receiptBlock}
           <p>Thank you for completing your payment!</p>
         `),
       };

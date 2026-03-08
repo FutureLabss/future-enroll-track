@@ -1,0 +1,1 @@
+UPDATE enrollments SET phone = '+2347032400529' WHERE id = '0a1b08af-c30b-4514-b7a8-ff7a6a581eba';

@@ -188,7 +188,22 @@ export default function CreateInvoicePage() {
           </div>
           <div>
             <Label>Phone</Label>
-            <Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} className="mt-1.5" />
+            <Input
+              value={form.phone}
+              onChange={e => {
+                const val = e.target.value;
+                if (val === '' || /^\+?[0-9]*$/.test(val)) {
+                  setForm({ ...form, phone: val });
+                }
+              }}
+              className="mt-1.5"
+              placeholder="+2347032400529"
+              pattern="^\+[1-9]\d{6,14}$"
+              title="Enter phone in international format, e.g. +2347032400529"
+            />
+            {form.phone && !/^\+[1-9]\d{6,14}$/.test(form.phone) && (
+              <p className="text-xs text-destructive mt-1">Use international format: +234...</p>
+            )}
           </div>
           <div>
             <Label>Program *</Label>

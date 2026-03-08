@@ -259,12 +259,19 @@ export default function CreateInvoicePage() {
           <div className="border-t border-border pt-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-heading font-semibold">Installments</h3>
-              <Button type="button" variant="outline" size="sm" onClick={addInstallment}>
-                <Plus className="h-4 w-4 mr-1" /> Add
-              </Button>
+              <div className="flex items-center gap-2">
+                <Label className="text-sm">Split into</Label>
+                <Select value={installmentCount ? String(installmentCount) : ''} onValueChange={v => { const count = parseInt(v); setInstallmentCount(count); generateInstallments(count, form.total_amount); }}>
+                  <SelectTrigger className="w-24"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    {INSTALLMENT_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>{n} parts</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             {installments.map((inst, i) => (
               <div key={i} className="flex gap-3 mb-3 items-end">
+                <div className="w-12 flex items-center justify-center text-sm font-medium text-muted-foreground">{i + 1}.</div>
                 <div className="flex-1">
                   <Label>Amount</Label>
                   <Input type="number" step="0.01" value={inst.amount} onChange={e => updateInstallment(i, 'amount', e.target.value)} className="mt-1" />
@@ -273,13 +280,10 @@ export default function CreateInvoicePage() {
                   <Label>Due Date</Label>
                   <Input type="date" value={inst.due_date} onChange={e => updateInstallment(i, 'due_date', e.target.value)} className="mt-1" />
                 </div>
-                <Button type="button" variant="ghost" size="icon" onClick={() => removeInstallment(i)}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
               </div>
             ))}
             {installments.length === 0 && (
-              <p className="text-sm text-muted-foreground">Add installments to define the payment schedule.</p>
+              <p className="text-sm text-muted-foreground">Select the number of installments above. Amount will be split evenly with monthly due dates.</p>
             )}
           </div>
         )}

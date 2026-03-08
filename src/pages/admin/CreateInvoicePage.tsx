@@ -244,7 +244,7 @@ export default function CreateInvoicePage() {
             </div>
             <div>
               <Label>Payment Plan</Label>
-              <Select value={form.payment_plan_type} onValueChange={(v: 'single' | 'installment') => { setForm({ ...form, payment_plan_type: v }); if (v === 'single') setInstallments([]); }}>
+              <Select value={form.payment_plan_type} onValueChange={(v: 'single' | 'installment') => { setForm({ ...form, payment_plan_type: v }); if (v === 'single') { setInstallments([]); setInstallmentCount(0); } }}>
                 <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="single">Single Payment</SelectItem>

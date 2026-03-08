@@ -30,6 +30,8 @@ export default function EnrollmentsPage() {
     fetchEnrollments();
   }, [statusFilter]);
 
+  const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
+
   const getPaymentStatus = (r: any) => {
     const paid = Number(r.amount_paid);
     const total = Number(r.total_amount);

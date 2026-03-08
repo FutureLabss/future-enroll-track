@@ -6,7 +6,8 @@ import { DataTable } from '@/components/shared/DataTable';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Eye } from 'lucide-react';
+import { Eye, LayoutGrid, List } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 export default function EnrollmentsPage() {
   const navigate = useNavigate();

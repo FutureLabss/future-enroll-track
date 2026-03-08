@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { StatCard } from '@/components/shared/StatCard';
 import { DataTable } from '@/components/shared/DataTable';
 import { StatusBadge } from '@/components/shared/StatusBadge';
+import { CompleteProfileBanner } from '@/components/enrollment/CompleteProfileBanner';
 import { FileText, CreditCard, AlertTriangle } from 'lucide-react';
 
 export default function StudentDashboard() {
@@ -39,6 +40,7 @@ export default function StudentDashboard() {
   return (
     <div>
       <PageHeader title="My Dashboard" description="Overview of your enrollments and payments" />
+      <CompleteProfileBanner />
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <StatCard title="Total Owed" value={formatCurrency(totalOwed)} icon={FileText} />
         <StatCard title="Total Paid" value={formatCurrency(totalPaid)} icon={CreditCard} />

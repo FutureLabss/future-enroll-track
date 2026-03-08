@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { StatCard } from '@/components/shared/StatCard';
 import { DataTable } from '@/components/shared/DataTable';
 import { StatusBadge } from '@/components/shared/StatusBadge';
+import { CompleteProfileBanner } from '@/components/enrollment/CompleteProfileBanner';
 import { FileText, CreditCard, AlertTriangle } from 'lucide-react';
 
 export default function StudentDashboard() {

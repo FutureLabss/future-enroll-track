@@ -180,15 +180,6 @@ export default function EnrollPage() {
             </div>
           </div>
 
-          {/* Dynamic Custom Fields */}
-          {customFields.length > 0 && (
-            <CustomFieldsForm
-              fields={customFields}
-              values={customValues}
-              onChange={(key, value) => setCustomValues(prev => ({ ...prev, [key]: value }))}
-            />
-          )}
-
           <div className="border-t border-border pt-6">
             <h2 className="font-heading font-semibold text-lg text-foreground mb-4">Program Selection</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

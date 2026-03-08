@@ -70,13 +70,6 @@ export default function EnrollPage() {
       return;
     }
 
-    // Validate required custom fields
-    const missingFields = customFields.filter(f => f.required && !customValues[f.key]?.trim());
-    if (missingFields.length > 0) {
-      toast.error(`Please fill in: ${missingFields.map(f => f.label).join(', ')}`);
-      return;
-    }
-
     setLoading(true);
 
     try {

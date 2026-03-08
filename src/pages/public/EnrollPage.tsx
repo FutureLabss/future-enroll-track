@@ -28,7 +28,6 @@ export default function EnrollPage() {
   useEffect(() => {
     supabase.from('programs').select('*').eq('active', true).then(({ data }) => setPrograms(data || []));
     supabase.from('cohorts').select('*').then(({ data }) => setCohorts(data || []));
-    supabase.from('custom_fields').select('*').eq('active', true).eq('visible_to_student', true).order('sort_order').then(({ data }) => setCustomFields(data || []));
   }, []);
 
   const filteredCohorts = cohorts.filter(c => c.program_id === form.program_id);

@@ -556,6 +556,14 @@ export type Database = {
         }
         Returns: boolean
       }
+      link_enrollment_to_user: {
+        Args: { p_enrollment_id: string }
+        Returns: undefined
+      }
+      submit_enrollment_fields: {
+        Args: { p_enrollment_id: string; p_fields: Json }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "admin" | "student" | "organization"

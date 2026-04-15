@@ -270,6 +270,36 @@ Deno.serve(async (req) => {
 
     const results: string[] = [];
 
+    // Admin notification emails for new enrollments
+    const ADMIN_NOTIFY_EMAILS = ["manny@futurelabs.com.ng", "hello@futurelabs.africa"];
+    if (type === "invoice_created") {
+      for (const adminEmail of ADMIN_NOTIFY_EMAILS) {
+        try {
+          const adminSubject = `New Enrollment: ${enrollment.full_name} - ${invoice?.invoice_number || "N/A"}`;
+          const programName = enrollment.programs?.program_name || "N/A";
+          const adminHtml = `
+            <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <div style="background: linear-gradient(135deg, #1a1a2e, #16213e); padding: 24px; text-align: center; border-radius: 12px 12px 0 0;">
+                <h1 style="color: #fff; margin: 0; font-size: 20px;">New Enrollment Alert</h1>
+              </div>
+              <div style="padding: 24px; background: #fff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+                <p><strong>Student:</strong> ${enrollment.full_name}</p>
+                <p><strong>Email:</strong> ${enrollment.email}</p>
+                <p><strong>Phone:</strong> ${enrollment.phone || "N/A"}</p>
+                <p><strong>Program:</strong> ${programName}</p>
+                <p><strong>Invoice:</strong> ${invoice?.invoice_number || "N/A"}</p>
+                <p><strong>Amount:</strong> ${templateData.currency === "USD" ? "$" : "₦"}${Number(templateData.total_amount).toLocaleString()}</p>
+              </div>
+            </div>`;
+          await sendEmail(adminEmail, adminSubject, adminHtml);
+          results.push(`admin_email_sent_${adminEmail}`);
+        } catch (e: unknown) {
+          console.error(`Admin email error (${adminEmail}):`, e);
+          results.push(`admin_email_failed_${adminEmail}`);
+        }
+      }
+    }
+
     // Send email
     if (channel === "email" || channel === "both") {
       try {

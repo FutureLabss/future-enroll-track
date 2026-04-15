@@ -25,7 +25,7 @@ async function sendEmail(to: string, subject: string, html: string) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: "EnoAbasi <notifications@futurelabs.ng>",
+      from: "FutureLabs <notifications@futurelabs.ng>",
       to: [to],
       subject,
       html,
@@ -76,7 +76,7 @@ async function sendWhatsApp(to: string, body: string) {
 }
 
 function buildEmailContent(type: string, data: Record<string, any>): { subject: string; html: string } {
-  const { full_name, invoice_number, total_amount, currency, due_date, amount_paid, payment_reference, payment_method, program_name } = data;
+  const { full_name, invoice_number, total_amount, currency, due_date, amount_paid, payment_reference, payment_method, program_name, enrollment_id, FRONTEND_URL } = data;
   const currencySymbol = currency === "USD" ? "$" : "₦";
   const formattedAmount = `${currencySymbol}${Number(total_amount).toLocaleString()}`;
   const formattedPaid = amount_paid ? `${currencySymbol}${Number(amount_paid).toLocaleString()}` : "";
@@ -122,6 +122,11 @@ function buildEmailContent(type: string, data: Record<string, any>): { subject: 
             ${due_date ? `<p style="margin: 4px 0;"><strong>Due Date:</strong> ${due_date}</p>` : ""}
           </div>
           <p>Please ensure timely payment to avoid late fees.</p>
+          <div style="margin-top: 24px; padding: 16px; border: 1px solid #e5e7eb; border-radius: 8px; background: #ffffff;">
+            <h3 style="margin-top: 0;">Action Required: Complete Your Enrollment</h3>
+            <p>Please complete your profile to finalize your enrollment.</p>
+            <a href="${FRONTEND_URL}/enroll/complete/${enrollment_id}" style="display: inline-block; padding: 10px 20px; background: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Complete Enrollment Profile</a>
+          </div>
         `),
       };
 
@@ -187,14 +192,14 @@ function buildEmailContent(type: string, data: Record<string, any>): { subject: 
 }
 
 function buildWhatsAppMessage(type: string, data: Record<string, any>): string {
-  const { full_name, invoice_number, total_amount, currency, due_date, amount_paid } = data;
+  const { full_name, invoice_number, total_amount, currency, due_date, amount_paid, enrollment_id, FRONTEND_URL } = data;
   const sym = currency === "USD" ? "$" : "₦";
   const amt = `${sym}${Number(total_amount).toLocaleString()}`;
   const paid = amount_paid ? `${sym}${Number(amount_paid).toLocaleString()}` : "";
 
   switch (type) {
     case "invoice_created":
-      return `🧾 *New Invoice Created*\n\nHi ${full_name},\nInvoice: ${invoice_number}\nAmount: ${amt}\n${due_date ? `Due: ${due_date}` : ""}\n\nPlease ensure timely payment.`;
+      return `🧾 *New Invoice Created*\n\nHi ${full_name},\nInvoice: ${invoice_number}\nAmount: ${amt}\n${due_date ? `Due: ${due_date}` : ""}\n\nAction Required: Please complete your enrollment profile here:\n${FRONTEND_URL}/enroll/complete/${enrollment_id}\n\nPlease ensure timely payment.`;
     case "payment_received":
       return `✅ *Payment Received*\n\nHi ${full_name},\nInvoice: ${invoice_number}\nAmount Paid: ${paid}\n\nThank you!`;
     case "payment_reminder":
@@ -258,6 +263,8 @@ Deno.serve(async (req) => {
       currency: invoice?.currency || "NGN",
       due_date: nextDue?.due_date || extra?.due_date || "",
       amount_paid: extra?.amount_paid || enrollment.amount_paid,
+      enrollment_id: enrollment_id,
+      FRONTEND_URL: Deno.env.get("FRONTEND_URL") || "http://localhost:8080",
       ...extra,
     };
 

@@ -29,6 +29,7 @@ import OrgEnrollmentsPage from "@/pages/org/OrgEnrollmentsPage";
 import OrgReportsPage from "@/pages/org/OrgReportsPage";
 import ProfilePage from "@/pages/profile/ProfilePage";
 import EnrollPage from "@/pages/public/EnrollPage";
+import EnrollCompletePage from "@/pages/public/EnrollCompletePage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -59,6 +60,7 @@ const App = () => (
             <Route path="/login" element={<LoginPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/enroll" element={<EnrollPage />} />
+            <Route path="/enroll/complete/:id" element={<EnrollCompletePage />} />
             <Route path="/" element={<ProtectedRoute><RoleRedirect /></ProtectedRoute>} />
             
             {/* Admin routes */}

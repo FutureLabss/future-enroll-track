@@ -286,9 +286,9 @@ Deno.serve(async (req) => {
           user_id: enrollment.user_id,
           sent_at: new Date().toISOString(),
         });
-      } catch (e) {
+      } catch (e: unknown) {
         console.error("Email error:", e);
-        results.push(`email_failed: ${e.message}`);
+        results.push(`email_failed: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
 
@@ -308,19 +308,19 @@ Deno.serve(async (req) => {
           user_id: enrollment.user_id,
           sent_at: new Date().toISOString(),
         });
-      } catch (e) {
+      } catch (e: unknown) {
         console.error("WhatsApp error:", e);
-        results.push(`whatsapp_failed: ${e.message}`);
+        results.push(`whatsapp_failed: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
 
     return new Response(JSON.stringify({ success: true, results }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Notification error:", error);
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ success: false, error: error instanceof Error ? error.message : String(error) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

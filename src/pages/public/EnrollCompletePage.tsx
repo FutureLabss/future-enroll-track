@@ -115,10 +115,10 @@ export default function EnrollCompletePage() {
 
       if (!enrollment.user_id && user) {
         // Link enrollment securely immediately since they are logged in
-        await supabase.rpc('link_enrollment_to_user', { p_enrollment_id: id });
+        await supabase.rpc('link_enrollment_to_user' as any, { p_enrollment_id: id });
       }
 
-      const { error } = await supabase.rpc('submit_enrollment_fields', {
+      const { error } = await supabase.rpc('submit_enrollment_fields' as any, {
         p_enrollment_id: id,
         p_fields: formValues
       });

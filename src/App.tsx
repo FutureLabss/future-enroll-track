@@ -60,7 +60,13 @@ const App = () => (
             <Route path="/login" element={<LoginPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/enroll" element={<EnrollPage />} />
-            <Route path="/enroll/complete/:id" element={<EnrollCompletePage />} />
+            <Route path="/students/:id" element={<StudentSignupPage />} />
+            {/* Backward compatibility for older invitation links */}
+            <Route path="/enroll/complete/:id" element={<Navigate to="/students/:id" replace />} />
+            <Route
+              path="/enroll/complete/:id"
+              element={<StudentSignupPage />}
+            />
             <Route path="/" element={<ProtectedRoute><RoleRedirect /></ProtectedRoute>} />
             
             {/* Admin routes */}

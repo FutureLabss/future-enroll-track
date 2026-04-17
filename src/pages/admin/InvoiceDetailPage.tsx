@@ -5,7 +5,12 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { ArrowLeft, CheckCircle, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, Trash2 } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function InvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -14,6 +19,22 @@ export default function InvoiceDetailPage() {
   const [installments, setInstallments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const { isAdmin } = useAuth();
+
+  const handleDelete = async () => {
+    if (!id) return;
+    setDeleting(true);
+    try {
+      const { error } = await supabase.rpc('admin_delete_invoice' as any, { p_invoice_id: id });
+      if (error) throw error;
+      toast.success('Invoice deleted');
+      navigate('/admin/invoices');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete invoice');
+      setDeleting(false);
+    }
+  };
 
   const fetchData = async () => {
     if (!id) return;
@@ -113,9 +134,35 @@ export default function InvoiceDetailPage() {
         title={`Invoice ${invoice.invoice_number}`}
         description={`${invoice.enrollments?.full_name} — ${invoice.enrollments?.programs?.program_name || ''}`}
         actions={
-          <Button variant="outline" onClick={() => navigate('/admin/invoices')}>
-            <ArrowLeft className="h-4 w-4 mr-2" /> Back
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => navigate('/admin/invoices')}>
+              <ArrowLeft className="h-4 w-4 mr-2" /> Back
+            </Button>
+            {isAdmin && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" disabled={deleting}>
+                    <Trash2 className="h-4 w-4 mr-2" /> Delete
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete invoice {invoice.invoice_number}?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This permanently removes the invoice, its installments, and any recorded payments.
+                      The enrollment's payment totals will be recalculated. This cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                      Delete invoice
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
         }
       />
 

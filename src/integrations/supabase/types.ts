@@ -549,6 +549,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_delete_invoice: {
+        Args: { p_invoice_id: string }
+        Returns: undefined
+      }
       get_enrollment_field_values: {
         Args: { p_enrollment_id: string }
         Returns: {

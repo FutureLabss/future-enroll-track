@@ -549,6 +549,23 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_enrollment_field_values: {
+        Args: { p_enrollment_id: string }
+        Returns: {
+          field_key: string
+          value: string
+        }[]
+      }
+      get_enrollment_for_completion: {
+        Args: { p_enrollment_id: string }
+        Returns: {
+          email: string
+          full_name: string
+          id: string
+          program_name: string
+          user_id: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

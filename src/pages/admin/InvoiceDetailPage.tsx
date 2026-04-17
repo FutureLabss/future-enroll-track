@@ -19,6 +19,22 @@ export default function InvoiceDetailPage() {
   const [installments, setInstallments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const { isAdmin } = useAuth();
+
+  const handleDelete = async () => {
+    if (!id) return;
+    setDeleting(true);
+    try {
+      const { error } = await supabase.rpc('admin_delete_invoice' as any, { p_invoice_id: id });
+      if (error) throw error;
+      toast.success('Invoice deleted');
+      navigate('/admin/invoices');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete invoice');
+      setDeleting(false);
+    }
+  };
 
   const fetchData = async () => {
     if (!id) return;

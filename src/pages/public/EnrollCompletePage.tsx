@@ -27,43 +27,41 @@ export default function EnrollCompletePage() {
     
     async function loadData() {
       try {
-        // Fetch enrollment
-        const { data: enrollData, error: enrollErr } = await supabase
-          .from('enrollments')
-          .select('*, programs(program_name)')
-          .eq('id', id)
-          .single();
-          
+        // Fetch enrollment via security-definer RPC (works for both anon and auth users)
+        const { data: enrollRows, error: enrollErr } = await supabase
+          .rpc('get_enrollment_for_completion' as any, { p_enrollment_id: id });
+
+        const enrollData = Array.isArray(enrollRows) ? enrollRows[0] : null;
+
         if (enrollErr || !enrollData) {
           toast.error("Enrollment not found");
           setLoading(false);
           return;
         }
-        setEnrollment(enrollData);
+        setEnrollment({
+          ...enrollData,
+          programs: { program_name: enrollData.program_name },
+        });
 
-        // Fetch custom fields
+        // Fetch custom fields visible to students
         const { data: fieldsData, error: fieldsErr } = await supabase
           .from('custom_fields')
           .select('*')
           .eq('active', true)
           .eq('visible_to_student', true)
           .order('sort_order', { ascending: true });
-          
+
         if (fieldsErr) throw fieldsErr;
         setCustomFields(fieldsData || []);
 
-        // Fetch any existing values if they partially filled it
+        // Fetch any existing values via RPC (works for anon flow too)
         const { data: existingValues } = await supabase
-          .from('field_values')
-          .select('*, custom_fields(key)')
-          .eq('enrollment_id', id);
-          
+          .rpc('get_enrollment_field_values' as any, { p_enrollment_id: id });
+
         if (existingValues && existingValues.length > 0) {
           const map: Record<string, string> = {};
-          existingValues.forEach((ev: any) => {
-            if (ev.custom_fields?.key) {
-              map[ev.custom_fields.key] = ev.value;
-            }
+          (existingValues as any[]).forEach((ev: any) => {
+            if (ev.field_key) map[ev.field_key] = ev.value;
           });
           setFormValues(map);
         }

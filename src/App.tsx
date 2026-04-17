@@ -29,7 +29,7 @@ import OrgEnrollmentsPage from "@/pages/org/OrgEnrollmentsPage";
 import OrgReportsPage from "@/pages/org/OrgReportsPage";
 import ProfilePage from "@/pages/profile/ProfilePage";
 import EnrollPage from "@/pages/public/EnrollPage";
-import EnrollCompletePage from "@/pages/public/EnrollCompletePage";
+import StudentSignupPage from "@/pages/public/StudentSignupPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();

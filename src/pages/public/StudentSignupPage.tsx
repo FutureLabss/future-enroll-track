@@ -104,7 +104,7 @@ export default function EnrollCompletePage() {
         if (signUpErr) {
           if (signUpErr.message.toLowerCase().includes("already registered")) {
             toast.error("An account with this email already exists. Please log in first.");
-            navigate(`/login?next=/enroll/complete/${id}`);
+            navigate(`/login?next=/students/${id}`);
             return;
           }
           throw signUpErr;

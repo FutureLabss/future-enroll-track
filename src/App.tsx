@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { AppLayout } from "@/components/layout/AppLayout";
 import LoginPage from "@/pages/auth/LoginPage";
@@ -29,7 +29,7 @@ import OrgEnrollmentsPage from "@/pages/org/OrgEnrollmentsPage";
 import OrgReportsPage from "@/pages/org/OrgReportsPage";
 import ProfilePage from "@/pages/profile/ProfilePage";
 import EnrollPage from "@/pages/public/EnrollPage";
-import EnrollCompletePage from "@/pages/public/EnrollCompletePage";
+import StudentSignupPage from "@/pages/public/StudentSignupPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -49,6 +49,11 @@ function RoleRedirect() {
   return <Navigate to="/student" replace />;
 }
 
+function LegacyEnrollRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/students/${id}`} replace />;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -60,7 +65,9 @@ const App = () => (
             <Route path="/login" element={<LoginPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/enroll" element={<EnrollPage />} />
-            <Route path="/enroll/complete/:id" element={<EnrollCompletePage />} />
+            <Route path="/students/:id" element={<StudentSignupPage />} />
+            {/* Backward compatibility: old invitation links */}
+            <Route path="/enroll/complete/:id" element={<LegacyEnrollRedirect />} />
             <Route path="/" element={<ProtectedRoute><RoleRedirect /></ProtectedRoute>} />
             
             {/* Admin routes */}

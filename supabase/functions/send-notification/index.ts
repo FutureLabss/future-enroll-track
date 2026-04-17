@@ -125,7 +125,7 @@ function buildEmailContent(type: string, data: Record<string, any>): { subject: 
           <div style="margin-top: 24px; padding: 16px; border: 1px solid #e5e7eb; border-radius: 8px; background: #ffffff;">
             <h3 style="margin-top: 0;">Action Required: Complete Your Enrollment</h3>
             <p>Please complete your profile to finalize your enrollment.</p>
-            <a href="${FRONTEND_URL}/enroll/complete/${enrollment_id}" style="display: inline-block; padding: 10px 20px; background: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Complete Enrollment Profile</a>
+            <a href="${FRONTEND_URL}/students/${enrollment_id}" style="display: inline-block; padding: 10px 20px; background: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Complete Enrollment Profile</a>
           </div>
         `),
       };
@@ -199,7 +199,7 @@ function buildWhatsAppMessage(type: string, data: Record<string, any>): string {
 
   switch (type) {
     case "invoice_created":
-      return `🧾 *New Invoice Created*\n\nHi ${full_name},\nInvoice: ${invoice_number}\nAmount: ${amt}\n${due_date ? `Due: ${due_date}` : ""}\n\nAction Required: Please complete your enrollment profile here:\n${FRONTEND_URL}/enroll/complete/${enrollment_id}\n\nPlease ensure timely payment.`;
+      return `🧾 *New Invoice Created*\n\nHi ${full_name},\nInvoice: ${invoice_number}\nAmount: ${amt}\n${due_date ? `Due: ${due_date}` : ""}\n\nAction Required: Please complete your enrollment profile here:\n${FRONTEND_URL}/students/${enrollment_id}\n\nPlease ensure timely payment.`;
     case "payment_received":
       return `✅ *Payment Received*\n\nHi ${full_name},\nInvoice: ${invoice_number}\nAmount Paid: ${paid}\n\nThank you!`;
     case "payment_reminder":

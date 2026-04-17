@@ -47,6 +47,9 @@ function RoleRedirect() {
   if (isAdmin) return <Navigate to="/admin" replace />;
   if (isOrganization) return <Navigate to="/org" replace />;
   return <Navigate to="/student" replace />;
+function LegacyEnrollRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/students/${id}`} replace />;
 }
 
 const App = () => (

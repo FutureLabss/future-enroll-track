@@ -125,7 +125,7 @@ function buildEmailContent(type: string, data: Record<string, any>): { subject: 
           <div style="margin-top: 24px; padding: 16px; border: 1px solid #e5e7eb; border-radius: 8px; background: #ffffff;">
             <h3 style="margin-top: 0;">Action Required: Complete Your Enrollment</h3>
             <p>Please complete your profile to finalize your enrollment.</p>
-            <a href="${FRONTEND_URL}/enroll/complete/${enrollment_id}" style="display: inline-block; padding: 10px 20px; background: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Complete Enrollment Profile</a>
+            <a href="${FRONTEND_URL}/students/${enrollment_id}" style="display: inline-block; padding: 10px 20px; background: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Complete Enrollment Profile</a>
           </div>
         `),
       };

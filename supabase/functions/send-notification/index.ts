@@ -199,7 +199,7 @@ function buildWhatsAppMessage(type: string, data: Record<string, any>): string {
 
   switch (type) {
     case "invoice_created":
-      return `🧾 *New Invoice Created*\n\nHi ${full_name},\nInvoice: ${invoice_number}\nAmount: ${amt}\n${due_date ? `Due: ${due_date}` : ""}\n\nAction Required: Please complete your enrollment profile here:\n${FRONTEND_URL}/enroll/complete/${enrollment_id}\n\nPlease ensure timely payment.`;
+      return `🧾 *New Invoice Created*\n\nHi ${full_name},\nInvoice: ${invoice_number}\nAmount: ${amt}\n${due_date ? `Due: ${due_date}` : ""}\n\nAction Required: Please complete your enrollment profile here:\n${FRONTEND_URL}/students/${enrollment_id}\n\nPlease ensure timely payment.`;
     case "payment_received":
       return `✅ *Payment Received*\n\nHi ${full_name},\nInvoice: ${invoice_number}\nAmount Paid: ${paid}\n\nThank you!`;
     case "payment_reminder":

@@ -134,9 +134,35 @@ export default function InvoiceDetailPage() {
         title={`Invoice ${invoice.invoice_number}`}
         description={`${invoice.enrollments?.full_name} — ${invoice.enrollments?.programs?.program_name || ''}`}
         actions={
-          <Button variant="outline" onClick={() => navigate('/admin/invoices')}>
-            <ArrowLeft className="h-4 w-4 mr-2" /> Back
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => navigate('/admin/invoices')}>
+              <ArrowLeft className="h-4 w-4 mr-2" /> Back
+            </Button>
+            {isAdmin && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" disabled={deleting}>
+                    <Trash2 className="h-4 w-4 mr-2" /> Delete
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete invoice {invoice.invoice_number}?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This permanently removes the invoice, its installments, and any recorded payments.
+                      The enrollment's payment totals will be recalculated. This cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                      Delete invoice
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
         }
       />
 

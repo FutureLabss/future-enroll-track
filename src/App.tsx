@@ -61,12 +61,8 @@ const App = () => (
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/enroll" element={<EnrollPage />} />
             <Route path="/students/:id" element={<StudentSignupPage />} />
-            {/* Backward compatibility for older invitation links */}
-            <Route path="/enroll/complete/:id" element={<Navigate to="/students/:id" replace />} />
-            <Route
-              path="/enroll/complete/:id"
-              element={<StudentSignupPage />}
-            />
+            {/* Backward compatibility: old invitation links */}
+            <Route path="/enroll/complete/:id" element={<LegacyEnrollRedirect />} />
             <Route path="/" element={<ProtectedRoute><RoleRedirect /></ProtectedRoute>} />
             
             {/* Admin routes */}

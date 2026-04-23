@@ -227,8 +227,8 @@ Deno.serve(async (req) => {
     const { type, channel, enrollment_id, invoice_id, extra } = payload;
 
     // Determine the base URL for links: prefer the caller's origin (so the link
-    // always matches the domain the admin is using), fall back to the configured
-    // FRONTEND_URL secret, then to the published Lovable URL.
+    // always matches the domain the admin is using), then fall back to the
+    // configured FRONTEND_URL secret.
     const requestOrigin = req.headers.get("origin") || req.headers.get("referer") || "";
     let originBase = "";
     if (requestOrigin) {
@@ -274,13 +274,13 @@ Deno.serve(async (req) => {
       amount_paid: extra?.amount_paid || enrollment.amount_paid,
       enrollment_id: enrollment_id,
       FRONTEND_URL: (() => {
-        // Priority: caller origin (admin's current domain) > FRONTEND_URL secret > Lovable URL
-        let url = originBase || Deno.env.get("FRONTEND_URL") || "https://future-enroll-track.lovable.app";
+        // Priority: caller origin (admin's current domain) > FRONTEND_URL secret
+        let url = originBase || Deno.env.get("FRONTEND_URL") || "https://admin.futurelabs.ng";
         if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
         url = url.replace(/\/+$/, "");
         // Don't use preview/sandbox URLs in emails — they're not shareable
         if (/id-preview--|lovableproject\.com|sandbox/i.test(url)) {
-          url = (Deno.env.get("FRONTEND_URL") || "https://future-enroll-track.lovable.app").replace(/\/+$/, "");
+          url = (Deno.env.get("FRONTEND_URL") || "https://admin.futurelabs.ng").replace(/\/+$/, "");
           if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
         }
         return url;

@@ -226,6 +226,15 @@ Deno.serve(async (req) => {
     const payload: NotificationPayload = await req.json();
     const { type, channel, enrollment_id, invoice_id, extra } = payload;
 
+    // Determine the base URL for links: prefer the caller's origin (so the link
+    // always matches the domain the admin is using), fall back to the configured
+    // FRONTEND_URL secret, then to the published Lovable URL.
+    const requestOrigin = req.headers.get("origin") || req.headers.get("referer") || "";
+    let originBase = "";
+    if (requestOrigin) {
+      try { originBase = new URL(requestOrigin).origin; } catch { originBase = ""; }
+    }
+
     // Get enrollment data
     const { data: enrollment, error: enrollErr } = await supabase
       .from("enrollments")
@@ -265,16 +274,20 @@ Deno.serve(async (req) => {
       amount_paid: extra?.amount_paid || enrollment.amount_paid,
       enrollment_id: enrollment_id,
       FRONTEND_URL: (() => {
-        let url = Deno.env.get("FRONTEND_URL") || "https://future-enroll-track.lovable.app";
-        // Ensure protocol is present
+        // Priority: caller origin (admin's current domain) > FRONTEND_URL secret > Lovable URL
+        let url = originBase || Deno.env.get("FRONTEND_URL") || "https://future-enroll-track.lovable.app";
         if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
-        // Strip trailing slash
         url = url.replace(/\/+$/, "");
+        // Don't use preview/sandbox URLs in emails — they're not shareable
+        if (/id-preview--|lovableproject\.com|sandbox/i.test(url)) {
+          url = (Deno.env.get("FRONTEND_URL") || "https://future-enroll-track.lovable.app").replace(/\/+$/, "");
+          if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+        }
         return url;
       })(),
       ...extra,
     };
-    console.log("[send-notification] Using FRONTEND_URL:", templateData.FRONTEND_URL, "→ link:", `${templateData.FRONTEND_URL}/students/${enrollment_id}`);
+    console.log("[send-notification] origin:", requestOrigin, "→ base:", `${templateData.FRONTEND_URL}/students/${enrollment_id}`);
 
     const results: string[] = [];
 

@@ -12,7 +12,7 @@ import { useAuth } from '@/hooks/useAuth';
 export default function EnrollCompletePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user, signUp } = useAuth();
+  const { user, signUp, signIn } = useAuth();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -94,7 +94,8 @@ export default function EnrollCompletePage() {
 
     setSubmitting(true);
     try {
-      if (!enrollment.user_id && !user) {
+      let didSignUp = false;
+      if (!user) {
         if (!password || password.length < 6) {
           toast.error("Please provide a password of at least 6 characters.");
           setSubmitting(false);
@@ -102,19 +103,27 @@ export default function EnrollCompletePage() {
         }
         const { error: signUpErr } = await signUp(enrollment.email, password, enrollment.full_name);
         if (signUpErr) {
-          if (signUpErr.message.toLowerCase().includes("already registered")) {
-            toast.error("An account with this email already exists. Please log in first.");
-            navigate(`/login?next=/students/${id}`);
-            return;
+          const msg = signUpErr.message.toLowerCase();
+          if (msg.includes("already registered") || msg.includes("already been registered") || msg.includes("user already")) {
+            // Try to sign in with provided password
+            const { error: signInErr } = await signIn(enrollment.email, password);
+            if (signInErr) {
+              toast.error("An account with this email already exists. Please log in to continue.");
+              navigate(`/login?next=/students/${id}`);
+              return;
+            }
+          } else {
+            throw signUpErr;
           }
-          throw signUpErr;
+        } else {
+          didSignUp = true;
+          // Ensure session is active (auto-confirm signup is enabled)
+          await signIn(enrollment.email, password).catch(() => {});
         }
       }
 
-      if (!enrollment.user_id && user) {
-        // Link enrollment securely immediately since they are logged in
-        await supabase.rpc('link_enrollment_to_user' as any, { p_enrollment_id: id });
-      }
+      // Link enrollment to current user (idempotent)
+      await supabase.rpc('link_enrollment_to_user' as any, { p_enrollment_id: id });
 
       const { error } = await supabase.rpc('submit_enrollment_fields' as any, {
         p_enrollment_id: id,
@@ -162,7 +171,7 @@ export default function EnrollCompletePage() {
             Thank you for completing your enrollment details. Your profile is now up to date.
           </p>
         </div>
-        <Button onClick={() => navigate('/login')}>
+        <Button onClick={() => navigate(user ? '/student' : '/login')}>
           Proceed to Dashboard
         </Button>
       </div>
@@ -195,7 +204,7 @@ export default function EnrollCompletePage() {
             </p>
           </div>
 
-          {!enrollment.user_id && !user && (
+          {!user && (
             <div className="mb-6 pb-6 border-b border-border space-y-4">
               <h2 className="font-heading font-semibold text-lg text-foreground">Create Your Account</h2>
               <p className="text-sm text-muted-foreground">Setup a password to access your student dashboard.</p>

@@ -226,6 +226,15 @@ Deno.serve(async (req) => {
     const payload: NotificationPayload = await req.json();
     const { type, channel, enrollment_id, invoice_id, extra } = payload;
 
+    // Determine the base URL for links: prefer the caller's origin (so the link
+    // always matches the domain the admin is using), fall back to the configured
+    // FRONTEND_URL secret, then to the published Lovable URL.
+    const requestOrigin = req.headers.get("origin") || req.headers.get("referer") || "";
+    let originBase = "";
+    if (requestOrigin) {
+      try { originBase = new URL(requestOrigin).origin; } catch { originBase = ""; }
+    }
+
     // Get enrollment data
     const { data: enrollment, error: enrollErr } = await supabase
       .from("enrollments")

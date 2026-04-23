@@ -1,0 +1,45 @@
+CREATE OR REPLACE FUNCTION public.admin_delete_invoice(p_invoice_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  _enrollment_id uuid;
+  _invoice_number text;
+  _new_paid numeric;
+BEGIN
+  IF NOT public.has_role(auth.uid(), 'admin') THEN
+    RAISE EXCEPTION 'Only admins can delete invoices';
+  END IF;
+
+  SELECT enrollment_id, invoice_number INTO _enrollment_id, _invoice_number
+  FROM public.invoices WHERE id = p_invoice_id;
+
+  IF _enrollment_id IS NULL THEN
+    RAISE EXCEPTION 'Invoice not found';
+  END IF;
+
+  -- Delete in correct order: related rows first, then invoice
+  DELETE FROM public.payments WHERE invoice_id = p_invoice_id;
+  DELETE FROM public.installments WHERE invoice_id = p_invoice_id;
+  DELETE FROM public.notifications
+    WHERE enrollment_id = _enrollment_id
+      AND message ILIKE '%' || _invoice_number || '%';
+  DELETE FROM public.invoices WHERE id = p_invoice_id;
+
+  SELECT COALESCE(SUM(i.amount), 0) INTO _new_paid
+  FROM public.installments i
+  JOIN public.invoices inv ON inv.id = i.invoice_id
+  WHERE inv.enrollment_id = _enrollment_id AND i.status = 'paid';
+
+  -- outstanding_balance is a generated column (total_amount - amount_paid); do not set it directly
+  UPDATE public.enrollments
+  SET amount_paid = _new_paid
+  WHERE id = _enrollment_id;
+
+  INSERT INTO public.audit_logs (user_id, action, entity_type, entity_id, details)
+  VALUES (auth.uid(), 'delete', 'invoice', p_invoice_id,
+          jsonb_build_object('invoice_number', _invoice_number, 'cascaded', true));
+END;
+$function$;

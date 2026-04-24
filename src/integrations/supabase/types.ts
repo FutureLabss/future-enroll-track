@@ -458,6 +458,30 @@ export type Database = {
           },
         ]
       }
+      pending_admin_invites: {
+        Row: {
+          accepted_at: string | null
+          email: string
+          id: string
+          invited_at: string
+          invited_by: string | null
+        }
+        Insert: {
+          accepted_at?: string | null
+          email: string
+          id?: string
+          invited_at?: string
+          invited_by?: string | null
+        }
+        Update: {
+          accepted_at?: string | null
+          email?: string
+          id?: string
+          invited_at?: string
+          invited_by?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -553,6 +577,8 @@ export type Database = {
         Args: { p_invoice_id: string }
         Returns: undefined
       }
+      cancel_admin_invite: { Args: { p_email: string }; Returns: undefined }
+      create_admin_invite: { Args: { p_email: string }; Returns: undefined }
       get_enrollment_field_values: {
         Args: { p_enrollment_id: string }
         Returns: {
@@ -588,6 +614,7 @@ export type Database = {
         Returns: {
           email: string
           is_super: boolean
+          pending: boolean
           user_id: string
         }[]
       }

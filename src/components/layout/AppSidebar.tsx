@@ -13,6 +13,7 @@ import {
   Layers,
   FormInput,
   Shield,
+  ShieldCheck,
   UserCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -54,7 +55,11 @@ export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps)
   const { isAdmin, isOrganization, signOut, user } = useAuth();
   const location = useLocation();
 
-  const nav = isAdmin ? adminNav : isOrganization ? orgNav : studentNav;
+  const isSuperadmin = user?.email?.toLowerCase() === 'manassehudim@gmail.com';
+  const baseNav = isAdmin ? adminNav : isOrganization ? orgNav : studentNav;
+  const nav = isAdmin && isSuperadmin
+    ? [...baseNav, { to: '/admin/manage-admins', icon: ShieldCheck, label: 'Manage Admins' }]
+    : baseNav;
 
   const containerClass =
     variant === 'mobile'

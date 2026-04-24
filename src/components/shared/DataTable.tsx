@@ -105,40 +105,42 @@ function DataTableInner<T extends Record<string, any>>(
       )}
 
       <div className="glass-card rounded-xl overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent border-border/50">
-              {columns.map((col) => (
-                <TableHead key={col.key} className="font-heading font-semibold text-foreground/80">
-                  {col.header}
-                </TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {paged.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="text-center py-12 text-muted-foreground">
-                  {emptyMessage}
-                </TableCell>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent border-border/50">
+                {columns.map((col) => (
+                  <TableHead key={col.key} className="font-heading font-semibold text-foreground/80 whitespace-nowrap">
+                    {col.header}
+                  </TableHead>
+                ))}
               </TableRow>
-            ) : (
-              paged.map((item, i) => (
-                <TableRow
-                  key={i}
-                  onClick={() => onRowClick?.(item)}
-                  className={onRowClick ? 'cursor-pointer' : ''}
-                >
-                  {columns.map((col) => (
-                    <TableCell key={col.key}>
-                      {col.render ? col.render(item) : item[col.key]}
-                    </TableCell>
-                  ))}
+            </TableHeader>
+            <TableBody>
+              {paged.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={columns.length} className="text-center py-12 text-muted-foreground">
+                    {emptyMessage}
+                  </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ) : (
+                paged.map((item, i) => (
+                  <TableRow
+                    key={i}
+                    onClick={() => onRowClick?.(item)}
+                    className={onRowClick ? 'cursor-pointer' : ''}
+                  >
+                    {columns.map((col) => (
+                      <TableCell key={col.key} className="whitespace-nowrap">
+                        {col.render ? col.render(item) : item[col.key]}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
       {filtered.length > pageSize && (

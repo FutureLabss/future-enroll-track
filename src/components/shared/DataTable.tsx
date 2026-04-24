@@ -84,9 +84,9 @@ function DataTableInner<T extends Record<string, any>>(
   return (
     <div ref={ref} className="space-y-3">
       {(searchable || exportable) && (
-        <div className="flex items-center gap-3 justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
           {searchable && (
-            <div className="relative flex-1 max-w-sm">
+            <div className="relative flex-1 sm:max-w-sm w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder={searchPlaceholder}
@@ -97,7 +97,7 @@ function DataTableInner<T extends Record<string, any>>(
             </div>
           )}
           {exportable && (
-            <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={filtered.length === 0}>
+            <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={filtered.length === 0} className="w-full sm:w-auto">
               <Download className="h-4 w-4 mr-2" /> Export CSV
             </Button>
           )}

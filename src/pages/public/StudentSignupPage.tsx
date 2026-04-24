@@ -84,8 +84,12 @@ export default function EnrollCompletePage() {
     e.preventDefault();
     if (!id) return;
 
-    // Validate required fields
+    // Validate required fields (skip conditional fields that aren't applicable)
     for (const field of customFields) {
+      // current_academic_level only applies to SIWES/IT students
+      if (field.key === 'current_academic_level' && formValues['highest_education'] !== 'SIWES/IT (Internship)') {
+        continue;
+      }
       if (field.required && !formValues[field.key]) {
         toast.error(`Please fill in the required field: ${field.label}`);
         return;

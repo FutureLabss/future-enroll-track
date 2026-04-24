@@ -577,10 +577,21 @@ export type Database = {
         }
         Returns: boolean
       }
+      invite_admin: { Args: { p_email: string }; Returns: undefined }
+      is_superadmin: { Args: { _user_id: string }; Returns: boolean }
       link_enrollment_to_user: {
         Args: { p_enrollment_id: string }
         Returns: undefined
       }
+      list_admins: {
+        Args: never
+        Returns: {
+          email: string
+          is_super: boolean
+          user_id: string
+        }[]
+      }
+      revoke_admin: { Args: { p_email: string }; Returns: undefined }
       submit_enrollment_fields: {
         Args: { p_enrollment_id: string; p_fields: Json }
         Returns: undefined

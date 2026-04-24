@@ -45,14 +45,26 @@ const orgNav = [
   { to: '/org/reports', icon: BarChart3, label: 'Reports' },
 ];
 
-export function AppSidebar() {
+interface AppSidebarProps {
+  variant?: 'desktop' | 'mobile';
+  onNavigate?: () => void;
+}
+
+export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps) {
   const { isAdmin, isOrganization, signOut, user } = useAuth();
   const location = useLocation();
 
   const nav = isAdmin ? adminNav : isOrganization ? orgNav : studentNav;
 
+  const containerClass =
+    variant === 'mobile'
+      ? 'h-full w-full bg-sidebar text-sidebar-foreground flex flex-col'
+      : 'fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar text-sidebar-foreground flex flex-col border-r border-sidebar-border';
+
+  const Wrapper: any = variant === 'mobile' ? 'div' : 'aside';
+
   return (
-    <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar text-sidebar-foreground flex flex-col border-r border-sidebar-border">
+    <Wrapper className={containerClass}>
       <div className="px-6 py-6 border-b border-sidebar-border">
         <h1 className="font-heading text-xl font-bold tracking-tight">
           <span className="text-sidebar-primary">Future</span>Labs
@@ -68,6 +80,7 @@ export function AppSidebar() {
             key={item.to}
             to={item.to}
             end={item.to === '/admin' || item.to === '/student' || item.to === '/org'}
+            onClick={() => onNavigate?.()}
             className={({ isActive }) =>
               cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
@@ -90,6 +103,7 @@ export function AppSidebar() {
         <div className="flex gap-1">
           <NavLink
             to="/profile"
+            onClick={() => onNavigate?.()}
             className={({ isActive }) =>
               cn(
                 'flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all',
@@ -104,12 +118,12 @@ export function AppSidebar() {
         <Button
           variant="ghost"
           className="w-full justify-start gap-3 mt-1 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
-          onClick={signOut}
+          onClick={() => { onNavigate?.(); signOut(); }}
         >
           <LogOut className="h-4 w-4" />
           Sign Out
         </Button>
       </div>
-    </aside>
+    </Wrapper>
   );
 }

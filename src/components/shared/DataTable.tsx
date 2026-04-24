@@ -84,9 +84,9 @@ function DataTableInner<T extends Record<string, any>>(
   return (
     <div ref={ref} className="space-y-3">
       {(searchable || exportable) && (
-        <div className="flex items-center gap-3 justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
           {searchable && (
-            <div className="relative flex-1 max-w-sm">
+            <div className="relative flex-1 sm:max-w-sm w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder={searchPlaceholder}
@@ -97,7 +97,7 @@ function DataTableInner<T extends Record<string, any>>(
             </div>
           )}
           {exportable && (
-            <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={filtered.length === 0}>
+            <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={filtered.length === 0} className="w-full sm:w-auto">
               <Download className="h-4 w-4 mr-2" /> Export CSV
             </Button>
           )}
@@ -105,40 +105,42 @@ function DataTableInner<T extends Record<string, any>>(
       )}
 
       <div className="glass-card rounded-xl overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent border-border/50">
-              {columns.map((col) => (
-                <TableHead key={col.key} className="font-heading font-semibold text-foreground/80">
-                  {col.header}
-                </TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {paged.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="text-center py-12 text-muted-foreground">
-                  {emptyMessage}
-                </TableCell>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent border-border/50">
+                {columns.map((col) => (
+                  <TableHead key={col.key} className="font-heading font-semibold text-foreground/80 whitespace-nowrap">
+                    {col.header}
+                  </TableHead>
+                ))}
               </TableRow>
-            ) : (
-              paged.map((item, i) => (
-                <TableRow
-                  key={i}
-                  onClick={() => onRowClick?.(item)}
-                  className={onRowClick ? 'cursor-pointer' : ''}
-                >
-                  {columns.map((col) => (
-                    <TableCell key={col.key}>
-                      {col.render ? col.render(item) : item[col.key]}
-                    </TableCell>
-                  ))}
+            </TableHeader>
+            <TableBody>
+              {paged.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={columns.length} className="text-center py-12 text-muted-foreground">
+                    {emptyMessage}
+                  </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ) : (
+                paged.map((item, i) => (
+                  <TableRow
+                    key={i}
+                    onClick={() => onRowClick?.(item)}
+                    className={onRowClick ? 'cursor-pointer' : ''}
+                  >
+                    {columns.map((col) => (
+                      <TableCell key={col.key} className="whitespace-nowrap">
+                        {col.render ? col.render(item) : item[col.key]}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
       {filtered.length > pageSize && (

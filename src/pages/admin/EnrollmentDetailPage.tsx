@@ -175,12 +175,22 @@ export default function EnrollmentDetailPage() {
         <div key={group.title} className="glass-card rounded-xl p-6 mb-6">
           <h3 className="font-heading font-semibold text-lg mb-4">{group.title}</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {group.fields.map(fv => (
-              <div key={fv.id}>
-                <p className="text-xs text-muted-foreground">{fv.custom_fields?.label}</p>
-                <p className="font-medium mt-0.5">{fv.value || '—'}</p>
-              </div>
-            ))}
+            {group.fields.map(fv => {
+              const val = fv.value || '';
+              const isImage = fv.custom_fields?.field_type === 'image' || /\.(png|jpe?g|gif|webp|bmp|svg)(\?.*)?$/i.test(val) || (val.startsWith('http') && /\/storage\/v1\/object\//i.test(val));
+              return (
+                <div key={fv.id}>
+                  <p className="text-xs text-muted-foreground">{fv.custom_fields?.label}</p>
+                  {isImage && val ? (
+                    <a href={val} target="_blank" rel="noopener noreferrer" className="mt-1 block">
+                      <img src={val} alt={fv.custom_fields?.label} className="mt-1 h-32 w-32 object-cover rounded-lg border border-border bg-muted" />
+                    </a>
+                  ) : (
+                    <p className="font-medium mt-0.5 break-words">{val || '—'}</p>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       ))}

@@ -22,21 +22,26 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     const fetchData = async () => {
-      const [enrollRes, invoiceRes] = await Promise.all([
-        supabase.from('enrollments').select('*').order('created_at', { ascending: false }).limit(10),
+      const [allEnrollRes, recentEnrollRes, invoiceRes, otherIncomeRes] = await Promise.all([
+        supabase.from('enrollments').select('total_amount, amount_paid, enrollment_status'),
+        supabase.from('enrollments').select('*').order('created_at', { ascending: false }).limit(5),
         supabase.from('invoices').select('total_amount, status'),
+        supabase.from('other_income').select('amount'),
       ]);
 
-      const enrollments = enrollRes.data || [];
+      const allEnrollments = allEnrollRes.data || [];
       const invoices = invoiceRes.data || [];
+      const otherIncome = otherIncomeRes.data || [];
 
       const totalInvoiced = invoices.reduce((s, i) => s + Number(i.total_amount), 0);
-      const totalCollected = enrollments.reduce((s, e) => s + Number(e.amount_paid), 0);
-      const outstanding = enrollments.reduce((s, e) => s + (Number(e.total_amount) - Number(e.amount_paid)), 0);
-      const overdueCount = enrollments.filter(e => e.enrollment_status === 'overdue').length;
+      const enrollmentCollected = allEnrollments.reduce((s, e) => s + Number(e.amount_paid), 0);
+      const otherCollected = otherIncome.reduce((s, o) => s + Number(o.amount), 0);
+      const totalCollected = enrollmentCollected + otherCollected;
+      const outstanding = allEnrollments.reduce((s, e) => s + (Number(e.total_amount) - Number(e.amount_paid)), 0);
+      const overdueCount = allEnrollments.filter(e => e.enrollment_status === 'overdue').length;
 
-      setStats({ totalInvoiced, totalCollected, outstanding, overdueCount, totalEnrollments: enrollments.length });
-      setRecentEnrollments(enrollments.slice(0, 5));
+      setStats({ totalInvoiced, totalCollected, outstanding, overdueCount, totalEnrollments: allEnrollments.length });
+      setRecentEnrollments(recentEnrollRes.data || []);
       setLoading(false);
     };
     fetchData();

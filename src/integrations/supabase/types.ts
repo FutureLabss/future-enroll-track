@@ -212,6 +212,48 @@ export type Database = {
           },
         ]
       }
+      expenses: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string
+          id: string
+          notes: string | null
+          payment_date: string
+          payment_method: string | null
+          payment_reference: string | null
+          recorded_by: string | null
+          updated_at: string
+          vendor_name: string | null
+        }
+        Insert: {
+          amount?: number
+          category: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          payment_date?: string
+          payment_method?: string | null
+          payment_reference?: string | null
+          recorded_by?: string | null
+          updated_at?: string
+          vendor_name?: string | null
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          payment_date?: string
+          payment_method?: string | null
+          payment_reference?: string | null
+          recorded_by?: string | null
+          updated_at?: string
+          vendor_name?: string | null
+        }
+        Relationships: []
+      }
       field_values: {
         Row: {
           enrollment_id: string
@@ -722,6 +764,17 @@ export type Database = {
           id: string
           program_name: string
           user_id: string
+        }[]
+      }
+      get_finance_summary: {
+        Args: { p_months?: number }
+        Returns: {
+          expenses_total: number
+          month: string
+          other_income_total: number
+          payroll_total: number
+          profit: number
+          revenue: number
         }[]
       }
       has_role: {

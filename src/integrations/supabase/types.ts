@@ -638,7 +638,9 @@ export type Database = {
       }
       staff: {
         Row: {
+          account_number: string | null
           active: boolean
+          bank_name: string | null
           base_salary: number
           created_at: string
           email: string | null
@@ -649,7 +651,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          account_number?: string | null
           active?: boolean
+          bank_name?: string | null
           base_salary?: number
           created_at?: string
           email?: string | null
@@ -660,7 +664,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          account_number?: string | null
           active?: boolean
+          bank_name?: string | null
           base_salary?: number
           created_at?: string
           email?: string | null

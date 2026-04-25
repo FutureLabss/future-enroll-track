@@ -15,6 +15,8 @@ import {
   Shield,
   ShieldCheck,
   UserCircle,
+  Wallet,
+  Banknote,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -25,6 +27,7 @@ const adminNav = [
   { to: '/admin/enrollments', icon: Users, label: 'Enrollments' },
   { to: '/admin/invoices', icon: FileText, label: 'Invoices' },
   { to: '/admin/payments', icon: CreditCard, label: 'Payments' },
+  { to: '/admin/other-income', icon: Wallet, label: 'Other Income' },
   { to: '/admin/programs', icon: GraduationCap, label: 'Programs' },
   { to: '/admin/cohorts', icon: Layers, label: 'Cohorts' },
   { to: '/admin/organizations', icon: Building2, label: 'Organizations' },
@@ -58,7 +61,10 @@ export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps)
   const isSuperadmin = user?.email?.toLowerCase() === 'manassehudim@gmail.com';
   const baseNav = isAdmin ? adminNav : isOrganization ? orgNav : studentNav;
   const nav = isAdmin && isSuperadmin
-    ? [...baseNav, { to: '/admin/manage-admins', icon: ShieldCheck, label: 'Manage Admins' }]
+    ? [...baseNav,
+        { to: '/admin/payroll', icon: Banknote, label: 'Payroll' },
+        { to: '/admin/manage-admins', icon: ShieldCheck, label: 'Manage Admins' },
+      ]
     : baseNav;
 
   const containerClass =

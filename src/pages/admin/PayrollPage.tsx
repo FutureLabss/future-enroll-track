@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Check, Trash2 } from 'lucide-react';
+import { Plus, Check, Trash2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { StatCard } from '@/components/shared/StatCard';
 import { Wallet, Users } from 'lucide-react';
@@ -40,7 +40,8 @@ export default function PayrollPage() {
 
   // Staff dialog
   const [staffOpen, setStaffOpen] = useState(false);
-  const [staffForm, setStaffForm] = useState({ full_name: '', role_title: '', base_salary: '', email: '', phone: '' });
+  const [editingStaffId, setEditingStaffId] = useState<string | null>(null);
+  const [staffForm, setStaffForm] = useState({ full_name: '', role_title: '', base_salary: '', email: '', phone: '', bank_name: '', account_number: '' });
 
   // Run dialog
   const [runOpen, setRunOpen] = useState(false);
@@ -60,21 +61,45 @@ export default function PayrollPage() {
 
   useEffect(() => { fetchAll(); }, [selectedMonth]);
 
+  const resetStaffForm = () => {
+    setEditingStaffId(null);
+    setStaffForm({ full_name: '', role_title: '', base_salary: '', email: '', phone: '', bank_name: '', account_number: '' });
+  };
+
+  const openEditStaff = (s: any) => {
+    setEditingStaffId(s.id);
+    setStaffForm({
+      full_name: s.full_name || '',
+      role_title: s.role_title || '',
+      base_salary: s.base_salary != null ? String(s.base_salary) : '',
+      email: s.email || '',
+      phone: s.phone || '',
+      bank_name: s.bank_name || '',
+      account_number: s.account_number || '',
+    });
+    setStaffOpen(true);
+  };
+
   const saveStaff = async () => {
     try {
       const base = parseFloat(staffForm.base_salary || '0');
       if (!staffForm.full_name) throw new Error('Name is required');
-      const { error } = await supabase.from('staff').insert({
+      const payload = {
         full_name: staffForm.full_name,
         role_title: staffForm.role_title || null,
         base_salary: isNaN(base) ? 0 : base,
         email: staffForm.email || null,
         phone: staffForm.phone || null,
-      });
+        bank_name: staffForm.bank_name || null,
+        account_number: staffForm.account_number || null,
+      };
+      const { error } = editingStaffId
+        ? await supabase.from('staff').update(payload).eq('id', editingStaffId)
+        : await supabase.from('staff').insert(payload);
       if (error) throw error;
-      toast.success('Staff added');
+      toast.success(editingStaffId ? 'Staff updated' : 'Staff added');
       setStaffOpen(false);
-      setStaffForm({ full_name: '', role_title: '', base_salary: '', email: '', phone: '' });
+      resetStaffForm();
       fetchAll();
     } catch (err: any) { toast.error(err.message); }
   };
@@ -157,11 +182,18 @@ export default function PayrollPage() {
     { key: 'base_salary', header: 'Base Salary', render: (r: any) => formatCurrency(Number(r.base_salary)) },
     { key: 'email', header: 'Email', render: (r: any) => r.email || '—' },
     { key: 'phone', header: 'Phone', render: (r: any) => r.phone || '—' },
+    { key: 'bank_name', header: 'Bank', render: (r: any) => r.bank_name || '—' },
+    { key: 'account_number', header: 'Account #', render: (r: any) => r.account_number || '—' },
     { key: 'active', header: 'Status', render: (r: any) => <Badge variant={r.active ? 'default' : 'secondary'}>{r.active ? 'Active' : 'Inactive'}</Badge> },
     { key: 'actions', header: '', render: (r: any) => (
-      <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); removeStaff(r.id); }}>
-        <Trash2 className="h-4 w-4" />
-      </Button>
+      <div className="flex gap-1 justify-end">
+        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openEditStaff(r); }}>
+          <Pencil className="h-4 w-4" />
+        </Button>
+        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); removeStaff(r.id); }}>
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
     )},
   ];
 
@@ -243,12 +275,12 @@ export default function PayrollPage() {
         <TabsContent value="staff" className="space-y-4">
           <div className="flex justify-between items-center">
             <StatCard title="Total Staff" value={staff.length} icon={Users} />
-            <Dialog open={staffOpen} onOpenChange={setStaffOpen}>
+            <Dialog open={staffOpen} onOpenChange={(o) => { setStaffOpen(o); if (!o) resetStaffForm(); }}>
               <DialogTrigger asChild>
-                <Button><Plus className="h-4 w-4 mr-2" /> Add Staff</Button>
+                <Button onClick={() => resetStaffForm()}><Plus className="h-4 w-4 mr-2" /> Add Staff</Button>
               </DialogTrigger>
               <DialogContent>
-                <DialogHeader><DialogTitle>Add Staff Member</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle>{editingStaffId ? 'Edit Staff Member' : 'Add Staff Member'}</DialogTitle></DialogHeader>
                 <div className="space-y-4 mt-4">
                   <div>
                     <Label>Full Name *</Label>
@@ -272,7 +304,17 @@ export default function PayrollPage() {
                       <Input value={staffForm.phone} onChange={e => setStaffForm({ ...staffForm, phone: e.target.value })} className="mt-1.5" />
                     </div>
                   </div>
-                  <Button onClick={saveStaff} className="w-full">Add Staff</Button>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Bank Name</Label>
+                      <Input value={staffForm.bank_name} onChange={e => setStaffForm({ ...staffForm, bank_name: e.target.value })} className="mt-1.5" placeholder="e.g. GTBank" />
+                    </div>
+                    <div>
+                      <Label>Account Number</Label>
+                      <Input value={staffForm.account_number} onChange={e => setStaffForm({ ...staffForm, account_number: e.target.value })} className="mt-1.5" placeholder="10-digit NUBAN" />
+                    </div>
+                  </div>
+                  <Button onClick={saveStaff} className="w-full">{editingStaffId ? 'Save Changes' : 'Add Staff'}</Button>
                 </div>
               </DialogContent>
             </Dialog>

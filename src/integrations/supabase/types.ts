@@ -410,6 +410,48 @@ export type Database = {
         }
         Relationships: []
       }
+      other_income: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string
+          id: string
+          notes: string | null
+          payer_name: string
+          payment_date: string
+          payment_method: string | null
+          payment_reference: string | null
+          recorded_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          category: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          payer_name: string
+          payment_date?: string
+          payment_method?: string | null
+          payment_reference?: string | null
+          recorded_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          payer_name?: string
+          payment_date?: string
+          payment_method?: string | null
+          payment_reference?: string | null
+          recorded_by?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       payments: {
         Row: {
           amount: number
@@ -454,6 +496,50 @@ export type Database = {
             columns: ["invoice_id"]
             isOneToOne: false
             referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payroll_runs: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          notes: string | null
+          paid_at: string | null
+          pay_month: string
+          staff_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          id?: string
+          notes?: string | null
+          paid_at?: string | null
+          pay_month: string
+          staff_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          notes?: string | null
+          paid_at?: string | null
+          pay_month?: string
+          staff_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_runs_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "staff"
             referencedColumns: ["id"]
           },
         ]
@@ -546,6 +632,42 @@ export type Database = {
           description?: string | null
           id?: string
           program_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      staff: {
+        Row: {
+          active: boolean
+          base_salary: number
+          created_at: string
+          email: string | null
+          full_name: string
+          id: string
+          phone: string | null
+          role_title: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          base_salary?: number
+          created_at?: string
+          email?: string | null
+          full_name: string
+          id?: string
+          phone?: string | null
+          role_title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          base_salary?: number
+          created_at?: string
+          email?: string | null
+          full_name?: string
+          id?: string
+          phone?: string | null
+          role_title?: string | null
           updated_at?: string
         }
         Relationships: []

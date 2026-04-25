@@ -1,0 +1,194 @@
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/hooks/useAuth';
+import { PageHeader } from '@/components/shared/PageHeader';
+import { DataTable } from '@/components/shared/DataTable';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Plus, Trash2, Pencil, Receipt, TrendingDown } from 'lucide-react';
+import { toast } from 'sonner';
+import { StatCard } from '@/components/shared/StatCard';
+
+const CATEGORIES = ['rent', 'utilities', 'supplies', 'internet', 'maintenance', 'marketing', 'travel', 'other'];
+
+export default function ExpensesPage() {
+  const { user } = useAuth();
+  const [rows, setRows] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const blank = {
+    category: 'rent',
+    vendor_name: '',
+    amount: '',
+    payment_date: new Date().toISOString().slice(0, 10),
+    payment_method: '',
+    payment_reference: '',
+    notes: '',
+  };
+  const [form, setForm] = useState(blank);
+
+  const fetchRows = async () => {
+    const { data } = await supabase.from('expenses').select('*').order('payment_date', { ascending: false });
+    setRows(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchRows(); }, []);
+
+  const reset = () => { setEditingId(null); setForm(blank); };
+
+  const openEdit = (r: any) => {
+    setEditingId(r.id);
+    setForm({
+      category: r.category || 'rent',
+      vendor_name: r.vendor_name || '',
+      amount: r.amount != null ? String(r.amount) : '',
+      payment_date: r.payment_date || new Date().toISOString().slice(0, 10),
+      payment_method: r.payment_method || '',
+      payment_reference: r.payment_reference || '',
+      notes: r.notes || '',
+    });
+    setOpen(true);
+  };
+
+  const handleSave = async () => {
+    try {
+      const amount = parseFloat(form.amount);
+      if (!form.category || isNaN(amount) || amount <= 0) throw new Error('Category and valid amount are required');
+      const payload = {
+        category: form.category,
+        vendor_name: form.vendor_name || null,
+        amount,
+        payment_date: form.payment_date,
+        payment_method: form.payment_method || null,
+        payment_reference: form.payment_reference || null,
+        notes: form.notes || null,
+        recorded_by: user?.id || null,
+      };
+      const { error } = editingId
+        ? await supabase.from('expenses').update(payload).eq('id', editingId)
+        : await supabase.from('expenses').insert(payload);
+      if (error) throw error;
+      toast.success(editingId ? 'Expense updated' : 'Expense recorded');
+      setOpen(false);
+      reset();
+      fetchRows();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
+  const remove = async (id: string) => {
+    if (!confirm('Delete this expense?')) return;
+    const { error } = await supabase.from('expenses').delete().eq('id', id);
+    if (error) return toast.error(error.message);
+    toast.success('Deleted');
+    fetchRows();
+  };
+
+  const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
+  const total = rows.reduce((s, r) => s + Number(r.amount), 0);
+  const thisMonth = rows
+    .filter(r => r.payment_date?.slice(0, 7) === new Date().toISOString().slice(0, 7))
+    .reduce((s, r) => s + Number(r.amount), 0);
+
+  const columns = [
+    { key: 'payment_date', header: 'Date', render: (r: any) => new Date(r.payment_date).toLocaleDateString() },
+    { key: 'category', header: 'Category', render: (r: any) => <span className="capitalize">{r.category}</span> },
+    { key: 'vendor_name', header: 'Vendor', render: (r: any) => r.vendor_name || '—' },
+    { key: 'amount', header: 'Amount', render: (r: any) => formatCurrency(Number(r.amount)) },
+    { key: 'payment_method', header: 'Method', render: (r: any) => r.payment_method || '—' },
+    { key: 'payment_reference', header: 'Reference', render: (r: any) => r.payment_reference || '—' },
+    { key: 'actions', header: '', render: (r: any) => (
+      <div className="flex gap-1 justify-end">
+        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openEdit(r); }}>
+          <Pencil className="h-4 w-4" />
+        </Button>
+        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); remove(r.id); }}>
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+    )},
+  ];
+
+  return (
+    <div>
+      <PageHeader
+        title="Expenses"
+        description="Track operating expenses (rent, utilities, supplies, etc.)"
+        actions={
+          <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
+            <DialogTrigger asChild>
+              <Button onClick={reset}><Plus className="h-4 w-4 mr-2" /> Record Expense</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>{editingId ? 'Edit Expense' : 'Record Expense'}</DialogTitle></DialogHeader>
+              <div className="space-y-4 mt-4">
+                <div>
+                  <Label>Category *</Label>
+                  <Select value={form.category} onValueChange={v => setForm({ ...form, category: v })}>
+                    <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CATEGORIES.map(c => <SelectItem key={c} value={c} className="capitalize">{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Vendor / Payee</Label>
+                  <Input value={form.vendor_name} onChange={e => setForm({ ...form, vendor_name: e.target.value })} className="mt-1.5" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Amount (₦) *</Label>
+                    <Input type="number" step="0.01" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} className="mt-1.5" />
+                  </div>
+                  <div>
+                    <Label>Payment Date *</Label>
+                    <Input type="date" value={form.payment_date} onChange={e => setForm({ ...form, payment_date: e.target.value })} className="mt-1.5" />
+                  </div>
+                </div>
+                <div>
+                  <Label>Payment Method</Label>
+                  <Select value={form.payment_method} onValueChange={v => setForm({ ...form, payment_method: v })}>
+                    <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select method" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                      <SelectItem value="card">Card</SelectItem>
+                      <SelectItem value="cash">Cash</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Reference</Label>
+                  <Input value={form.payment_reference} onChange={e => setForm({ ...form, payment_reference: e.target.value })} className="mt-1.5" placeholder="Receipt or transaction ref" />
+                </div>
+                <div>
+                  <Label>Notes</Label>
+                  <Textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} className="mt-1.5" />
+                </div>
+                <Button onClick={handleSave} className="w-full">{editingId ? 'Save Changes' : 'Save'}</Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        }
+      />
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+        <StatCard title="Total Expenses" value={formatCurrency(total)} icon={Receipt} />
+        <StatCard title="This Month" value={formatCurrency(thisMonth)} icon={TrendingDown} />
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>
+      ) : (
+        <DataTable columns={columns} data={rows} />
+      )}
+    </div>
+  );
+}

@@ -24,6 +24,8 @@ import AuditLogPage from "@/pages/admin/AuditLogPage";
 import ManageAdminsPage from "@/pages/admin/ManageAdminsPage";
 import PayrollPage from "@/pages/admin/PayrollPage";
 import OtherIncomePage from "@/pages/admin/OtherIncomePage";
+import ExpensesPage from "@/pages/admin/ExpensesPage";
+import FinanceDashboardPage from "@/pages/admin/FinanceDashboardPage";
 import StudentDashboard from "@/pages/student/StudentDashboard";
 import StudentInvoicesPage from "@/pages/student/StudentInvoicesPage";
 import StudentPaymentsPage from "@/pages/student/StudentPaymentsPage";
@@ -92,6 +94,8 @@ const App = () => (
               <Route path="/admin/manage-admins" element={<ManageAdminsPage />} />
               <Route path="/admin/payroll" element={<PayrollPage />} />
               <Route path="/admin/other-income" element={<OtherIncomePage />} />
+              <Route path="/admin/expenses" element={<ExpensesPage />} />
+              <Route path="/admin/finance" element={<FinanceDashboardPage />} />
               
               {/* Student routes */}
               <Route path="/student" element={<StudentDashboard />} />

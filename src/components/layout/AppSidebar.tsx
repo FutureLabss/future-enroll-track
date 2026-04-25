@@ -17,6 +17,8 @@ import {
   UserCircle,
   Wallet,
   Banknote,
+  Receipt,
+  PieChart,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -24,10 +26,12 @@ import { ThemeToggle } from '@/components/shared/ThemeToggle';
 
 const adminNav = [
   { to: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/admin/finance', icon: PieChart, label: 'Finance' },
   { to: '/admin/enrollments', icon: Users, label: 'Enrollments' },
   { to: '/admin/invoices', icon: FileText, label: 'Invoices' },
   { to: '/admin/payments', icon: CreditCard, label: 'Payments' },
   { to: '/admin/other-income', icon: Wallet, label: 'Other Income' },
+  { to: '/admin/expenses', icon: Receipt, label: 'Expenses' },
   { to: '/admin/programs', icon: GraduationCap, label: 'Programs' },
   { to: '/admin/cohorts', icon: Layers, label: 'Cohorts' },
   { to: '/admin/organizations', icon: Building2, label: 'Organizations' },

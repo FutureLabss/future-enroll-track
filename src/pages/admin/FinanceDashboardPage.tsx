@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { format } from 'date-fns';
+import { CalendarIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatCard } from '@/components/shared/StatCard';
@@ -7,6 +9,10 @@ import { TrendingUp, Banknote, Receipt, Wallet } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
 
 type Row = {
@@ -21,16 +27,29 @@ type Row = {
 const formatCurrency = (val: number) => `₦${Number(val || 0).toLocaleString('en-NG', { maximumFractionDigits: 0 })}`;
 const formatMonth = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 
+type Mode = 'preset' | 'custom';
+
 export default function FinanceDashboardPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mode, setMode] = useState<Mode>('preset');
   const [months, setMonths] = useState(12);
+  const [startDate, setStartDate] = useState<Date | undefined>();
+  const [endDate, setEndDate] = useState<Date | undefined>();
 
   useEffect(() => {
     let active = true;
     (async () => {
       setLoading(true);
-      const { data, error } = await supabase.rpc('get_finance_summary', { p_months: months });
+      const args: any =
+        mode === 'custom' && startDate && endDate
+          ? {
+              p_months: 12,
+              p_start_date: format(startDate, 'yyyy-MM-dd'),
+              p_end_date: format(endDate, 'yyyy-MM-dd'),
+            }
+          : { p_months: months };
+      const { data, error } = await supabase.rpc('get_finance_summary', args);
       if (!active) return;
       if (error) {
         console.error(error);
@@ -49,7 +68,7 @@ export default function FinanceDashboardPage() {
       setLoading(false);
     })();
     return () => { active = false; };
-  }, [months]);
+  }, [months, mode, startDate, endDate]);
 
   const totals = rows.reduce(
     (acc, r) => {
@@ -78,19 +97,63 @@ export default function FinanceDashboardPage() {
         title="Finance Dashboard"
         description="Monthly revenue, payroll, expenses and profit"
         actions={
-          <div className="flex items-end gap-2">
+          <div className="flex flex-wrap items-end gap-2">
             <div>
-              <Label className="text-xs">Period</Label>
-              <Select value={String(months)} onValueChange={v => setMonths(Number(v))}>
-                <SelectTrigger className="w-[160px] mt-1"><SelectValue /></SelectTrigger>
+              <Label className="text-xs">Mode</Label>
+              <Select value={mode} onValueChange={(v) => setMode(v as Mode)}>
+                <SelectTrigger className="w-[140px] mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="3">Last 3 months</SelectItem>
-                  <SelectItem value="6">Last 6 months</SelectItem>
-                  <SelectItem value="12">Last 12 months</SelectItem>
-                  <SelectItem value="24">Last 24 months</SelectItem>
+                  <SelectItem value="preset">Preset</SelectItem>
+                  <SelectItem value="custom">Custom range</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
+            {mode === 'preset' ? (
+              <div>
+                <Label className="text-xs">Period</Label>
+                <Select value={String(months)} onValueChange={v => setMonths(Number(v))}>
+                  <SelectTrigger className="w-[160px] mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="3">Last 3 months</SelectItem>
+                    <SelectItem value="6">Last 6 months</SelectItem>
+                    <SelectItem value="12">Last 12 months</SelectItem>
+                    <SelectItem value="24">Last 24 months</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <Label className="text-xs">From</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className={cn('w-[160px] mt-1 justify-start text-left font-normal', !startDate && 'text-muted-foreground')}>
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {startDate ? format(startDate, 'MMM yyyy') : 'Pick start'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar mode="single" selected={startDate} onSelect={setStartDate} initialFocus className={cn('p-3 pointer-events-auto')} />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div>
+                  <Label className="text-xs">To</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className={cn('w-[160px] mt-1 justify-start text-left font-normal', !endDate && 'text-muted-foreground')}>
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {endDate ? format(endDate, 'MMM yyyy') : 'Pick end'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar mode="single" selected={endDate} onSelect={setEndDate} disabled={(d) => (startDate ? d < startDate : false)} initialFocus className={cn('p-3 pointer-events-auto')} />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </>
+            )}
           </div>
         }
       />

@@ -743,6 +743,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_delete_enrollment: {
+        Args: { p_enrollment_id: string }
+        Returns: undefined
+      }
       admin_delete_invoice: {
         Args: { p_invoice_id: string }
         Returns: undefined
@@ -767,7 +771,7 @@ export type Database = {
         }[]
       }
       get_finance_summary: {
-        Args: { p_months?: number }
+        Args: { p_end_date?: string; p_months?: number; p_start_date?: string }
         Returns: {
           expenses_total: number
           month: string

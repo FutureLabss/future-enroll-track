@@ -6,7 +6,8 @@ import { StatusBadge } from '@/components/shared/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowLeft, CheckCircle, XCircle, ExternalLink } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { ArrowLeft, CheckCircle, XCircle, ExternalLink, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface FieldValue {
@@ -23,6 +24,21 @@ export default function EnrollmentDetailPage() {
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState(false);
   const [showEvidence, setShowEvidence] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (!enrollment) return;
+    setDeleting(true);
+    try {
+      const { error } = await supabase.rpc('admin_delete_enrollment', { p_enrollment_id: enrollment.id });
+      if (error) throw error;
+      toast.success('Enrollment deleted');
+      navigate('/admin/enrollments');
+    } catch (err: any) {
+      toast.error(err.message);
+      setDeleting(false);
+    }
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -98,9 +114,32 @@ export default function EnrollmentDetailPage() {
         title={enrollment.full_name}
         description={`Enrollment details — ${enrollment.email}`}
         actions={
-          <Button variant="ghost" onClick={() => navigate('/admin/enrollments')}>
-            <ArrowLeft className="h-4 w-4 mr-2" /> Back
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={() => navigate('/admin/enrollments')}>
+              <ArrowLeft className="h-4 w-4 mr-2" /> Back
+            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" disabled={deleting}>
+                  <Trash2 className="h-4 w-4 mr-2" /> Delete
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete this enrollment?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This permanently removes the enrollment along with its invoices, payments, installments, custom field values, and notifications. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         }
       />
 

@@ -8,6 +8,7 @@ import { StatusBadge } from '@/components/shared/StatusBadge';
 
 export default function StudentInvoicesPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 

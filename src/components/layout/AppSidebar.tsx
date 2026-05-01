@@ -30,6 +30,7 @@ const adminNav = [
   { to: '/admin/enrollments', icon: Users, label: 'Enrollments' },
   { to: '/admin/invoices', icon: FileText, label: 'Invoices' },
   { to: '/admin/payments', icon: CreditCard, label: 'Payments' },
+  { to: '/admin/pending-payments', icon: Banknote, label: 'Pending Payments' },
   { to: '/admin/other-income', icon: Wallet, label: 'Other Income' },
   { to: '/admin/expenses', icon: Receipt, label: 'Expenses' },
   { to: '/admin/programs', icon: GraduationCap, label: 'Programs' },

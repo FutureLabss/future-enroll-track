@@ -104,6 +104,8 @@ const App = () => (
               {/* Student routes */}
               <Route path="/student" element={<StudentDashboard />} />
               <Route path="/student/invoices" element={<StudentInvoicesPage />} />
+              <Route path="/student/invoices/:id" element={<StudentInvoiceDetailPage />} />
+              <Route path="/student/invoices/:id/payment-callback" element={<PaymentCallbackPage />} />
               <Route path="/student/payments" element={<StudentPaymentsPage />} />
               
               {/* Org routes */}

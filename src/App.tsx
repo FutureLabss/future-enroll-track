@@ -87,6 +87,7 @@ const App = () => (
               <Route path="/admin/invoices/:id" element={<InvoiceDetailPage />} />
               <Route path="/admin/invoices/new" element={<CreateInvoicePage />} />
               <Route path="/admin/payments" element={<PaymentsPage />} />
+              <Route path="/admin/pending-payments" element={<PendingPaymentsPage />} />
               <Route path="/admin/programs" element={<ProgramsPage />} />
               <Route path="/admin/cohorts" element={<CohortsPage />} />
               <Route path="/admin/organizations" element={<OrganizationsPage />} />

@@ -37,7 +37,7 @@ export default function StudentInvoicesPage() {
   return (
     <div>
       <PageHeader title="My Invoices" description="View your invoices and installment plans" />
-      <DataTable columns={columns} data={invoices} />
+      <DataTable columns={columns} data={invoices} onRowClick={(r: any) => navigate(`/student/invoices/${r.id}`)} />
     </div>
   );
 }

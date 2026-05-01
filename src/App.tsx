@@ -28,7 +28,10 @@ import ExpensesPage from "@/pages/admin/ExpensesPage";
 import FinanceDashboardPage from "@/pages/admin/FinanceDashboardPage";
 import StudentDashboard from "@/pages/student/StudentDashboard";
 import StudentInvoicesPage from "@/pages/student/StudentInvoicesPage";
+import StudentInvoiceDetailPage from "@/pages/student/StudentInvoiceDetailPage";
+import PaymentCallbackPage from "@/pages/student/PaymentCallbackPage";
 import StudentPaymentsPage from "@/pages/student/StudentPaymentsPage";
+import PendingPaymentsPage from "@/pages/admin/PendingPaymentsPage";
 import OrgDashboard from "@/pages/org/OrgDashboard";
 import OrgEnrollmentsPage from "@/pages/org/OrgEnrollmentsPage";
 import OrgReportsPage from "@/pages/org/OrgReportsPage";
@@ -84,6 +87,7 @@ const App = () => (
               <Route path="/admin/invoices/:id" element={<InvoiceDetailPage />} />
               <Route path="/admin/invoices/new" element={<CreateInvoicePage />} />
               <Route path="/admin/payments" element={<PaymentsPage />} />
+              <Route path="/admin/pending-payments" element={<PendingPaymentsPage />} />
               <Route path="/admin/programs" element={<ProgramsPage />} />
               <Route path="/admin/cohorts" element={<CohortsPage />} />
               <Route path="/admin/organizations" element={<OrganizationsPage />} />
@@ -100,6 +104,8 @@ const App = () => (
               {/* Student routes */}
               <Route path="/student" element={<StudentDashboard />} />
               <Route path="/student/invoices" element={<StudentInvoicesPage />} />
+              <Route path="/student/invoices/:id" element={<StudentInvoiceDetailPage />} />
+              <Route path="/student/invoices/:id/payment-callback" element={<PaymentCallbackPage />} />
               <Route path="/student/payments" element={<StudentPaymentsPage />} />
               
               {/* Org routes */}

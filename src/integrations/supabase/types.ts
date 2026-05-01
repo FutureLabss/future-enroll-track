@@ -610,6 +610,57 @@ export type Database = {
         }
         Relationships: []
       }
+      pending_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          enrollment_id: string
+          evidence_url: string
+          id: string
+          installment_id: string | null
+          invoice_id: string
+          notes: string | null
+          payment_reference: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          submitted_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          enrollment_id: string
+          evidence_url: string
+          id?: string
+          installment_id?: string | null
+          invoice_id: string
+          notes?: string | null
+          payment_reference?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          submitted_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          enrollment_id?: string
+          evidence_url?: string
+          id?: string
+          installment_id?: string | null
+          invoice_id?: string
+          notes?: string | null
+          payment_reference?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          submitted_by?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string

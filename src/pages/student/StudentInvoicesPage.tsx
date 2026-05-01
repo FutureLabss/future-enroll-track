@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -7,6 +8,7 @@ import { StatusBadge } from '@/components/shared/StatusBadge';
 
 export default function StudentInvoicesPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -35,7 +37,7 @@ export default function StudentInvoicesPage() {
   return (
     <div>
       <PageHeader title="My Invoices" description="View your invoices and installment plans" />
-      <DataTable columns={columns} data={invoices} />
+      <DataTable columns={columns} data={invoices} onRowClick={(r: any) => navigate(`/student/invoices/${r.id}`)} />
     </div>
   );
 }

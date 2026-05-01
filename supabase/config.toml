@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.check-due-reminders]
 verify_jwt = false
+
+[functions.paystack-verify]
+verify_jwt = false

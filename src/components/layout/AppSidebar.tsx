@@ -19,6 +19,7 @@ import {
   Banknote,
   Receipt,
   PieChart,
+  Mail,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -38,6 +39,7 @@ const adminNav = [
   { to: '/admin/organizations', icon: Building2, label: 'Organizations' },
   { to: '/admin/custom-fields', icon: FormInput, label: 'Custom Fields' },
   { to: '/admin/notifications', icon: Bell, label: 'Notifications' },
+  { to: '/admin/bulk-email', icon: Mail, label: 'Bulk Email' },
   { to: '/admin/reports', icon: BarChart3, label: 'Reports' },
   { to: '/admin/audit-logs', icon: Shield, label: 'Audit Logs' },
 ];

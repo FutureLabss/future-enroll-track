@@ -45,9 +45,10 @@ export default function StudentDashboard() {
     <div>
       <PageHeader title="My Dashboard" description="Overview of your enrollments and payments" />
       <CompleteProfileBanner />
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <StatCard title="Total Owed" value={formatCurrency(totalOwed)} icon={FileText} />
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
+        <StatCard title="Total Tuition" value={formatCurrency(totalAmount)} icon={FileText} />
         <StatCard title="Total Paid" value={formatCurrency(totalPaid)} icon={CreditCard} />
+        <StatCard title="Outstanding" value={formatCurrency(totalOwed)} icon={FileText} />
         <StatCard title="Overdue" value={overdue} icon={AlertTriangle} />
       </div>
       <h2 className="text-lg font-heading font-semibold mb-4">My Enrollments</h2>

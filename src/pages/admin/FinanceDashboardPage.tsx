@@ -32,6 +32,7 @@ type Mode = 'preset' | 'custom';
 export default function FinanceDashboardPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>('preset');
   const [months, setMonths] = useState(12);
   const [startDate, setStartDate] = useState<Date | undefined>();
@@ -41,6 +42,7 @@ export default function FinanceDashboardPage() {
     let active = true;
     (async () => {
       setLoading(true);
+      setErrorMsg(null);
       const args: any =
         mode === 'custom' && startDate && endDate
           ? {
@@ -52,7 +54,8 @@ export default function FinanceDashboardPage() {
       const { data, error } = await supabase.rpc('get_finance_summary', args);
       if (!active) return;
       if (error) {
-        console.error(error);
+        console.error('Finance RPC error:', error);
+        setErrorMsg(error.message || 'Could not load finance data. Make sure you are signed in as an admin.');
         setRows([]);
       } else {
         const normalized = (data || []).map((r: any) => ({
@@ -157,6 +160,12 @@ export default function FinanceDashboardPage() {
           </div>
         }
       />
+
+      {errorMsg && (
+        <div className="mb-4 p-4 rounded-lg border border-destructive/40 bg-destructive/10 text-destructive text-sm">
+          {errorMsg}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard title="Total Revenue" value={formatCurrency(totals.revenue)} icon={Wallet} />

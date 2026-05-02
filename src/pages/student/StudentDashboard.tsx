@@ -20,8 +20,12 @@ export default function StudentDashboard() {
       .then(({ data }) => { setEnrollments(data || []); setLoading(false); });
   }, [user]);
 
-  const totalOwed = enrollments.reduce((s, e) => s + Number(e.total_amount), 0);
-  const totalPaid = enrollments.reduce((s, e) => s + Number(e.amount_paid), 0);
+  const totalAmount = enrollments.reduce((s, e) => s + Number(e.total_amount || 0), 0);
+  const totalPaid = enrollments.reduce((s, e) => s + Number(e.amount_paid || 0), 0);
+  const totalOwed = enrollments.reduce((s, e) => {
+    const ob = e.outstanding_balance != null ? Number(e.outstanding_balance) : Math.max(Number(e.total_amount || 0) - Number(e.amount_paid || 0), 0);
+    return s + ob;
+  }, 0);
   const overdue = enrollments.filter(e => e.enrollment_status === 'overdue').length;
 
   const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;

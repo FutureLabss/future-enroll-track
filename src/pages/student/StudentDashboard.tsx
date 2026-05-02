@@ -20,8 +20,12 @@ export default function StudentDashboard() {
       .then(({ data }) => { setEnrollments(data || []); setLoading(false); });
   }, [user]);
 
-  const totalOwed = enrollments.reduce((s, e) => s + Number(e.total_amount), 0);
-  const totalPaid = enrollments.reduce((s, e) => s + Number(e.amount_paid), 0);
+  const totalAmount = enrollments.reduce((s, e) => s + Number(e.total_amount || 0), 0);
+  const totalPaid = enrollments.reduce((s, e) => s + Number(e.amount_paid || 0), 0);
+  const totalOwed = enrollments.reduce((s, e) => {
+    const ob = e.outstanding_balance != null ? Number(e.outstanding_balance) : Math.max(Number(e.total_amount || 0) - Number(e.amount_paid || 0), 0);
+    return s + ob;
+  }, 0);
   const overdue = enrollments.filter(e => e.enrollment_status === 'overdue').length;
 
   const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
@@ -41,9 +45,10 @@ export default function StudentDashboard() {
     <div>
       <PageHeader title="My Dashboard" description="Overview of your enrollments and payments" />
       <CompleteProfileBanner />
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <StatCard title="Total Owed" value={formatCurrency(totalOwed)} icon={FileText} />
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
+        <StatCard title="Total Tuition" value={formatCurrency(totalAmount)} icon={FileText} />
         <StatCard title="Total Paid" value={formatCurrency(totalPaid)} icon={CreditCard} />
+        <StatCard title="Outstanding" value={formatCurrency(totalOwed)} icon={FileText} />
         <StatCard title="Overdue" value={overdue} icon={AlertTriangle} />
       </div>
       <h2 className="text-lg font-heading font-semibold mb-4">My Enrollments</h2>

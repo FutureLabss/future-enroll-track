@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { ArrowLeft, CheckCircle, XCircle, Trash2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, Trash2, Pencil } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
@@ -138,6 +138,11 @@ export default function InvoiceDetailPage() {
             <Button variant="outline" onClick={() => navigate('/admin/invoices')}>
               <ArrowLeft className="h-4 w-4 mr-2" /> Back
             </Button>
+            {isAdmin && (
+              <Button variant="outline" onClick={() => navigate(`/admin/invoices/${id}/edit`)}>
+                <Pencil className="h-4 w-4 mr-2" /> Edit
+              </Button>
+            )}
             {isAdmin && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>

@@ -26,6 +26,8 @@ import PayrollPage from "@/pages/admin/PayrollPage";
 import OtherIncomePage from "@/pages/admin/OtherIncomePage";
 import ExpensesPage from "@/pages/admin/ExpensesPage";
 import FinanceDashboardPage from "@/pages/admin/FinanceDashboardPage";
+import BulkEmailPage from "@/pages/admin/BulkEmailPage";
+import EditInvoicePage from "@/pages/admin/EditInvoicePage";
 import StudentDashboard from "@/pages/student/StudentDashboard";
 import StudentInvoicesPage from "@/pages/student/StudentInvoicesPage";
 import StudentInvoiceDetailPage from "@/pages/student/StudentInvoiceDetailPage";
@@ -85,7 +87,9 @@ const App = () => (
               <Route path="/admin/enrollments/:id" element={<EnrollmentDetailPage />} />
               <Route path="/admin/invoices" element={<InvoicesPage />} />
               <Route path="/admin/invoices/:id" element={<InvoiceDetailPage />} />
+              <Route path="/admin/invoices/:id/edit" element={<EditInvoicePage />} />
               <Route path="/admin/invoices/new" element={<CreateInvoicePage />} />
+              <Route path="/admin/bulk-email" element={<BulkEmailPage />} />
               <Route path="/admin/payments" element={<PaymentsPage />} />
               <Route path="/admin/pending-payments" element={<PendingPaymentsPage />} />
               <Route path="/admin/programs" element={<ProgramsPage />} />

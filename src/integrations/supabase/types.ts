@@ -802,6 +802,14 @@ export type Database = {
         Args: { p_invoice_id: string }
         Returns: undefined
       }
+      admin_update_invoice: {
+        Args: {
+          p_installments: Json
+          p_invoice_id: string
+          p_total_amount: number
+        }
+        Returns: undefined
+      }
       cancel_admin_invite: { Args: { p_email: string }; Returns: undefined }
       create_admin_invite: { Args: { p_email: string }; Returns: undefined }
       get_enrollment_field_values: {
@@ -851,6 +859,19 @@ export type Database = {
           email: string
           is_super: boolean
           pending: boolean
+          user_id: string
+        }[]
+      }
+      list_audit_logs: {
+        Args: { p_limit?: number }
+        Returns: {
+          action: string
+          created_at: string
+          details: Json
+          entity_id: string
+          entity_type: string
+          id: string
+          user_email: string
           user_id: string
         }[]
       }

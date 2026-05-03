@@ -875,6 +875,27 @@ export type Database = {
           user_id: string
         }[]
       }
+      list_outstanding_invoices: {
+        Args: { p_only_overdue?: boolean }
+        Returns: {
+          amount_paid: number
+          cohort_label: string
+          days_overdue: number
+          earliest_overdue_date: string
+          email: string
+          enrollment_id: string
+          full_name: string
+          invoice_id: string
+          invoice_number: string
+          invoice_status: string
+          is_overdue: boolean
+          next_due_date: string
+          outstanding: number
+          phone: string
+          program_name: string
+          total_amount: number
+        }[]
+      }
       revoke_admin: { Args: { p_email: string }; Returns: undefined }
       submit_enrollment_fields: {
         Args: { p_enrollment_id: string; p_fields: Json }

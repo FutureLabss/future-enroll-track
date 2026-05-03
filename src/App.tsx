@@ -28,6 +28,7 @@ import ExpensesPage from "@/pages/admin/ExpensesPage";
 import FinanceDashboardPage from "@/pages/admin/FinanceDashboardPage";
 import BulkEmailPage from "@/pages/admin/BulkEmailPage";
 import EditInvoicePage from "@/pages/admin/EditInvoicePage";
+import OutstandingInvoicesPage from "@/pages/admin/OutstandingInvoicesPage";
 import StudentDashboard from "@/pages/student/StudentDashboard";
 import StudentInvoicesPage from "@/pages/student/StudentInvoicesPage";
 import StudentInvoiceDetailPage from "@/pages/student/StudentInvoiceDetailPage";
@@ -104,6 +105,7 @@ const App = () => (
               <Route path="/admin/other-income" element={<OtherIncomePage />} />
               <Route path="/admin/expenses" element={<ExpensesPage />} />
               <Route path="/admin/finance" element={<FinanceDashboardPage />} />
+              <Route path="/admin/outstanding" element={<OutstandingInvoicesPage />} />
               
               {/* Student routes */}
               <Route path="/student" element={<StudentDashboard />} />

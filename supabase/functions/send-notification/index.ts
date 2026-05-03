@@ -273,18 +273,7 @@ Deno.serve(async (req) => {
       due_date: nextDue?.due_date || extra?.due_date || "",
       amount_paid: extra?.amount_paid || enrollment.amount_paid,
       enrollment_id: enrollment_id,
-      FRONTEND_URL: (() => {
-        // Priority: caller origin (admin's current domain) > FRONTEND_URL secret
-        let url = originBase || Deno.env.get("FRONTEND_URL") || "https://admin.futurelabs.ng";
-        if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
-        url = url.replace(/\/+$/, "");
-        // Don't use preview/sandbox URLs in emails — they're not shareable
-        if (/id-preview--|lovableproject\.com|sandbox/i.test(url)) {
-          url = (Deno.env.get("FRONTEND_URL") || "https://admin.futurelabs.ng").replace(/\/+$/, "");
-          if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
-        }
-        return url;
-      })(),
+      FRONTEND_URL: "https://admin.futurelabs.ng",
       ...extra,
     };
     console.log("[send-notification] origin:", requestOrigin, "→ base:", `${templateData.FRONTEND_URL}/students/${enrollment_id}`);

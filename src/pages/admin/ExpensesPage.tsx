@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Trash2, Pencil, Receipt, TrendingDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { StatCard } from '@/components/shared/StatCard';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { RecurringManager } from '@/components/shared/RecurringManager';
 
 const CATEGORIES = ['rent', 'utilities', 'supplies', 'internet', 'maintenance', 'marketing', 'travel', 'other'];
 

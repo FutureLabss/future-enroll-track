@@ -13,6 +13,8 @@ import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { StatCard } from '@/components/shared/StatCard';
 import { Wallet, TrendingUp } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { RecurringManager } from '@/components/shared/RecurringManager';
 
 const CATEGORIES = ['workspace', 'rental', 'consulting', 'event', 'other'];
 

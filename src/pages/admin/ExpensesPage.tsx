@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Trash2, Pencil, Receipt, TrendingDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { StatCard } from '@/components/shared/StatCard';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { RecurringManager } from '@/components/shared/RecurringManager';
 
 const CATEGORIES = ['rent', 'utilities', 'supplies', 'internet', 'maintenance', 'marketing', 'travel', 'other'];
 
@@ -184,11 +186,22 @@ export default function ExpensesPage() {
         <StatCard title="This Month" value={formatCurrency(thisMonth)} icon={TrendingDown} />
       </div>
 
-      {loading ? (
-        <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>
-      ) : (
-        <DataTable columns={columns} data={rows} />
-      )}
+      <Tabs defaultValue="all">
+        <TabsList>
+          <TabsTrigger value="all">All Expenses</TabsTrigger>
+          <TabsTrigger value="recurring">Recurring</TabsTrigger>
+        </TabsList>
+        <TabsContent value="all" className="mt-4">
+          {loading ? (
+            <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>
+          ) : (
+            <DataTable columns={columns} data={rows} />
+          )}
+        </TabsContent>
+        <TabsContent value="recurring" className="mt-4">
+          <RecurringManager kind="expense" categories={CATEGORIES} onPosted={fetchRows} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -729,6 +729,114 @@ export type Database = {
         }
         Relationships: []
       }
+      recurring_expenses: {
+        Row: {
+          active: boolean
+          amount: number
+          category: string
+          created_at: string
+          created_by: string | null
+          end_date: string | null
+          frequency: string
+          id: string
+          last_posted_date: string | null
+          next_due_date: string
+          notes: string | null
+          payment_method: string | null
+          start_date: string
+          updated_at: string
+          vendor_name: string | null
+        }
+        Insert: {
+          active?: boolean
+          amount?: number
+          category: string
+          created_at?: string
+          created_by?: string | null
+          end_date?: string | null
+          frequency?: string
+          id?: string
+          last_posted_date?: string | null
+          next_due_date?: string
+          notes?: string | null
+          payment_method?: string | null
+          start_date?: string
+          updated_at?: string
+          vendor_name?: string | null
+        }
+        Update: {
+          active?: boolean
+          amount?: number
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          end_date?: string | null
+          frequency?: string
+          id?: string
+          last_posted_date?: string | null
+          next_due_date?: string
+          notes?: string | null
+          payment_method?: string | null
+          start_date?: string
+          updated_at?: string
+          vendor_name?: string | null
+        }
+        Relationships: []
+      }
+      recurring_income: {
+        Row: {
+          active: boolean
+          amount: number
+          category: string
+          created_at: string
+          created_by: string | null
+          end_date: string | null
+          frequency: string
+          id: string
+          last_posted_date: string | null
+          next_due_date: string
+          notes: string | null
+          payer_name: string
+          payment_method: string | null
+          start_date: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          amount?: number
+          category: string
+          created_at?: string
+          created_by?: string | null
+          end_date?: string | null
+          frequency?: string
+          id?: string
+          last_posted_date?: string | null
+          next_due_date?: string
+          notes?: string | null
+          payer_name: string
+          payment_method?: string | null
+          start_date?: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          amount?: number
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          end_date?: string | null
+          frequency?: string
+          id?: string
+          last_posted_date?: string | null
+          next_due_date?: string
+          notes?: string | null
+          payer_name?: string
+          payment_method?: string | null
+          start_date?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       staff: {
         Row: {
           account_number: string | null
@@ -811,6 +919,10 @@ export type Database = {
         Returns: undefined
       }
       cancel_admin_invite: { Args: { p_email: string }; Returns: undefined }
+      compute_next_recurrence: {
+        Args: { _d: string; _freq: string }
+        Returns: string
+      }
       create_admin_invite: { Args: { p_email: string }; Returns: undefined }
       get_enrollment_field_values: {
         Args: { p_enrollment_id: string }
@@ -895,6 +1007,14 @@ export type Database = {
           program_name: string
           total_amount: number
         }[]
+      }
+      post_recurring_expense: {
+        Args: { p_id: string; p_payment_date?: string }
+        Returns: string
+      }
+      post_recurring_income: {
+        Args: { p_id: string; p_payment_date?: string }
+        Returns: string
       }
       revoke_admin: { Args: { p_email: string }; Returns: undefined }
       submit_enrollment_fields: {

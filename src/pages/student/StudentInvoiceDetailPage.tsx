@@ -60,7 +60,7 @@ export default function StudentInvoiceDetailPage() {
     if (!amount || amount <= 0) { toast.error('Nothing to pay'); return; }
     setPaying(true);
     try {
-      const callback_url = `${window.location.origin}/student/invoices/${id}/payment-callback`;
+      const callback_url = `https://admin.futurelabs.ng/student/invoices/${id}/payment-callback`;
       const { data, error } = await supabase.functions.invoke('paystack-init', {
         body: { invoice_id: id, installment_id: installment_id || null, amount, callback_url },
       });

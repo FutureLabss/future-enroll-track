@@ -14,6 +14,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
+import EnrollmentTargets from '@/components/admin/EnrollmentTargets';
 
 type Row = {
   month: string;
@@ -200,6 +201,10 @@ export default function FinanceDashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      <div className="mb-6">
+        <EnrollmentTargets />
+      </div>
 
       <Card>
         <CardHeader><CardTitle>Per-Month Details</CardTitle></CardHeader>

@@ -124,6 +124,36 @@ export type Database = {
         }
         Relationships: []
       }
+      enrollment_targets: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          target_count: number
+          target_month: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          target_count?: number
+          target_month: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          target_count?: number
+          target_month?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       enrollments: {
         Row: {
           amount_paid: number
@@ -939,6 +969,16 @@ export type Database = {
           id: string
           program_name: string
           user_id: string
+        }[]
+      }
+      get_enrollment_performance: {
+        Args: { p_end_date?: string; p_months?: number; p_start_date?: string }
+        Returns: {
+          achievement_pct: number
+          actual_count: number
+          month: string
+          target_count: number
+          variance: number
         }[]
       }
       get_finance_summary: {

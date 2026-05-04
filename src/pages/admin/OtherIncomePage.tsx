@@ -9,10 +9,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus } from 'lucide-react';
+import { Plus, Pencil, Trash2, Wallet, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { StatCard } from '@/components/shared/StatCard';
-import { Wallet, TrendingUp } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RecurringManager } from '@/components/shared/RecurringManager';
 
@@ -23,7 +22,8 @@ export default function OtherIncomePage() {
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const blank = {
     category: 'workspace',
     payer_name: '',
     amount: '',
@@ -31,7 +31,8 @@ export default function OtherIncomePage() {
     payment_method: '',
     payment_reference: '',
     notes: '',
-  });
+  };
+  const [form, setForm] = useState(blank);
 
   const fetchRows = async () => {
     const { data } = await supabase.from('other_income').select('*').order('payment_date', { ascending: false });
@@ -41,11 +42,27 @@ export default function OtherIncomePage() {
 
   useEffect(() => { fetchRows(); }, []);
 
+  const reset = () => { setEditingId(null); setForm(blank); };
+
+  const openEdit = (r: any) => {
+    setEditingId(r.id);
+    setForm({
+      category: r.category || 'workspace',
+      payer_name: r.payer_name || '',
+      amount: r.amount != null ? String(r.amount) : '',
+      payment_date: r.payment_date || new Date().toISOString().slice(0, 10),
+      payment_method: r.payment_method || '',
+      payment_reference: r.payment_reference || '',
+      notes: r.notes || '',
+    });
+    setOpen(true);
+  };
+
   const handleSave = async () => {
     try {
       const amount = parseFloat(form.amount);
       if (!form.payer_name || isNaN(amount) || amount <= 0) throw new Error('Fill required fields');
-      const { error } = await supabase.from('other_income').insert({
+      const payload = {
         category: form.category,
         payer_name: form.payer_name,
         amount,
@@ -54,15 +71,26 @@ export default function OtherIncomePage() {
         payment_reference: form.payment_reference || null,
         notes: form.notes || null,
         recorded_by: user?.id || null,
-      });
+      };
+      const { error } = editingId
+        ? await supabase.from('other_income').update(payload).eq('id', editingId)
+        : await supabase.from('other_income').insert(payload);
       if (error) throw error;
-      toast.success('Income recorded');
+      toast.success(editingId ? 'Income updated' : 'Income recorded');
       setOpen(false);
-      setForm({ category: 'workspace', payer_name: '', amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: '', payment_reference: '', notes: '' });
+      reset();
       fetchRows();
     } catch (err: any) {
       toast.error(err.message);
     }
+  };
+
+  const remove = async (id: string) => {
+    if (!confirm('Delete this income entry?')) return;
+    const { error } = await supabase.from('other_income').delete().eq('id', id);
+    if (error) return toast.error(error.message);
+    toast.success('Deleted');
+    fetchRows();
   };
 
   const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
@@ -77,6 +105,16 @@ export default function OtherIncomePage() {
     { key: 'amount', header: 'Amount', render: (r: any) => formatCurrency(Number(r.amount)) },
     { key: 'payment_method', header: 'Method', render: (r: any) => r.payment_method || '—' },
     { key: 'payment_reference', header: 'Reference', render: (r: any) => r.payment_reference || '—' },
+    { key: 'actions', header: '', render: (r: any) => (
+      <div className="flex gap-1 justify-end">
+        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openEdit(r); }}>
+          <Pencil className="h-4 w-4" />
+        </Button>
+        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); remove(r.id); }}>
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+    )},
   ];
 
   return (
@@ -85,12 +123,12 @@ export default function OtherIncomePage() {
         title="Other Income"
         description="Workspace, rental, consulting and other revenue"
         actions={
-          <Dialog open={open} onOpenChange={setOpen}>
+          <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
             <DialogTrigger asChild>
-              <Button><Plus className="h-4 w-4 mr-2" /> Record Income</Button>
+              <Button onClick={reset}><Plus className="h-4 w-4 mr-2" /> Record Income</Button>
             </DialogTrigger>
             <DialogContent>
-              <DialogHeader><DialogTitle>Record Income</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>{editingId ? 'Edit Income' : 'Record Income'}</DialogTitle></DialogHeader>
               <div className="space-y-4 mt-4">
                 <div>
                   <Label>Category *</Label>
@@ -135,7 +173,7 @@ export default function OtherIncomePage() {
                   <Label>Notes</Label>
                   <Textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} className="mt-1.5" />
                 </div>
-                <Button onClick={handleSave} className="w-full">Save</Button>
+                <Button onClick={handleSave} className="w-full">{editingId ? 'Save Changes' : 'Save'}</Button>
               </div>
             </DialogContent>
           </Dialog>

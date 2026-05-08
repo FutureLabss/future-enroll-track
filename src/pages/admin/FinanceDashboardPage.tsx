@@ -119,6 +119,7 @@ export default function FinanceDashboardPage() {
                 <Select value={String(months)} onValueChange={v => setMonths(Number(v))}>
                   <SelectTrigger className="w-[160px] mt-1"><SelectValue /></SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="1">This month</SelectItem>
                     <SelectItem value="3">Last 3 months</SelectItem>
                     <SelectItem value="6">Last 6 months</SelectItem>
                     <SelectItem value="12">Last 12 months</SelectItem>

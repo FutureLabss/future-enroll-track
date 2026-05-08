@@ -51,6 +51,21 @@ export default function StudentInvoiceDetailPage() {
 
   useEffect(() => { fetchData(); }, [id, user]);
 
+  // Auto-trigger Paystack when ?pay=1 (from email link)
+  useEffect(() => {
+    if (autoPayTriggered.current) return;
+    if (!invoice || loading) return;
+    if (searchParams.get('pay') !== '1') return;
+    const next = installments.find(i => i.status !== 'paid');
+    const amt = next ? Number(next.amount) : (Number(invoice.total_amount) - installments.filter(i=>i.status==='paid').reduce((s,i)=>s+Number(i.amount),0));
+    if (amt > 0) {
+      autoPayTriggered.current = true;
+      searchParams.delete('pay');
+      setSearchParams(searchParams, { replace: true });
+      handlePaystack(amt, next?.id);
+    }
+  }, [invoice, loading, installments, searchParams]);
+
   const formatCurrency = (val: number) => `₦${Number(val).toLocaleString('en-NG')}`;
 
   const totalPaid = installments.filter(i => i.status === 'paid').reduce((s, i) => s + Number(i.amount), 0);

@@ -179,10 +179,13 @@ export default function EditInvoicePage() {
 
       <div className="mt-6 flex gap-3">
         <Button onClick={handleSave} disabled={saving} size="lg">
-          <Save className="h-4 w-4 mr-2" /> {saving ? 'Saving…' : 'Save changes'}
+          <Save className="h-4 w-4 mr-2" /> {saving ? 'Saving…' : isSuperadmin ? 'Save changes' : 'Request changes'}
         </Button>
         <Button variant="outline" onClick={() => navigate(`/admin/invoices/${id}`)}>Cancel</Button>
       </div>
+      {!isSuperadmin && (
+        <p className="text-xs text-muted-foreground mt-3">Edits require superadmin approval.</p>
+      )}
     </div>
   );
 }

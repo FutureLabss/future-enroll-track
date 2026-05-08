@@ -22,11 +22,21 @@ export default function PaymentsPage() {
   const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
 
   const fetchPayments = async () => {
-    const { data } = await supabase
-      .from('payments')
-      .select('*, invoices(invoice_number, enrollments(full_name, programs(program_name)))')
-      .order('created_at', { ascending: false });
-    setPayments(data || []);
+    const [payRes, oiRes] = await Promise.all([
+      supabase.from('payments')
+        .select('*, invoices(invoice_number, enrollments(full_name, programs(program_name)))')
+        .order('created_at', { ascending: false }).limit(100),
+      supabase.from('other_income').select('*').order('payment_date', { ascending: false }).limit(50),
+    ]);
+    const merged = [
+      ...(payRes.data || []).map((p: any) => ({ ...p, _kind: 'tuition', _date: p.created_at })),
+      ...(oiRes.data || []).map((o: any) => ({
+        ...o, _kind: 'other', _date: o.payment_date,
+        payment_reference: o.payment_reference || '—',
+        invoices: { invoice_number: o.category, enrollments: { full_name: o.payer_name } },
+      })),
+    ].sort((a: any, b: any) => new Date(b._date).getTime() - new Date(a._date).getTime());
+    setPayments(merged);
     setLoading(false);
   };
 

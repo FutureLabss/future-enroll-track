@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/hooks/useAuth';
 import { StatCard } from '@/components/shared/StatCard';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatusBadge } from '@/components/shared/StatusBadge';
@@ -10,6 +11,7 @@ import { useNavigate } from 'react-router-dom';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+  const { isAdmin, loading: authLoading } = useAuth();
   const [stats, setStats] = useState({
     totalInvoiced: 0,
     totalCollected: 0,

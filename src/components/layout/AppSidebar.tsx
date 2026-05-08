@@ -71,12 +71,23 @@ export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps)
 
   const isSuperadmin = user?.email?.toLowerCase() === 'manassehudim@gmail.com';
   const baseNav = isAdmin ? adminNav : isOrganization ? orgNav : studentNav;
-  const nav = isAdmin && isSuperadmin
-    ? [...baseNav,
-        { to: '/admin/payroll', icon: Banknote, label: 'Payroll' },
-        { to: '/admin/manage-admins', icon: ShieldCheck, label: 'Manage Admins' },
+  const adminExtras = isAdmin
+    ? [
+        ...(isSuperadmin
+          ? [
+              { to: '/admin/invoice-approvals', icon: ClipboardCheck, label: 'Invoice Approvals' },
+              { to: '/admin/staff-invoices', icon: Inbox, label: 'Staff Invoices' },
+              { to: '/admin/payroll', icon: Banknote, label: 'Payroll' },
+              { to: '/admin/manage-admins', icon: ShieldCheck, label: 'Manage Admins' },
+            ]
+          : []),
       ]
-    : baseNav;
+    : [];
+  // Allow non-admins (staff) to see their submission page if their email exists in staff table
+  const staffExtras = !isAdmin && !isOrganization
+    ? [{ to: '/staff/invoices', icon: FileText, label: 'Invoice Company' }]
+    : [];
+  const nav = [...baseNav, ...adminExtras, ...staffExtras];
 
   const containerClass =
     variant === 'mobile'

@@ -69,19 +69,34 @@ export default function EditInvoicePage() {
     }
     setSaving(true);
     try {
-      const { error } = await supabase.rpc('admin_update_invoice' as any, {
-        p_invoice_id: id,
-        p_total_amount: totalNum,
-        p_installments: installments.map(i => ({
+      const payload = {
+        total_amount: totalNum,
+        installments: installments.map(i => ({
           amount: Number(i.amount),
           due_date: i.due_date,
           status: i.status,
           paid_at: i.status === 'paid' ? (i.paid_at || new Date().toISOString()) : null,
         })),
-      });
-      if (error) throw error;
-      toast.success('Invoice updated');
-      navigate(`/admin/invoices/${id}`);
+      };
+      if (isSuperadmin) {
+        const { error } = await supabase.rpc('admin_update_invoice' as any, {
+          p_invoice_id: id,
+          p_total_amount: totalNum,
+          p_installments: payload.installments,
+        });
+        if (error) throw error;
+        toast.success('Invoice updated');
+        navigate(`/admin/invoices/${id}`);
+      } else {
+        const { error } = await supabase.rpc('request_invoice_change' as any, {
+          p_invoice_id: id,
+          p_action: 'edit',
+          p_payload: payload,
+        });
+        if (error) throw error;
+        toast.success('Edit request sent for superadmin approval');
+        navigate(`/admin/invoices/${id}`);
+      }
     } catch (e: any) {
       toast.error(e.message || 'Failed to update');
     } finally {

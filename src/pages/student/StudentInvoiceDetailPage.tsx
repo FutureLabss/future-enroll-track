@@ -16,6 +16,8 @@ import { toast } from 'sonner';
 export default function StudentInvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const autoPayTriggered = useRef(false);
   const { user } = useAuth();
   const [invoice, setInvoice] = useState<any>(null);
   const [installments, setInstallments] = useState<any[]>([]);

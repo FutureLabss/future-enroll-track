@@ -68,6 +68,7 @@ export default function EnrollmentsPage() {
   const columns = [
     { key: 'full_name', header: 'Student' },
     { key: 'email', header: 'Email' },
+    { key: 'enrollment_date', header: 'Enrollment Date', render: (r: any) => new Date(r.first_payment_date || r.created_at).toLocaleDateString() },
     { key: 'program', header: 'Program', render: (r: any) => r.programs?.program_name || '—' },
     { key: 'cohort', header: 'Cohort', render: (r: any) => r.cohorts?.cohort_label || '—' },
     { key: 'organization', header: 'Sponsor', render: (r: any) => r.organizations?.organization_name || '—' },

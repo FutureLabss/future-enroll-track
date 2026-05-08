@@ -23,10 +23,11 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (authLoading || !isAdmin) return;
     const fetchData = async () => {
       const [allEnrollRes, recentEnrollRes, invoiceRes, otherIncomeRes] = await Promise.all([
         supabase.from('enrollments').select('total_amount, amount_paid, enrollment_status'),
-        supabase.from('enrollments').select('*').order('created_at', { ascending: false }).limit(5),
+        supabase.from('enrollments').select('*').order('first_payment_date', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }).limit(5),
         supabase.from('invoices').select('total_amount, status'),
         supabase.from('other_income').select('amount'),
       ]);
@@ -47,7 +48,7 @@ export default function AdminDashboard() {
       setLoading(false);
     };
     fetchData();
-  }, []);
+  }, [authLoading, isAdmin]);
 
   const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG', { minimumFractionDigits: 0 })}`;
 

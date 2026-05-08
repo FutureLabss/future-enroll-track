@@ -144,17 +144,18 @@ export default function PaymentsPage() {
   };
 
   const columns = [
+    { key: 'type', header: 'Type', render: (r: any) => r._kind === 'other' ? <span className="text-xs px-2 py-0.5 rounded bg-accent/15 text-accent-foreground">Other Income</span> : <span className="text-xs px-2 py-0.5 rounded bg-primary/15 text-primary">Tuition</span> },
     { key: 'payment_reference', header: 'Reference' },
-    { key: 'student', header: 'Student', render: (r: any) => r.invoices?.enrollments?.full_name || '—' },
-    { key: 'invoice', header: 'Invoice', render: (r: any) => r.invoices?.invoice_number || '—' },
+    { key: 'student', header: 'Student / Payer', render: (r: any) => r.invoices?.enrollments?.full_name || '—' },
+    { key: 'invoice', header: 'Invoice / Category', render: (r: any) => r.invoices?.invoice_number || '—' },
     { key: 'amount', header: 'Amount', render: (r: any) => formatCurrency(Number(r.amount)) },
     { key: 'payment_method', header: 'Method', render: (r: any) => r.payment_method || '—' },
-    { key: 'created_at', header: 'Date', render: (r: any) => new Date(r.created_at).toLocaleDateString() },
-    { key: 'receipt', header: '', render: (r: any) => (
+    { key: 'created_at', header: 'Date', render: (r: any) => new Date(r._date || r.created_at).toLocaleDateString() },
+    { key: 'receipt', header: '', render: (r: any) => r._kind === 'tuition' ? (
       <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openReceipt(r); }}>
         <FileText className="h-4 w-4 mr-1" /> Receipt
       </Button>
-    )},
+    ) : null },
   ];
 
   return (

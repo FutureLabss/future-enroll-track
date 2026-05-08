@@ -76,7 +76,7 @@ async function sendWhatsApp(to: string, body: string) {
 }
 
 function buildEmailContent(type: string, data: Record<string, any>): { subject: string; html: string } {
-  const { full_name, invoice_number, total_amount, currency, due_date, amount_paid, payment_reference, payment_method, program_name, enrollment_id, FRONTEND_URL } = data;
+  const { full_name, invoice_number, total_amount, currency, due_date, amount_paid, payment_reference, payment_method, program_name, enrollment_id, invoice_id, FRONTEND_URL } = data;
   const currencySymbol = currency === "USD" ? "$" : "₦";
   const formattedAmount = `${currencySymbol}${Number(total_amount).toLocaleString()}`;
   const formattedPaid = amount_paid ? `${currencySymbol}${Number(amount_paid).toLocaleString()}` : "";

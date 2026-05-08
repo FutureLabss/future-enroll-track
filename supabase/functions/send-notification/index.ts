@@ -278,6 +278,7 @@ Deno.serve(async (req) => {
       due_date: nextDue?.due_date || extra?.due_date || "",
       amount_paid: extra?.amount_paid || enrollment.amount_paid,
       enrollment_id: enrollment_id,
+      invoice_id: invoice_id || null,
       FRONTEND_URL: "https://admin.futurelabs.ng",
       ...extra,
     };

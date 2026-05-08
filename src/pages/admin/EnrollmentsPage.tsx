@@ -21,6 +21,7 @@ export default function EnrollmentsPage() {
     const fetchEnrollments = async () => {
       let query = supabase.from('enrollments')
         .select('*, programs(program_name), cohorts(cohort_label), organizations(organization_name)')
+        .order('first_payment_date', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false });
       if (statusFilter !== 'all') query = query.eq('enrollment_status', statusFilter);
       const { data } = await query;

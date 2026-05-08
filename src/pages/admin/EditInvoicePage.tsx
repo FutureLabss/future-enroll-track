@@ -16,7 +16,8 @@ type Inst = { id?: string; amount: string; due_date: string; status: 'pending' |
 export default function EditInvoicePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
+  const isSuperadmin = user?.email?.toLowerCase() === 'manassehudim@gmail.com';
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [invoice, setInvoice] = useState<any>(null);
@@ -68,19 +69,34 @@ export default function EditInvoicePage() {
     }
     setSaving(true);
     try {
-      const { error } = await supabase.rpc('admin_update_invoice' as any, {
-        p_invoice_id: id,
-        p_total_amount: totalNum,
-        p_installments: installments.map(i => ({
+      const payload = {
+        total_amount: totalNum,
+        installments: installments.map(i => ({
           amount: Number(i.amount),
           due_date: i.due_date,
           status: i.status,
           paid_at: i.status === 'paid' ? (i.paid_at || new Date().toISOString()) : null,
         })),
-      });
-      if (error) throw error;
-      toast.success('Invoice updated');
-      navigate(`/admin/invoices/${id}`);
+      };
+      if (isSuperadmin) {
+        const { error } = await supabase.rpc('admin_update_invoice' as any, {
+          p_invoice_id: id,
+          p_total_amount: totalNum,
+          p_installments: payload.installments,
+        });
+        if (error) throw error;
+        toast.success('Invoice updated');
+        navigate(`/admin/invoices/${id}`);
+      } else {
+        const { error } = await supabase.rpc('request_invoice_change' as any, {
+          p_invoice_id: id,
+          p_action: 'edit',
+          p_payload: payload,
+        });
+        if (error) throw error;
+        toast.success('Edit request sent for superadmin approval');
+        navigate(`/admin/invoices/${id}`);
+      }
     } catch (e: any) {
       toast.error(e.message || 'Failed to update');
     } finally {
@@ -163,10 +179,13 @@ export default function EditInvoicePage() {
 
       <div className="mt-6 flex gap-3">
         <Button onClick={handleSave} disabled={saving} size="lg">
-          <Save className="h-4 w-4 mr-2" /> {saving ? 'Saving…' : 'Save changes'}
+          <Save className="h-4 w-4 mr-2" /> {saving ? 'Saving…' : isSuperadmin ? 'Save changes' : 'Request changes'}
         </Button>
         <Button variant="outline" onClick={() => navigate(`/admin/invoices/${id}`)}>Cancel</Button>
       </div>
+      {!isSuperadmin && (
+        <p className="text-xs text-muted-foreground mt-3">Edits require superadmin approval.</p>
+      )}
     </div>
   );
 }

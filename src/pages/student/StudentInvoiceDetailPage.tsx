@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useEffect, useState, useRef } from 'react';
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -16,6 +16,8 @@ import { toast } from 'sonner';
 export default function StudentInvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const autoPayTriggered = useRef(false);
   const { user } = useAuth();
   const [invoice, setInvoice] = useState<any>(null);
   const [installments, setInstallments] = useState<any[]>([]);
@@ -48,6 +50,21 @@ export default function StudentInvoiceDetailPage() {
   };
 
   useEffect(() => { fetchData(); }, [id, user]);
+
+  // Auto-trigger Paystack when ?pay=1 (from email link)
+  useEffect(() => {
+    if (autoPayTriggered.current) return;
+    if (!invoice || loading) return;
+    if (searchParams.get('pay') !== '1') return;
+    const next = installments.find(i => i.status !== 'paid');
+    const amt = next ? Number(next.amount) : (Number(invoice.total_amount) - installments.filter(i=>i.status==='paid').reduce((s,i)=>s+Number(i.amount),0));
+    if (amt > 0) {
+      autoPayTriggered.current = true;
+      searchParams.delete('pay');
+      setSearchParams(searchParams, { replace: true });
+      handlePaystack(amt, next?.id);
+    }
+  }, [invoice, loading, installments, searchParams]);
 
   const formatCurrency = (val: number) => `₦${Number(val).toLocaleString('en-NG')}`;
 

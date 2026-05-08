@@ -29,6 +29,9 @@ import FinanceDashboardPage from "@/pages/admin/FinanceDashboardPage";
 import BulkEmailPage from "@/pages/admin/BulkEmailPage";
 import EditInvoicePage from "@/pages/admin/EditInvoicePage";
 import OutstandingInvoicesPage from "@/pages/admin/OutstandingInvoicesPage";
+import InvoiceApprovalsPage from "@/pages/admin/InvoiceApprovalsPage";
+import StaffInvoicesAdminPage from "@/pages/admin/StaffInvoicesAdminPage";
+import StaffInvoicesPage from "@/pages/staff/StaffInvoicesPage";
 import StudentDashboard from "@/pages/student/StudentDashboard";
 import StudentInvoicesPage from "@/pages/student/StudentInvoicesPage";
 import StudentInvoiceDetailPage from "@/pages/student/StudentInvoiceDetailPage";
@@ -106,6 +109,9 @@ const App = () => (
               <Route path="/admin/expenses" element={<ExpensesPage />} />
               <Route path="/admin/finance" element={<FinanceDashboardPage />} />
               <Route path="/admin/outstanding" element={<OutstandingInvoicesPage />} />
+              <Route path="/admin/invoice-approvals" element={<InvoiceApprovalsPage />} />
+              <Route path="/admin/staff-invoices" element={<StaffInvoicesAdminPage />} />
+              <Route path="/staff/invoices" element={<StaffInvoicesPage />} />
               
               {/* Student routes */}
               <Route path="/student" element={<StudentDashboard />} />

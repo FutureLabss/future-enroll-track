@@ -21,6 +21,7 @@ export default function EnrollmentsPage() {
     const fetchEnrollments = async () => {
       let query = supabase.from('enrollments')
         .select('*, programs(program_name), cohorts(cohort_label), organizations(organization_name)')
+        .order('first_payment_date', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false });
       if (statusFilter !== 'all') query = query.eq('enrollment_status', statusFilter);
       const { data } = await query;
@@ -67,6 +68,7 @@ export default function EnrollmentsPage() {
   const columns = [
     { key: 'full_name', header: 'Student' },
     { key: 'email', header: 'Email' },
+    { key: 'enrollment_date', header: 'Enrollment Date', render: (r: any) => new Date(r.first_payment_date || r.created_at).toLocaleDateString() },
     { key: 'program', header: 'Program', render: (r: any) => r.programs?.program_name || '—' },
     { key: 'cohort', header: 'Cohort', render: (r: any) => r.cohorts?.cohort_label || '—' },
     { key: 'organization', header: 'Sponsor', render: (r: any) => r.organizations?.organization_name || '—' },

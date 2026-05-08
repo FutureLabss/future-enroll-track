@@ -358,6 +358,48 @@ export type Database = {
           },
         ]
       }
+      invoice_change_requests: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          invoice_id: string
+          payload: Json | null
+          reason: string | null
+          requested_by: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          invoice_id: string
+          payload?: Json | null
+          reason?: string | null
+          requested_by?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          invoice_id?: string
+          payload?: Json | null
+          reason?: string | null
+          requested_by?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       invoices: {
         Row: {
           created_at: string
@@ -909,6 +951,60 @@ export type Database = {
         }
         Relationships: []
       }
+      staff_invoices: {
+        Row: {
+          amount: number
+          created_at: string
+          description: string | null
+          evidence_url: string | null
+          expense_id: string | null
+          id: string
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          staff_id: string | null
+          staff_name: string
+          status: string
+          submitted_by: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          description?: string | null
+          evidence_url?: string | null
+          expense_id?: string | null
+          id?: string
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          staff_id?: string | null
+          staff_name: string
+          status?: string
+          submitted_by?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          description?: string | null
+          evidence_url?: string | null
+          expense_id?: string | null
+          id?: string
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          staff_id?: string | null
+          staff_name?: string
+          status?: string
+          submitted_by?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           id: string
@@ -947,6 +1043,14 @@ export type Database = {
           p_total_amount: number
         }
         Returns: undefined
+      }
+      approve_invoice_change: {
+        Args: { p_request_id: string }
+        Returns: undefined
+      }
+      approve_staff_invoice: {
+        Args: { p_id: string; p_payment_date?: string }
+        Returns: string
       }
       cancel_admin_invite: { Args: { p_email: string }; Returns: undefined }
       compute_next_recurrence: {
@@ -1054,6 +1158,18 @@ export type Database = {
       }
       post_recurring_income: {
         Args: { p_id: string; p_payment_date?: string }
+        Returns: string
+      }
+      reject_invoice_change: {
+        Args: { p_reason?: string; p_request_id: string }
+        Returns: undefined
+      }
+      reject_staff_invoice: {
+        Args: { p_id: string; p_reason?: string }
+        Returns: undefined
+      }
+      request_invoice_change: {
+        Args: { p_action: string; p_invoice_id: string; p_payload: Json }
         Returns: string
       }
       revoke_admin: { Args: { p_email: string }; Returns: undefined }

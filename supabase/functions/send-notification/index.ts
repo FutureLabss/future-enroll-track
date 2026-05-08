@@ -76,7 +76,7 @@ async function sendWhatsApp(to: string, body: string) {
 }
 
 function buildEmailContent(type: string, data: Record<string, any>): { subject: string; html: string } {
-  const { full_name, invoice_number, total_amount, currency, due_date, amount_paid, payment_reference, payment_method, program_name, enrollment_id, FRONTEND_URL } = data;
+  const { full_name, invoice_number, total_amount, currency, due_date, amount_paid, payment_reference, payment_method, program_name, enrollment_id, invoice_id, FRONTEND_URL } = data;
   const currencySymbol = currency === "USD" ? "$" : "₦";
   const formattedAmount = `${currencySymbol}${Number(total_amount).toLocaleString()}`;
   const formattedPaid = amount_paid ? `${currencySymbol}${Number(amount_paid).toLocaleString()}` : "";
@@ -123,6 +123,11 @@ function buildEmailContent(type: string, data: Record<string, any>): { subject: 
           </div>
           <p>Please ensure timely payment to avoid late fees.</p>
           <div style="margin-top: 24px; padding: 16px; border: 1px solid #e5e7eb; border-radius: 8px; background: #ffffff;">
+            <h3 style="margin-top: 0;">Pay Now</h3>
+            <p>Pay this invoice instantly with card, bank transfer, or USSD via Paystack.</p>
+            <a href="${FRONTEND_URL}/student/invoices/${invoice_id || ''}?pay=1" style="display: inline-block; padding: 12px 24px; background: #16a34a; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">💳 Pay with Paystack</a>
+          </div>
+          <div style="margin-top: 16px; padding: 16px; border: 1px solid #e5e7eb; border-radius: 8px; background: #ffffff;">
             <h3 style="margin-top: 0;">Action Required: Complete Your Enrollment</h3>
             <p>Please complete your profile to finalize your enrollment.</p>
             <a href="${FRONTEND_URL}/students/${enrollment_id}" style="display: inline-block; padding: 10px 20px; background: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Complete Enrollment Profile</a>
@@ -273,6 +278,7 @@ Deno.serve(async (req) => {
       due_date: nextDue?.due_date || extra?.due_date || "",
       amount_paid: extra?.amount_paid || enrollment.amount_paid,
       enrollment_id: enrollment_id,
+      invoice_id: invoice_id || null,
       FRONTEND_URL: "https://admin.futurelabs.ng",
       ...extra,
     };

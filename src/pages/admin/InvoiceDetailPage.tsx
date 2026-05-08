@@ -20,16 +20,26 @@ export default function InvoiceDetailPage() {
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
+  const isSuperadmin = user?.email?.toLowerCase() === 'manassehudim@gmail.com';
 
   const handleDelete = async () => {
     if (!id) return;
     setDeleting(true);
     try {
-      const { error } = await supabase.rpc('admin_delete_invoice' as any, { p_invoice_id: id });
-      if (error) throw error;
-      toast.success('Invoice deleted');
-      navigate('/admin/invoices');
+      if (isSuperadmin) {
+        const { error } = await supabase.rpc('admin_delete_invoice' as any, { p_invoice_id: id });
+        if (error) throw error;
+        toast.success('Invoice deleted');
+        navigate('/admin/invoices');
+      } else {
+        const { error } = await supabase.rpc('request_invoice_change' as any, {
+          p_invoice_id: id, p_action: 'delete', p_payload: null,
+        });
+        if (error) throw error;
+        toast.success('Delete request sent for superadmin approval');
+        setDeleting(false);
+      }
     } catch (err: any) {
       toast.error(err.message || 'Failed to delete invoice');
       setDeleting(false);

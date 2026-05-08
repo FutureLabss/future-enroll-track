@@ -22,11 +22,21 @@ export default function PaymentsPage() {
   const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
 
   const fetchPayments = async () => {
-    const { data } = await supabase
-      .from('payments')
-      .select('*, invoices(invoice_number, enrollments(full_name, programs(program_name)))')
-      .order('created_at', { ascending: false });
-    setPayments(data || []);
+    const [payRes, oiRes] = await Promise.all([
+      supabase.from('payments')
+        .select('*, invoices(invoice_number, enrollments(full_name, programs(program_name)))')
+        .order('created_at', { ascending: false }).limit(100),
+      supabase.from('other_income').select('*').order('payment_date', { ascending: false }).limit(50),
+    ]);
+    const merged = [
+      ...(payRes.data || []).map((p: any) => ({ ...p, _kind: 'tuition', _date: p.created_at })),
+      ...(oiRes.data || []).map((o: any) => ({
+        ...o, _kind: 'other', _date: o.payment_date,
+        payment_reference: o.payment_reference || '—',
+        invoices: { invoice_number: o.category, enrollments: { full_name: o.payer_name } },
+      })),
+    ].sort((a: any, b: any) => new Date(b._date).getTime() - new Date(a._date).getTime());
+    setPayments(merged);
     setLoading(false);
   };
 
@@ -134,17 +144,18 @@ export default function PaymentsPage() {
   };
 
   const columns = [
+    { key: 'type', header: 'Type', render: (r: any) => r._kind === 'other' ? <span className="text-xs px-2 py-0.5 rounded bg-accent/15 text-accent-foreground">Other Income</span> : <span className="text-xs px-2 py-0.5 rounded bg-primary/15 text-primary">Tuition</span> },
     { key: 'payment_reference', header: 'Reference' },
-    { key: 'student', header: 'Student', render: (r: any) => r.invoices?.enrollments?.full_name || '—' },
-    { key: 'invoice', header: 'Invoice', render: (r: any) => r.invoices?.invoice_number || '—' },
+    { key: 'student', header: 'Student / Payer', render: (r: any) => r.invoices?.enrollments?.full_name || '—' },
+    { key: 'invoice', header: 'Invoice / Category', render: (r: any) => r.invoices?.invoice_number || '—' },
     { key: 'amount', header: 'Amount', render: (r: any) => formatCurrency(Number(r.amount)) },
     { key: 'payment_method', header: 'Method', render: (r: any) => r.payment_method || '—' },
-    { key: 'created_at', header: 'Date', render: (r: any) => new Date(r.created_at).toLocaleDateString() },
-    { key: 'receipt', header: '', render: (r: any) => (
+    { key: 'created_at', header: 'Date', render: (r: any) => new Date(r._date || r.created_at).toLocaleDateString() },
+    { key: 'receipt', header: '', render: (r: any) => r._kind === 'tuition' ? (
       <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openReceipt(r); }}>
         <FileText className="h-4 w-4 mr-1" /> Receipt
       </Button>
-    )},
+    ) : null },
   ];
 
   return (

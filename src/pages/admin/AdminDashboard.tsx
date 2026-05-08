@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/hooks/useAuth';
 import { StatCard } from '@/components/shared/StatCard';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatusBadge } from '@/components/shared/StatusBadge';
@@ -10,6 +11,7 @@ import { useNavigate } from 'react-router-dom';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+  const { isAdmin, loading: authLoading } = useAuth();
   const [stats, setStats] = useState({
     totalInvoiced: 0,
     totalCollected: 0,
@@ -21,10 +23,11 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (authLoading || !isAdmin) return;
     const fetchData = async () => {
       const [allEnrollRes, recentEnrollRes, invoiceRes, otherIncomeRes] = await Promise.all([
         supabase.from('enrollments').select('total_amount, amount_paid, enrollment_status'),
-        supabase.from('enrollments').select('*').order('created_at', { ascending: false }).limit(5),
+        supabase.from('enrollments').select('*').order('first_payment_date', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }).limit(5),
         supabase.from('invoices').select('total_amount, status'),
         supabase.from('other_income').select('amount'),
       ]);
@@ -45,7 +48,7 @@ export default function AdminDashboard() {
       setLoading(false);
     };
     fetchData();
-  }, []);
+  }, [authLoading, isAdmin]);
 
   const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG', { minimumFractionDigits: 0 })}`;
 

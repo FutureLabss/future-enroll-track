@@ -39,7 +39,7 @@ export default function ReportsPage() {
       supabase.from('programs').select('id, program_name'),
       supabase.from('cohorts').select('id, cohort_label'),
       supabase.from('organizations').select('id, organization_name'),
-      supabase.from('enrollments').select('*, programs(program_name), cohorts(cohort_label), organizations(organization_name)').order('created_at', { ascending: false }),
+      supabase.from('enrollments').select('*, programs(program_name), cohorts(cohort_label), organizations(organization_name)').order('first_payment_date', { ascending: false, nullsFirst: false }),
     ]).then(([p, c, o, e]) => {
       setPrograms(p.data || []);
       setCohorts(c.data || []);
@@ -54,8 +54,8 @@ export default function ReportsPage() {
     if (filters.cohort_id !== 'all' && e.cohort_id !== filters.cohort_id) return false;
     if (filters.organization_id !== 'all' && e.organization_id !== filters.organization_id) return false;
     if (filters.enrollment_status !== 'all' && e.enrollment_status !== filters.enrollment_status) return false;
-    if (filters.dateFrom && e.created_at < filters.dateFrom) return false;
-    if (filters.dateTo && e.created_at > filters.dateTo + 'T23:59:59') return false;
+    if (filters.dateFrom && (!e.first_payment_date || e.first_payment_date < filters.dateFrom)) return false;
+    if (filters.dateTo && (!e.first_payment_date || e.first_payment_date > filters.dateTo + 'T23:59:59')) return false;
     return true;
   });
 
@@ -82,11 +82,11 @@ export default function ReportsPage() {
 
   const handleExport = () => {
     if (filtered.length === 0) { toast.error('No data to export'); return; }
-    const headers = ['Full Name', 'Email', 'Phone', 'Program', 'Cohort', 'Organization', 'Status', 'Total Amount', 'Amount Paid', 'Outstanding Balance', 'Created At'];
+    const headers = ['Full Name', 'Email', 'Phone', 'Program', 'Cohort', 'Organization', 'Status', 'Total Amount', 'Amount Paid', 'Outstanding Balance', 'Enrollment Date'];
     const rows = filtered.map(e => [
       e.full_name, e.email, e.phone || '', e.programs?.program_name || '', e.cohorts?.cohort_label || '',
       e.organizations?.organization_name || '', e.enrollment_status, e.total_amount, e.amount_paid,
-      e.outstanding_balance, new Date(e.created_at).toLocaleDateString(),
+      e.outstanding_balance, e.first_payment_date ? new Date(e.first_payment_date).toLocaleDateString() : '',
     ]);
     const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${v}"`).join(','))].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });

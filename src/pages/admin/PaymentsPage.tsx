@@ -157,7 +157,11 @@ export default function PaymentsPage() {
   };
 
   const columns = [
-    { key: 'type', header: 'Type', render: (r: any) => r._kind === 'other' ? <span className="text-xs px-2 py-0.5 rounded bg-accent/15 text-accent-foreground">Other Income</span> : <span className="text-xs px-2 py-0.5 rounded bg-primary/15 text-primary">Tuition</span> },
+    { key: 'type', header: 'Type', render: (r: any) => r._kind === 'other'
+      ? <span className="text-xs px-2 py-0.5 rounded bg-accent/15 text-accent-foreground">Other Income</span>
+      : r._kind === 'invoice'
+      ? <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">Invoice</span>
+      : <span className="text-xs px-2 py-0.5 rounded bg-primary/15 text-primary">Tuition</span> },
     { key: 'payment_reference', header: 'Reference' },
     { key: 'student', header: 'Student / Payer', render: (r: any) => r.invoices?.enrollments?.full_name || '—' },
     { key: 'invoice', header: 'Invoice / Category', render: (r: any) => r.invoices?.invoice_number || '—' },

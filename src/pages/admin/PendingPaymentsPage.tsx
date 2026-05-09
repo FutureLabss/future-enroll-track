@@ -24,6 +24,17 @@ export default function PendingPaymentsPage() {
 
   const formatCurrency = (val: number) => `₦${Number(val).toLocaleString('en-NG')}`;
 
+  const getInvoiceEnrollmentDate = async (invoiceId: string) => {
+    const { data } = await supabase
+      .from('installments')
+      .select('due_date')
+      .eq('invoice_id', invoiceId)
+      .order('due_date', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    return data?.due_date ? new Date(`${data.due_date}T00:00:00`).toISOString() : new Date().toISOString();
+  };
+
   const approve = async (p: any) => {
     setBusyId(p.id);
     try {
@@ -45,8 +56,12 @@ export default function PendingPaymentsPage() {
       const { data: enr } = await supabase.from('enrollments').select('amount_paid, first_payment_date').eq('id', p.enrollment_id).single();
       if (enr) {
         const newPaid = Number(enr.amount_paid || 0) + Number(p.amount);
-        const updates: any = { amount_paid: newPaid, last_payment_date: new Date().toISOString() };
-        if (!enr.first_payment_date) { updates.first_payment_date = new Date().toISOString(); updates.enrollment_status = 'active'; }
+        const updates: any = {
+          amount_paid: newPaid,
+          first_payment_date: await getInvoiceEnrollmentDate(p.invoice_id),
+          last_payment_date: new Date().toISOString(),
+        };
+        if (!enr.first_payment_date) { updates.enrollment_status = 'active'; }
         await supabase.from('enrollments').update(updates).eq('id', p.enrollment_id);
       }
 

@@ -57,6 +57,25 @@ export default function EnrollmentDetailPage() {
     });
   }, [id]);
 
+  const getEnrollmentDate = async () => {
+    const { data: invoice } = await supabase
+      .from('invoices')
+      .select('id')
+      .eq('enrollment_id', enrollment.id)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (!invoice?.id) return new Date().toISOString();
+    const { data: installment } = await supabase
+      .from('installments')
+      .select('due_date')
+      .eq('invoice_id', invoice.id)
+      .order('due_date', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    return installment?.due_date ? new Date(`${installment.due_date}T00:00:00`).toISOString() : new Date().toISOString();
+  };
+
   const handleVerify = async (action: 'approved' | 'rejected') => {
     if (!enrollment) return;
     setVerifying(true);
@@ -67,7 +86,7 @@ export default function EnrollmentDetailPage() {
       };
       if (action === 'approved') {
         updates.amount_paid = enrollment.total_amount;
-        updates.first_payment_date = new Date().toISOString();
+        updates.first_payment_date = await getEnrollmentDate();
         updates.last_payment_date = new Date().toISOString();
       }
       const { error } = await supabase.from('enrollments').update(updates).eq('id', enrollment.id);
@@ -199,7 +218,7 @@ export default function EnrollmentDetailPage() {
             ['Verification', enrollment.verification_status || 'pending'],
             ['Amount Paid', formatCurrency(Number(enrollment.amount_paid))],
             ['Outstanding', formatCurrency(Number(enrollment.outstanding_balance || 0))],
-            ['Enrolled', new Date(enrollment.created_at).toLocaleDateString()],
+            ['Enrolled', enrollment.first_payment_date ? new Date(enrollment.first_payment_date).toLocaleDateString() : '—'],
           ].map(([label, value]) => (
             <div key={label as string}>
               <p className="text-xs text-muted-foreground">{label}</p>

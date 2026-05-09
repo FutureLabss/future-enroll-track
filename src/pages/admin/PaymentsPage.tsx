@@ -64,6 +64,17 @@ export default function PaymentsPage() {
     setInstallments(data || []);
   };
 
+  const getInvoiceEnrollmentDate = async (invoiceId: string) => {
+    const { data } = await supabase
+      .from('installments')
+      .select('due_date')
+      .eq('invoice_id', invoiceId)
+      .order('due_date', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    return data?.due_date ? new Date(`${data.due_date}T00:00:00`).toISOString() : new Date().toISOString();
+  };
+
   const handleRecord = async () => {
     try {
       const amount = parseFloat(form.amount);
@@ -87,10 +98,12 @@ export default function PaymentsPage() {
         const { data: enrollment } = await supabase.from('enrollments').select('amount_paid').eq('id', invoice.enrollment_id).single();
         if (enrollment) {
           const newPaid = Number(enrollment.amount_paid) + amount;
+          const enrollmentDate = await getInvoiceEnrollmentDate(form.invoice_id);
           await supabase.from('enrollments').update({
             amount_paid: newPaid,
             last_payment_date: new Date().toISOString(),
-            ...(!enrollment.amount_paid || Number(enrollment.amount_paid) === 0 ? { first_payment_date: new Date().toISOString(), enrollment_status: 'active' } : {}),
+            first_payment_date: enrollmentDate,
+            ...(!enrollment.amount_paid || Number(enrollment.amount_paid) === 0 ? { enrollment_status: 'active' } : {}),
           }).eq('id', invoice.enrollment_id);
         }
       }

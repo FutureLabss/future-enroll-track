@@ -22,11 +22,14 @@ export default function PaymentsPage() {
   const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
 
   const fetchPayments = async () => {
-    const [payRes, oiRes] = await Promise.all([
+    const [payRes, oiRes, invRes] = await Promise.all([
       supabase.from('payments')
         .select('*, invoices(invoice_number, enrollments(full_name, programs(program_name)))')
         .order('created_at', { ascending: false }).limit(100),
       supabase.from('other_income').select('*').order('payment_date', { ascending: false }).limit(50),
+      supabase.from('invoices')
+        .select('id, invoice_number, total_amount, status, created_at, enrollments(full_name, programs(program_name))')
+        .order('created_at', { ascending: false }).limit(50),
     ]);
     const merged = [
       ...(payRes.data || []).map((p: any) => ({ ...p, _kind: 'tuition', _date: p.created_at })),
@@ -34,6 +37,16 @@ export default function PaymentsPage() {
         ...o, _kind: 'other', _date: o.payment_date,
         payment_reference: o.payment_reference || '—',
         invoices: { invoice_number: o.category, enrollments: { full_name: o.payer_name } },
+      })),
+      ...(invRes.data || []).map((inv: any) => ({
+        id: `inv-${inv.id}`,
+        _kind: 'invoice',
+        _date: inv.created_at,
+        created_at: inv.created_at,
+        amount: inv.total_amount,
+        payment_reference: inv.invoice_number,
+        payment_method: inv.status,
+        invoices: { invoice_number: inv.invoice_number, enrollments: inv.enrollments },
       })),
     ].sort((a: any, b: any) => new Date(b._date).getTime() - new Date(a._date).getTime());
     setPayments(merged);
@@ -144,7 +157,11 @@ export default function PaymentsPage() {
   };
 
   const columns = [
-    { key: 'type', header: 'Type', render: (r: any) => r._kind === 'other' ? <span className="text-xs px-2 py-0.5 rounded bg-accent/15 text-accent-foreground">Other Income</span> : <span className="text-xs px-2 py-0.5 rounded bg-primary/15 text-primary">Tuition</span> },
+    { key: 'type', header: 'Type', render: (r: any) => r._kind === 'other'
+      ? <span className="text-xs px-2 py-0.5 rounded bg-accent/15 text-accent-foreground">Other Income</span>
+      : r._kind === 'invoice'
+      ? <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">Invoice</span>
+      : <span className="text-xs px-2 py-0.5 rounded bg-primary/15 text-primary">Tuition</span> },
     { key: 'payment_reference', header: 'Reference' },
     { key: 'student', header: 'Student / Payer', render: (r: any) => r.invoices?.enrollments?.full_name || '—' },
     { key: 'invoice', header: 'Invoice / Category', render: (r: any) => r.invoices?.invoice_number || '—' },

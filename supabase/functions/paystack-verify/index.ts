@@ -60,16 +60,28 @@ Deno.serve(async (req) => {
       await admin.from('installments').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', installment_id);
     }
 
+    const { data: firstDue } = await admin
+      .from('installments')
+      .select('due_date')
+      .eq('invoice_id', invoice_id)
+      .order('due_date', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    const enrollmentDate = firstDue?.due_date
+      ? new Date(`${firstDue.due_date}T00:00:00`).toISOString()
+      : new Date().toISOString();
+
     // Update enrollment totals
     const { data: enr } = await admin.from('enrollments').select('amount_paid, first_payment_date').eq('id', enrollment_id).single();
     if (enr) {
       const newPaid = Number(enr.amount_paid || 0) + amount;
       const updates: any = {
         amount_paid: newPaid,
+        first_payment_date: enrollmentDate,
         last_payment_date: new Date().toISOString(),
       };
       if (!enr.first_payment_date) {
-        updates.first_payment_date = new Date().toISOString();
         updates.enrollment_status = 'active';
       }
       await admin.from('enrollments').update(updates).eq('id', enrollment_id);

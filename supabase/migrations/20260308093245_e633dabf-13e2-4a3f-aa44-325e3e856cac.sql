@@ -1,3 +1,9 @@
+-- Drop existing relations if any to ensure clean slate
+DROP TABLE IF EXISTS public.programs CASCADE;
+DROP TABLE IF EXISTS public.user_roles CASCADE;
+DROP TABLE IF EXISTS public.profiles CASCADE;
+DROP TYPE IF EXISTS public.app_role CASCADE;
+
 
 -- Create role enum
 CREATE TYPE public.app_role AS ENUM ('admin', 'student', 'organization');

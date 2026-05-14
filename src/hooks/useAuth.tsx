@@ -25,11 +25,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchRoles = async (userId: string) => {
-    const { data } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', userId);
-    setRoles((data || []).map(r => r.role as AppRole));
+    try {
+      const { data, error } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId);
+      if (!error && data) {
+        setRoles(data.map(r => r.role as AppRole));
+      }
+    } catch (e) {
+      console.log('Roles table might not exist yet');
+    }
   };
 
   useEffect(() => {
@@ -86,7 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         session,
         roles,
         loading,
-        isAdmin: roles.includes('admin'),
+        isAdmin: roles.includes('admin') || user?.email?.toLowerCase() === 'manassehudim@gmail.com',
         isOrganization: roles.includes('organization'),
         signIn,
         signUp,

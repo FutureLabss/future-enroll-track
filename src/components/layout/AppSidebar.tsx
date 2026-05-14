@@ -23,6 +23,8 @@ import {
   AlertTriangle,
   ClipboardCheck,
   Inbox,
+  School,
+  BookOpen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -40,6 +42,8 @@ const adminNav = [
   { to: '/admin/expenses', icon: Receipt, label: 'Expenses' },
   { to: '/admin/programs', icon: GraduationCap, label: 'Programs' },
   { to: '/admin/cohorts', icon: Layers, label: 'Cohorts' },
+  { to: '/admin/classrooms', icon: School, label: 'Classrooms' },
+  { to: '/admin/staff-invitations', icon: Mail, label: 'Staff Invitations' },
   { to: '/admin/organizations', icon: Building2, label: 'Organizations' },
   { to: '/admin/custom-fields', icon: FormInput, label: 'Custom Fields' },
   { to: '/admin/notifications', icon: Bell, label: 'Notifications' },
@@ -50,6 +54,7 @@ const adminNav = [
 
 const studentNav = [
   { to: '/student', icon: LayoutDashboard, label: 'My Dashboard' },
+  { to: '/student/classrooms', icon: School, label: 'My Classrooms' },
   { to: '/student/invoices', icon: FileText, label: 'My Invoices' },
   { to: '/student/payments', icon: CreditCard, label: 'Payment History' },
 ];
@@ -83,9 +88,13 @@ export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps)
           : []),
       ]
     : [];
-  // Allow non-admins (staff) to see their submission page if their email exists in staff table
+  // Allow non-admins (staff) to see their submission page and classrooms
   const staffExtras = !isAdmin && !isOrganization
-    ? [{ to: '/staff/invoices', icon: FileText, label: 'Invoice Company' }]
+    ? [
+        { to: '/staff/classrooms', icon: School, label: 'My Classrooms' },
+        { to: '/staff/invitations', icon: Inbox, label: 'My Invitations' },
+        { to: '/staff/invoices', icon: FileText, label: 'Invoice Company' },
+      ]
     : [];
   const nav = [...baseNav, ...adminExtras, ...staffExtras];
 

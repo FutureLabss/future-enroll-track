@@ -85,6 +85,13 @@ Deno.serve(async (req) => {
         updates.enrollment_status = 'active';
       }
       await admin.from('enrollments').update(updates).eq('id', enrollment_id);
+
+      // Auto-enroll into classroom/cohort
+      try {
+        await admin.rpc('auto_enroll_student_classroom', { p_enrollment_id: enrollment_id });
+      } catch (err) {
+        console.error('Auto-enroll failed:', err);
+      }
     }
 
     // If invoice fully paid, mark paid

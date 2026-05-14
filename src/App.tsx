@@ -44,6 +44,15 @@ import OrgReportsPage from "@/pages/org/OrgReportsPage";
 import ProfilePage from "@/pages/profile/ProfilePage";
 import EnrollPage from "@/pages/public/EnrollPage";
 import StudentSignupPage from "@/pages/public/StudentSignupPage";
+import AcceptInvitationPage from "@/pages/public/AcceptInvitationPage";
+import ClassroomsPage from "@/pages/admin/ClassroomsPage";
+import ClassroomDetailPage from "@/pages/admin/ClassroomDetailPage";
+import StaffInvitationsAdminPage from "@/pages/admin/StaffInvitationsAdminPage";
+import StaffClassroomsPage from "@/pages/staff/StaffClassroomsPage";
+import ClassroomWorkspacePage from "@/pages/staff/ClassroomWorkspacePage";
+import StaffInvitationsPage from "@/pages/staff/StaffInvitationsPage";
+import StudentClassroomsPage from "@/pages/student/StudentClassroomsPage";
+import StudentClassroomPage from "@/pages/student/StudentClassroomPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -80,6 +89,7 @@ const App = () => (
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/enroll" element={<EnrollPage />} />
             <Route path="/students/:id" element={<StudentSignupPage />} />
+            <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
             {/* Backward compatibility: old invitation links */}
             <Route path="/enroll/complete/:id" element={<LegacyEnrollRedirect />} />
             <Route path="/" element={<ProtectedRoute><RoleRedirect /></ProtectedRoute>} />
@@ -111,7 +121,15 @@ const App = () => (
               <Route path="/admin/outstanding" element={<OutstandingInvoicesPage />} />
               <Route path="/admin/invoice-approvals" element={<InvoiceApprovalsPage />} />
               <Route path="/admin/staff-invoices" element={<StaffInvoicesAdminPage />} />
+              {/* Classroom admin routes */}
+              <Route path="/admin/classrooms" element={<ClassroomsPage />} />
+              <Route path="/admin/classrooms/:id" element={<ClassroomDetailPage />} />
+              <Route path="/admin/staff-invitations" element={<StaffInvitationsAdminPage />} />
+              {/* Staff classroom routes */}
               <Route path="/staff/invoices" element={<StaffInvoicesPage />} />
+              <Route path="/staff/classrooms" element={<StaffClassroomsPage />} />
+              <Route path="/staff/classrooms/:id" element={<ClassroomWorkspacePage />} />
+              <Route path="/staff/invitations" element={<StaffInvitationsPage />} />
               
               {/* Student routes */}
               <Route path="/student" element={<StudentDashboard />} />
@@ -119,6 +137,8 @@ const App = () => (
               <Route path="/student/invoices/:id" element={<StudentInvoiceDetailPage />} />
               <Route path="/student/invoices/:id/payment-callback" element={<PaymentCallbackPage />} />
               <Route path="/student/payments" element={<StudentPaymentsPage />} />
+              <Route path="/student/classrooms" element={<StudentClassroomsPage />} />
+              <Route path="/student/classrooms/:id" element={<StudentClassroomPage />} />
               
               {/* Org routes */}
               <Route path="/org" element={<OrgDashboard />} />

@@ -511,7 +511,7 @@ export default function ClassroomWorkspacePage() {
               </select>
             </div>
             {curriculumCohortId ? (
-              <CurriculumBuilder cohortId={curriculumCohortId} canEdit={can.can_create_lessons} />
+              <CurriculumBuilder cohortId={curriculumCohortId} canEdit={can.can_create_lessons} cohorts={cohorts} />
             ) : (
               <div className="text-center py-16 border-2 border-dashed border-border rounded-2xl text-muted-foreground">
                 <LayoutList className="h-10 w-10 mx-auto mb-3 opacity-40" />

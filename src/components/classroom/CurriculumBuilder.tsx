@@ -6,9 +6,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { supabase } from '@/lib/supabase';
 import {
   Plus, Book, LayoutList, Loader2, Pencil, Trash2,
-  FileText, Video, Link2, File, ExternalLink, Upload, X,
+  FileText, Video, Link2, File, ExternalLink, Upload, X, Copy,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -58,7 +59,15 @@ function MaterialItem({ material, canEdit, onDelete }: { material: any; canEdit:
   );
 }
 
-export function CurriculumBuilder({ cohortId, canEdit = false }: { cohortId: string; canEdit?: boolean }) {
+export function CurriculumBuilder({
+  cohortId,
+  canEdit = false,
+  cohorts = [],
+}: {
+  cohortId: string;
+  canEdit?: boolean;
+  cohorts?: { id: string; cohort_label: string }[];
+}) {
   const {
     curriculum, weeks, loading,
     createCurriculum, addWeek, addLesson,
@@ -80,6 +89,11 @@ export function CurriculumBuilder({ cohortId, canEdit = false }: { cohortId: str
   const [matFile, setMatFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
+
+  // Clone to cohort state
+  const [cloneOpen, setCloneOpen] = useState(false);
+  const [cloneTargetId, setCloneTargetId] = useState('');
+  const [cloning, setCloning] = useState(false);
 
   const run = async (fn: () => Promise<void>, close: () => void) => {
     setSaving(true);
@@ -144,6 +158,27 @@ export function CurriculumBuilder({ cohortId, canEdit = false }: { cohortId: str
     setMaterialModal({ open: true, lessonId });
   };
 
+  const handleClone = async () => {
+    if (!cloneTargetId) { toast.error('Select a target cohort'); return; }
+    if (cloneTargetId === cohortId) { toast.error('Cannot clone to the same cohort'); return; }
+    setCloning(true);
+    try {
+      const { error } = await supabase.rpc('clone_curriculum_to_cohort', {
+        p_source_curriculum_id: curriculum!.id,
+        p_target_cohort_id: cloneTargetId,
+      });
+      if (error) throw error;
+      const target = cohorts.find(c => c.id === cloneTargetId);
+      toast.success(`Curriculum cloned to "${target?.cohort_label}"`);
+      setCloneOpen(false);
+      setCloneTargetId('');
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setCloning(false);
+    }
+  };
+
   if (loading) return (
     <div className="flex justify-center py-10">
       <Loader2 className="animate-spin h-6 w-6 text-primary" />
@@ -175,13 +210,20 @@ export function CurriculumBuilder({ cohortId, canEdit = false }: { cohortId: str
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <h3 className="font-semibold text-lg">{curriculum.title}</h3>
-        {canEdit && (
-          <Button size="sm" onClick={() => setWeekOpen(true)}>
-            <Plus className="h-4 w-4 mr-1" /> Add Week
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {cohorts.filter(c => c.id !== cohortId).length > 0 && (
+            <Button size="sm" variant="outline" onClick={() => { setCloneTargetId(''); setCloneOpen(true); }}>
+              <Copy className="h-4 w-4 mr-1" />Copy to Cohort
+            </Button>
+          )}
+          {canEdit && (
+            <Button size="sm" onClick={() => setWeekOpen(true)}>
+              <Plus className="h-4 w-4 mr-1" /> Add Week
+            </Button>
+          )}
+        </div>
       </div>
 
       {weeks.length === 0 && (
@@ -384,6 +426,33 @@ export function CurriculumBuilder({ cohortId, canEdit = false }: { cohortId: str
             <Button onClick={handleAddMaterial} disabled={saving} className="w-full">
               {saving && <Loader2 className="animate-spin h-4 w-4 mr-2" />}
               {saving ? 'Uploading...' : 'Add Material'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Clone curriculum to cohort modal */}
+      <Dialog open={cloneOpen} onOpenChange={setCloneOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Copy className="h-4 w-4" />Copy Curriculum to Cohort</DialogTitle></DialogHeader>
+          <div className="space-y-4 mt-2">
+            <p className="text-sm text-muted-foreground">
+              This will copy all weeks, lessons, and material links from <strong>{curriculum?.title}</strong> to another cohort. Existing curriculum in the target cohort will be replaced.
+            </p>
+            <div>
+              <Label>Target Cohort *</Label>
+              <Select value={cloneTargetId} onValueChange={setCloneTargetId}>
+                <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select a cohort…" /></SelectTrigger>
+                <SelectContent>
+                  {cohorts.filter(c => c.id !== cohortId).map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={handleClone} disabled={cloning || !cloneTargetId} className="w-full">
+              {cloning ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
+              {cloning ? 'Copying…' : 'Copy Curriculum'}
             </Button>
           </div>
         </DialogContent>

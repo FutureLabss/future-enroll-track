@@ -589,7 +589,7 @@ export default function ClassroomDetailPage() {
             </select>
           </div>
           {curriculumCohortId ? (
-            <CurriculumBuilder cohortId={curriculumCohortId} canEdit={true} />
+            <CurriculumBuilder cohortId={curriculumCohortId} canEdit={true} cohorts={cohorts} />
           ) : (
             <div className="text-center py-16 border-2 border-dashed border-border rounded-2xl text-muted-foreground">
               <LayoutList className="h-10 w-10 mx-auto mb-3 opacity-40" />

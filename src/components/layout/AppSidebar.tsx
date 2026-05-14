@@ -69,10 +69,10 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps) {
-  const { isAdmin, isOrganization, signOut, user } = useAuth();
+  const { isAdmin, isOrganization, isSuperadmin: isSA, signOut, user } = useAuth();
   const location = useLocation();
 
-  const isSuperadmin = user?.email?.toLowerCase() === 'manassehudim@gmail.com';
+  const isSuperadmin = isSA || user?.email?.toLowerCase() === 'manassehudim@gmail.com';
   const baseNav = isAdmin ? adminNav : isOrganization ? orgNav : studentNav;
   const adminExtras = isAdmin
     ? [
@@ -82,6 +82,7 @@ export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps)
               { to: '/admin/staff-invoices', icon: Inbox, label: 'Staff Invoices' },
               { to: '/admin/payroll', icon: Banknote, label: 'Payroll' },
               { to: '/admin/manage-admins', icon: ShieldCheck, label: 'Manage Admins' },
+              { to: '/admin/hubs', icon: Building2, label: 'Hub Management' },
             ]
           : []),
       ]

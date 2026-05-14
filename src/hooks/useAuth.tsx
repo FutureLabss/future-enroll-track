@@ -11,6 +11,7 @@ interface AuthContextType {
   loading: boolean;
   isAdmin: boolean;
   isOrganization: boolean;
+  isSuperadmin: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -22,17 +23,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
+  const [isSuperadmin, setIsSuperadmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const fetchRoles = async (userId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', userId);
-      if (!error && data) {
-        setRoles(data.map(r => r.role as AppRole));
+      const [rolesRes, saRes] = await Promise.all([
+        supabase.from('user_roles').select('role').eq('user_id', userId),
+        supabase.from('superadmins').select('user_id').eq('user_id', userId).maybeSingle(),
+      ]);
+      if (!rolesRes.error && rolesRes.data) {
+        setRoles(rolesRes.data.map(r => r.role as AppRole));
       }
+      setIsSuperadmin(!!saRes.data);
     } catch (e) {
       console.log('Roles table might not exist yet');
     }
@@ -94,6 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         isAdmin: roles.includes('admin') || user?.email?.toLowerCase() === 'manassehudim@gmail.com',
         isOrganization: roles.includes('organization'),
+        isSuperadmin,
         signIn,
         signUp,
         signOut,

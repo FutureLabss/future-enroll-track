@@ -44,6 +44,9 @@ import ProfilePage from "@/pages/profile/ProfilePage";
 import EnrollPage from "@/pages/public/EnrollPage";
 import StudentSignupPage from "@/pages/public/StudentSignupPage";
 import AcceptInvitationPage from "@/pages/public/AcceptInvitationPage";
+import AcceptHubInvitationPage from "@/pages/public/AcceptHubInvitationPage";
+import DemoPage from "@/pages/public/DemoPage";
+import HubsPage from "@/pages/admin/HubsPage";
 import ClassroomsPage from "@/pages/admin/ClassroomsPage";
 import ClassroomDetailPage from "@/pages/admin/ClassroomDetailPage";
 import StaffInvitationsAdminPage from "@/pages/admin/StaffInvitationsAdminPage";
@@ -89,6 +92,8 @@ const App = () => (
             <Route path="/enroll" element={<EnrollPage />} />
             <Route path="/students/:id" element={<StudentSignupPage />} />
             <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
+            <Route path="/accept-hub-invitation" element={<AcceptHubInvitationPage />} />
+            <Route path="/demo" element={<DemoPage />} />
             {/* Backward compatibility: old invitation links */}
             <Route path="/enroll/complete/:id" element={<LegacyEnrollRedirect />} />
             <Route path="/" element={<ProtectedRoute><RoleRedirect /></ProtectedRoute>} />
@@ -119,6 +124,8 @@ const App = () => (
               <Route path="/admin/outstanding" element={<OutstandingInvoicesPage />} />
               <Route path="/admin/invoice-approvals" element={<InvoiceApprovalsPage />} />
               <Route path="/admin/staff-invoices" element={<StaffInvoicesAdminPage />} />
+              {/* Hub management (superadmin only) */}
+              <Route path="/admin/hubs" element={<HubsPage />} />
               {/* Classroom admin routes */}
               <Route path="/admin/classrooms" element={<ClassroomsPage />} />
               <Route path="/admin/classrooms/:id" element={<ClassroomDetailPage />} />

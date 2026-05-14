@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -335,7 +334,6 @@ function GetStartedModal({ open, onClose }: { open: boolean; onClose: () => void
 // ─────────────────────────────────────────────────────────────────────
 
 export default function DemoPage() {
-  const navigate = useNavigate();
   const [studentSearch, setStudentSearch] = useState('');
   const [enrollSearch, setEnrollSearch] = useState('');
   const [activeSession, setActiveSession] = useState(false);
@@ -375,7 +373,6 @@ export default function DemoPage() {
             <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/30">Demo</Badge>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => navigate('/login')}>Sign In</Button>
             <Button size="sm" onClick={() => setGetStartedOpen(true)}>Get Started</Button>
           </div>
         </div>

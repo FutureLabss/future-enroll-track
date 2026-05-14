@@ -161,6 +161,7 @@ export default function ClassroomDetailPage() {
   const [students, setStudents] = useState<any[]>([]);
   const [lessons, setLessons] = useState<any[]>([]);
   const [staffRoster, setStaffRoster] = useState<any[]>([]);
+  const [curriculumCohortId, setCurriculumCohortId] = useState('');
 
   // Modals
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -574,7 +575,27 @@ export default function ClassroomDetailPage() {
 
         {/* CURRICULUM */}
         <TabsContent value="curriculum">
-          <CurriculumBuilder classroomId={id!} canEdit={true} />
+          <div className="mb-5">
+            <Label className="text-sm font-medium">Select Cohort</Label>
+            <select
+              value={curriculumCohortId}
+              onChange={e => setCurriculumCohortId(e.target.value)}
+              className="mt-1.5 w-full max-w-xs rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="">— choose a cohort —</option>
+              {cohorts.map((c: any) => (
+                <option key={c.id} value={c.id}>{c.cohort_label}</option>
+              ))}
+            </select>
+          </div>
+          {curriculumCohortId ? (
+            <CurriculumBuilder cohortId={curriculumCohortId} canEdit={true} />
+          ) : (
+            <div className="text-center py-16 border-2 border-dashed border-border rounded-2xl text-muted-foreground">
+              <LayoutList className="h-10 w-10 mx-auto mb-3 opacity-40" />
+              <p className="font-medium">Select a cohort above to view or build its curriculum</p>
+            </div>
+          )}
         </TabsContent>
 
         {/* STAFF */}

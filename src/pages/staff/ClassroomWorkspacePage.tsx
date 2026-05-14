@@ -192,6 +192,9 @@ export default function ClassroomWorkspacePage() {
   const [savingAssign, setSavingAssign] = useState(false);
   const [submissionsAssignment, setSubmissionsAssignment] = useState<any>(null);
 
+  // Curriculum cohort selector
+  const [curriculumCohortId, setCurriculumCohortId] = useState('');
+
   // Cohort state
   const [cohortOpen, setCohortOpen] = useState(false);
   const [cohortEditModal, setCohortEditModal] = useState<{ open: boolean; cohort?: any }>({ open: false });
@@ -455,7 +458,27 @@ export default function ClassroomWorkspacePage() {
         {/* CURRICULUM */}
         {can.can_create_lessons && (
           <TabsContent value="curriculum">
-            <CurriculumBuilder classroomId={id!} canEdit={true} />
+            <div className="mb-5">
+              <label className="text-sm font-medium">Select Cohort</label>
+              <select
+                value={curriculumCohortId}
+                onChange={e => setCurriculumCohortId(e.target.value)}
+                className="mt-1.5 w-full max-w-xs rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">— choose a cohort —</option>
+                {cohorts.map((c: any) => (
+                  <option key={c.id} value={c.id}>{c.cohort_label}</option>
+                ))}
+              </select>
+            </div>
+            {curriculumCohortId ? (
+              <CurriculumBuilder cohortId={curriculumCohortId} canEdit={can.can_create_lessons} />
+            ) : (
+              <div className="text-center py-16 border-2 border-dashed border-border rounded-2xl text-muted-foreground">
+                <LayoutList className="h-10 w-10 mx-auto mb-3 opacity-40" />
+                <p className="font-medium">Select a cohort to view or build its curriculum</p>
+              </div>
+            )}
           </TabsContent>
         )}
 

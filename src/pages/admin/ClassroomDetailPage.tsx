@@ -204,13 +204,44 @@ export default function ClassroomDetailPage() {
     if (!inviteForm.staff_id) { toast.error('Select a staff member'); return; }
     setInviting(true);
     try {
-      const { error } = await supabase.rpc('assign_staff_to_classroom', {
+      const { data: invitationId, error } = await supabase.rpc('assign_staff_to_classroom', {
         p_classroom_id: id,
         p_staff_id: inviteForm.staff_id,
         p_staff_type: inviteForm.staff_type,
       });
       if (error) throw error;
-      toast.success('Staff assigned and invitation sent');
+
+      // Fetch the generated token
+      const { data: inv } = await supabase
+        .from('staff_invitations')
+        .select('token')
+        .eq('id', invitationId)
+        .single();
+
+      if (inv?.token) {
+        const staffMember = staffRoster.find(s => s.id === inviteForm.staff_id);
+        const { data: { session } } = await supabase.auth.getSession();
+        await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-staff-invitation`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${session?.access_token}`,
+              apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              email: staffMember?.email,
+              name: staffMember?.full_name,
+              classroom: classroom?.name,
+              token: inv.token,
+              staffType: inviteForm.staff_type,
+            }),
+          }
+        );
+      }
+
+      toast.success('Staff assigned and invitation email sent');
       setInviteOpen(false);
       loadAll();
     } catch (e: any) {

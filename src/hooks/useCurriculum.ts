@@ -40,11 +40,9 @@ export function useCurriculum(classroomId: string) {
   }, [classroomId]);
 
   const createCurriculum = async (title: string, cohortId: string | null) => {
-    const { error } = await supabase.from('curriculums').insert({
-      classroom_id: classroomId,
-      title,
-      cohort_id: cohortId,
-    });
+    const payload: Record<string, unknown> = { classroom_id: classroomId, title };
+    if (cohortId) payload.cohort_id = cohortId;
+    const { error } = await supabase.from('curriculums').insert(payload);
     if (error) throw error;
     await fetchCurriculum();
   };

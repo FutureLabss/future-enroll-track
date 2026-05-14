@@ -41,6 +41,17 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
+// Routes hidden from demo users — contain unscoped or sensitive data
+const DEMO_HIDDEN_ROUTES = new Set([
+  '/admin/staff-invitations',
+  '/admin/organizations',
+  '/admin/custom-fields',
+  '/admin/notifications',
+  '/admin/bulk-email',
+  '/admin/reports',
+  '/admin/audit-logs',
+]);
+
 const adminNav = [
   { to: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/admin/finance', icon: PieChart, label: 'Finance' },
@@ -143,11 +154,12 @@ function HubSwitcher({ userId }: { userId: string }) {
 }
 
 export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps) {
-  const { isAdmin, isOrganization, isSuperadmin: isSA, signOut, user } = useAuth();
+  const { isAdmin, isOrganization, isSuperadmin: isSA, isDemo, signOut, user } = useAuth();
   const location = useLocation();
 
   const isSuperadmin = isSA || user?.email?.toLowerCase() === 'manassehudim@gmail.com';
-  const baseNav = isAdmin ? adminNav : isOrganization ? orgNav : studentNav;
+  const rawBaseNav = isAdmin ? adminNav : isOrganization ? orgNav : studentNav;
+  const baseNav = isDemo ? rawBaseNav.filter(item => !DEMO_HIDDEN_ROUTES.has(item.to)) : rawBaseNav;
   const adminExtras = isAdmin
     ? [
         ...(isSuperadmin

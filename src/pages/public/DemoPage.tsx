@@ -234,6 +234,10 @@ function GetStartedModal({ open, onClose }: { open: boolean; onClose: () => void
       });
 
       if (res.error) throw new Error(res.error.message || 'Failed to send invite');
+      if (res.data?.alreadyInvited) {
+        setError('This email has already received a demo invitation. Check your inbox (and spam folder).');
+        return;
+      }
       setSent(true);
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');
@@ -261,10 +265,10 @@ function GetStartedModal({ open, onClose }: { open: boolean; onClose: () => void
             <h2 className="font-bold text-xl">Check your inbox!</h2>
             <p className="text-muted-foreground text-sm mt-1">
               We've sent a magic link to <strong>{email}</strong>. Click it to instantly access your
-              demo hub — <strong>RhemaHub</strong> — preloaded with students, programs, curriculum, and finance data.
+              demo dashboard — preloaded with students, programs, curriculum, and finance data.
             </p>
           </div>
-          <p className="text-xs text-muted-foreground">Link expires in 7 days · Check your spam folder if you don't see it</p>
+          <p className="text-xs text-muted-foreground">Admin access is valid for 1 hour · Check your spam folder if you don't see it</p>
           <Button className="w-full" onClick={handleClose}>Close</Button>
         </div>
       </DialogContent>
@@ -281,12 +285,12 @@ function GetStartedModal({ open, onClose }: { open: boolean; onClose: () => void
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
             Enter your email and we'll send you a magic link to log straight into
-            <strong> RhemaHub</strong>, our fully loaded demo academy.
+            the <strong>FutureLabs</strong> admin dashboard as a demo admin.
           </p>
         </DialogHeader>
         <div className="space-y-4 mt-2">
           <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-1.5">
-            <p className="text-xs font-semibold text-foreground/70 uppercase tracking-wide">What's inside RhemaHub</p>
+            <p className="text-xs font-semibold text-foreground/70 uppercase tracking-wide">What's inside your demo</p>
             {[
               '3 programs & 2 classrooms with live cohorts',
               'Full curriculum with lessons & materials',

@@ -5,7 +5,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const RHEMA_HUB_ID = "00000000-0000-0000-0000-000000000002";
+const DEMO_HUB_ID = "00000000-0000-0000-0000-000000000002"; // RhemaHub — isolated demo data
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -26,29 +26,39 @@ Deno.serve(async (req) => {
     const normalizedEmail = email.toLowerCase().trim();
     const admin = createClient(supabaseUrl, serviceKey);
 
-    // 1. Generate a unique hex token for the hub invitation
+    // Once per email: reject if any demo invitation already exists for this address
+    const { data: existing } = await admin
+      .from("hub_invitations")
+      .select("id")
+      .eq("hub_id", DEMO_HUB_ID)
+      .eq("email", normalizedEmail)
+      .eq("is_demo", true)
+      .maybeSingle();
+
+    if (existing) {
+      return new Response(
+        JSON.stringify({ ok: false, alreadyInvited: true }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Generate invitation token — expires in 24 h (magic link itself expires after 1 h via Supabase)
     const tokenBytes = new Uint8Array(24);
     crypto.getRandomValues(tokenBytes);
     const token = Array.from(tokenBytes).map(b => b.toString(16).padStart(2, "0")).join("");
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-
-    // 2. Clear any previous pending demo invite for this email, then insert fresh one
-    await admin.from("hub_invitations")
-      .delete()
-      .eq("hub_id", RHEMA_HUB_ID)
-      .eq("email", normalizedEmail)
-      .is("accepted_at", null);
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
     const { error: invErr } = await admin.from("hub_invitations").insert({
-      hub_id: RHEMA_HUB_ID,
+      hub_id: DEMO_HUB_ID,
       email: normalizedEmail,
       token,
       hub_role: "admin",
       expires_at: expiresAt,
+      is_demo: true,
     });
     if (invErr) throw invErr;
 
-    // 3. Generate a Supabase magic link (creates auth user if new, works for existing)
+    // Generate Supabase magic link
     const redirectTo = `${FRONTEND_URL}/accept-hub-invitation?token=${token}`;
     const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
       type: "magiclink",
@@ -60,7 +70,7 @@ Deno.serve(async (req) => {
     const magicLink = linkData.properties?.action_link;
     if (!magicLink) throw new Error("Failed to generate magic link");
 
-    // 4. Send styled email via Resend
+    // Send styled email via Resend
     const html = `
 <!DOCTYPE html>
 <html>
@@ -72,29 +82,34 @@ Deno.serve(async (req) => {
         <path d="M22 10v6M2 10l10-5 10 5-10 5-10-5z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     </div>
-    <h1 style="font-size:24px;font-weight:700;color:#09090b;margin:0 0 8px">Your RhemaHub demo is ready</h1>
+    <h1 style="font-size:24px;font-weight:700;color:#09090b;margin:0 0 8px">Your FutureLabs demo is ready</h1>
     <p style="color:#71717a;font-size:15px;line-height:1.6;margin:0 0 28px">
       You requested a live demo of <strong style="color:#09090b">FutureLabs LMS</strong>.
-      Click the button below to log in and explore <strong style="color:#7c3aed">RhemaHub</strong> — a fully loaded
-      academy instance with programs, cohorts, curriculum, finance, and more.
+      Click the button below to log in as an admin and explore the full platform —
+      programs, cohorts, curriculum, finance, enrollment, and more.
     </p>
     <a href="${magicLink}"
        style="display:inline-block;background:#7c3aed;color:#fff;padding:14px 32px;border-radius:12px;text-decoration:none;font-weight:600;font-size:15px;letter-spacing:-.01em">
-      Open My Demo Hub →
+      Open My Demo Dashboard →
     </a>
     <div style="margin-top:32px;padding:20px;background:#fafafa;border-radius:12px;border:1px solid #e4e4e7">
-      <p style="font-size:13px;font-weight:600;color:#3f3f46;margin:0 0 8px">What's inside RhemaHub</p>
+      <p style="font-size:13px;font-weight:600;color:#3f3f46;margin:0 0 8px">What's inside your demo</p>
       <ul style="font-size:13px;color:#71717a;margin:0;padding-left:16px;line-height:1.8">
-        <li>3 programs &amp; 2 classrooms with live cohorts</li>
-        <li>Full curriculum with lessons &amp; materials</li>
-        <li>Finance: invoices, payments, expenses</li>
+        <li>Programs, cohorts &amp; live curriculum</li>
+        <li>Finance: invoices, payments, expenses &amp; payroll</li>
         <li>Student roster &amp; enrollment management</li>
-        <li>Staff management &amp; payroll</li>
+        <li>Staff management &amp; attendance tracking</li>
       </ul>
     </div>
+    <div style="margin-top:20px;padding:16px 20px;background:#fef3c7;border-radius:12px;border:1px solid #fde68a">
+      <p style="font-size:13px;color:#92400e;margin:0">
+        <strong>Demo access is valid for 1 hour</strong> after you click the link.
+        This is a one-time invitation — please use it now.
+      </p>
+    </div>
     <p style="margin-top:28px;font-size:12px;color:#a1a1aa;line-height:1.6">
-      This link expires in 7 days. If you didn't request a demo, you can safely ignore this email.<br>
-      Questions? Reply to this email or reach us at <a href="mailto:manny@futurelabs.com.ng" style="color:#7c3aed">manny@futurelabs.com.ng</a>
+      If you didn't request a demo, you can safely ignore this email.<br>
+      Questions? Reply here or reach us at <a href="mailto:manny@futurelabs.com.ng" style="color:#7c3aed">manny@futurelabs.com.ng</a>
     </p>
   </div>
 </body>
@@ -109,7 +124,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         from: "FutureLabs <no-reply@futurelabs.ng>",
         to: [normalizedEmail],
-        subject: "Your FutureLabs demo is ready — open RhemaHub",
+        subject: "Your FutureLabs demo is ready — 1-hour admin access",
         html,
       }),
     });

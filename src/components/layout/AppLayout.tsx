@@ -1,9 +1,54 @@
 import { Outlet } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AppSidebar } from './AppSidebar';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
-import { Menu } from 'lucide-react';
+import { Menu, Clock, Sparkles } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+
+function DemoBanner() {
+  const { isDemo, demoExpiresAt } = useAuth();
+  const [remaining, setRemaining] = useState('');
+
+  useEffect(() => {
+    if (!isDemo || !demoExpiresAt) return;
+    const tick = () => {
+      const ms = demoExpiresAt.getTime() - Date.now();
+      if (ms <= 0) { setRemaining('expired'); return; }
+      const m = Math.floor(ms / 60000);
+      const s = Math.floor((ms % 60000) / 1000);
+      setRemaining(`${m}m ${s}s`);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [isDemo, demoExpiresAt]);
+
+  if (!isDemo) return null;
+
+  return (
+    <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center justify-between gap-4 flex-wrap text-sm">
+      <div className="flex items-center gap-2 text-amber-800">
+        <Clock className="h-4 w-4 flex-shrink-0" />
+        <span>
+          <strong>Demo Mode</strong> — you're exploring a preloaded demo academy.
+          {remaining && remaining !== 'expired' && (
+            <span className="ml-2 font-mono font-semibold">{remaining} remaining</span>
+          )}
+          {remaining === 'expired' && (
+            <span className="ml-2 text-destructive font-semibold">Access expired</span>
+          )}
+        </span>
+      </div>
+      <a
+        href="/demo"
+        className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 hover:text-amber-900 underline underline-offset-2"
+      >
+        <Sparkles className="h-3.5 w-3.5" /> Get your own hub
+      </a>
+    </div>
+  );
+}
 
 export function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -40,6 +85,7 @@ export function AppLayout() {
           </h1>
         </header>
 
+        <DemoBanner />
         <div className="p-4 sm:p-6 lg:p-8 max-w-7xl">
           <Outlet />
         </div>

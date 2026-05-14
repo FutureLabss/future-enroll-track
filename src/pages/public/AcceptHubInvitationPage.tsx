@@ -22,7 +22,6 @@ export default function AcceptHubInvitationPage() {
   const token = new URLSearchParams(window.location.search).get('token');
   const isInviteRef = useRef(window.location.hash.includes('type=invite'));
   const handledRef = useRef(false);
-  // Ref so doAccept always reads the latest hub slug even from stale closures
   const hubSlugRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -88,7 +87,6 @@ export default function AcceptHubInvitationPage() {
     // Grant admin role in user_roles if not already present
     await supabase.from('user_roles').upsert({ user_id: userId, role: 'admin' }, { onConflict: 'user_id,role' });
 
-    // Navigate to the hub's portal URL (/:hubSlug) so users land on a branded page
     const destination = hubSlugRef.current ? `/${hubSlugRef.current}` : '/admin';
     navigate(destination, { replace: true });
   };

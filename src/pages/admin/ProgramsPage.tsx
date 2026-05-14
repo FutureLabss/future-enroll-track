@@ -9,39 +9,109 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Plus } from 'lucide-react';
+import { Plus, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
+
+const BLANK = { program_name: '', description: '', active: true };
 
 export default function ProgramsPage() {
   const [programs, setPrograms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ program_name: '', description: '', active: true });
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editProgram, setEditProgram] = useState<any>(null);
+  const [form, setForm] = useState(BLANK);
+  const [saving, setSaving] = useState(false);
 
-  const fetch = async () => {
+  const load = async () => {
     const { data } = await supabase.from('programs').select('*').order('created_at', { ascending: false });
     setPrograms(data || []);
     setLoading(false);
   };
 
-  useEffect(() => { fetch(); }, []);
+  useEffect(() => { load(); }, []);
+
+  const openEdit = (program: any) => {
+    setEditProgram(program);
+    setForm({ program_name: program.program_name, description: program.description || '', active: program.active });
+  };
 
   const handleCreate = async () => {
     if (!form.program_name.trim()) { toast.error('Name required'); return; }
-    const { error } = await supabase.from('programs').insert(form);
+    setSaving(true);
+    // hub_id is set automatically by the DB trigger (programs_set_hub_id)
+    const { error } = await supabase.from('programs').insert({
+      program_name: form.program_name.trim(),
+      description: form.description.trim() || null,
+      active: form.active,
+    });
+    setSaving(false);
     if (error) { toast.error(error.message); return; }
     toast.success('Program created');
-    setOpen(false);
-    setForm({ program_name: '', description: '', active: true });
-    fetch();
+    setCreateOpen(false);
+    setForm(BLANK);
+    load();
+  };
+
+  const handleEdit = async () => {
+    if (!form.program_name.trim()) { toast.error('Name required'); return; }
+    setSaving(true);
+    const { error } = await supabase
+      .from('programs')
+      .update({
+        program_name: form.program_name.trim(),
+        description: form.description.trim() || null,
+        active: form.active,
+      })
+      .eq('id', editProgram.id);
+    setSaving(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success('Program updated');
+    setEditProgram(null);
+    setForm(BLANK);
+    load();
   };
 
   const columns = [
     { key: 'program_name', header: 'Program Name' },
-    { key: 'description', header: 'Description', render: (r: any) => <span className="text-muted-foreground truncate max-w-[200px] block">{r.description || '—'}</span> },
-    { key: 'active', header: 'Status', render: (r: any) => <StatusBadge status={r.active ? 'active' : 'cancelled'} /> },
-    { key: 'created_at', header: 'Created', render: (r: any) => new Date(r.created_at).toLocaleDateString() },
+    {
+      key: 'description', header: 'Description',
+      render: (r: any) => <span className="text-muted-foreground truncate max-w-[200px] block">{r.description || '—'}</span>,
+    },
+    {
+      key: 'active', header: 'Status',
+      render: (r: any) => <StatusBadge status={r.active ? 'active' : 'cancelled'} />,
+    },
+    {
+      key: 'created_at', header: 'Created',
+      render: (r: any) => new Date(r.created_at).toLocaleDateString(),
+    },
+    {
+      key: 'actions', header: '',
+      render: (r: any) => (
+        <Button variant="ghost" size="sm" onClick={() => openEdit(r)}>
+          <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
+        </Button>
+      ),
+    },
   ];
+
+  const ProgramForm = ({ onSave, label }: { onSave: () => void; label: string }) => (
+    <div className="space-y-4 mt-4">
+      <div>
+        <Label>Program Name *</Label>
+        <Input value={form.program_name} onChange={e => setForm({ ...form, program_name: e.target.value })} className="mt-1.5" />
+      </div>
+      <div>
+        <Label>Description</Label>
+        <Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="mt-1.5" rows={3} />
+      </div>
+      <div className="flex items-center gap-3">
+        <Switch checked={form.active} onCheckedChange={v => setForm({ ...form, active: v })} />
+        <Label>Active</Label>
+      </div>
+      <Button onClick={onSave} disabled={saving} className="w-full">{label}</Button>
+    </div>
+  );
 
   return (
     <div>
@@ -49,21 +119,30 @@ export default function ProgramsPage() {
         title="Programs"
         description="Manage training programs"
         actions={
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" /> New Program</Button></DialogTrigger>
+          <Dialog open={createOpen} onOpenChange={v => { setCreateOpen(v); if (!v) setForm(BLANK); }}>
+            <DialogTrigger asChild>
+              <Button><Plus className="h-4 w-4 mr-2" /> New Program</Button>
+            </DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>Create Program</DialogTitle></DialogHeader>
-              <div className="space-y-4 mt-4">
-                <div><Label>Program Name *</Label><Input value={form.program_name} onChange={e => setForm({ ...form, program_name: e.target.value })} className="mt-1.5" /></div>
-                <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="mt-1.5" /></div>
-                <div className="flex items-center gap-3"><Switch checked={form.active} onCheckedChange={v => setForm({ ...form, active: v })} /><Label>Active</Label></div>
-                <Button onClick={handleCreate} className="w-full">Create Program</Button>
-              </div>
+              <ProgramForm onSave={handleCreate} label={saving ? 'Creating…' : 'Create Program'} />
             </DialogContent>
           </Dialog>
         }
       />
-      {loading ? <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div> : <DataTable columns={columns} data={programs} />}
+
+      {/* Edit dialog */}
+      <Dialog open={!!editProgram} onOpenChange={v => { if (!v) { setEditProgram(null); setForm(BLANK); } }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Edit Program</DialogTitle></DialogHeader>
+          <ProgramForm onSave={handleEdit} label={saving ? 'Saving…' : 'Save Changes'} />
+        </DialogContent>
+      </Dialog>
+
+      {loading
+        ? <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>
+        : <DataTable columns={columns} data={programs} />
+      }
     </div>
   );
 }

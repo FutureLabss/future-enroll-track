@@ -20,6 +20,7 @@ import { toast } from 'sonner';
 import {
   Calendar, ClipboardList, Users, BookOpen, Plus, Radio, Clock, Loader2,
   LayoutList, Layers, PlayCircle, CheckCircle, XCircle, Pencil, Eye, RefreshCw,
+  UserPlus, UserMinus, UserCheck,
 } from 'lucide-react';
 
 const STATUS_COLOURS: Record<string, string> = {
@@ -201,6 +202,12 @@ export default function ClassroomWorkspacePage() {
   const [cohortForm, setCohortForm] = useState({ cohort_label: '', start_date: '', end_date: '', status: 'upcoming' });
   const [savingCohort, setSavingCohort] = useState(false);
 
+  // Cohort student management state
+  const [cohortStudentsModal, setCohortStudentsModal] = useState<{ open: boolean; cohort?: any }>({ open: false });
+  const [cohortMembers, setCohortMembers] = useState<any[]>([]);
+  const [cohortStudentsLoading, setCohortStudentsLoading] = useState(false);
+  const [cohortStudentSearch, setCohortStudentSearch] = useState('');
+
   useEffect(() => { if (id && user) loadData(); }, [id, user]);
 
   useEffect(() => {
@@ -373,6 +380,38 @@ export default function ClassroomWorkspacePage() {
     }
   };
 
+  const openCohortStudents = async (cohort: any) => {
+    setCohortStudentsModal({ open: true, cohort });
+    setCohortStudentSearch('');
+    setCohortStudentsLoading(true);
+    const { data } = await supabase
+      .from('cohort_students')
+      .select('id, student_id, status, profiles:student_id(full_name, email)')
+      .eq('cohort_id', cohort.id);
+    setCohortMembers(data || []);
+    setCohortStudentsLoading(false);
+  };
+
+  const handleAddToCohort = async (student: any) => {
+    const cohort = cohortStudentsModal.cohort;
+    const { error } = await supabase.from('cohort_students').insert({
+      cohort_id: cohort.id,
+      student_id: student.student_id,
+      enrollment_id: student.enrollment_id || null,
+    });
+    if (error) { toast.error(error.message); return; }
+    toast.success(`${student.profiles?.full_name || 'Student'} added to cohort`);
+    openCohortStudents(cohort);
+  };
+
+  const handleRemoveFromCohort = async (memberId: string, name: string) => {
+    const cohort = cohortStudentsModal.cohort;
+    const { error } = await supabase.from('cohort_students').delete().eq('id', memberId);
+    if (error) { toast.error(error.message); return; }
+    toast.success(`${name} removed from cohort`);
+    openCohortStudents(cohort);
+  };
+
   if (dataLoading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
   if (!classroomData) return <div className="text-center py-20 text-muted-foreground">Classroom not found or access denied.</div>;
 
@@ -527,6 +566,10 @@ export default function ClassroomWorkspacePage() {
                             {c.start_date ? new Date(c.start_date).toLocaleDateString() : '—'} – {c.end_date ? new Date(c.end_date).toLocaleDateString() : '—'}
                           </p>
                         </div>
+                        <div className="flex items-center gap-2">
+                          <Button size="sm" variant="outline" onClick={() => openCohortStudents(c)}>
+                            <UserCheck className="h-3.5 w-3.5 mr-1" />Students
+                          </Button>
                         <Dialog
                           open={cohortEditModal.open && cohortEditModal.cohort?.id === c.id}
                           onOpenChange={o => {
@@ -558,6 +601,7 @@ export default function ClassroomWorkspacePage() {
                             </div>
                           </DialogContent>
                         </Dialog>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -789,6 +833,111 @@ export default function ClassroomWorkspacePage() {
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Submissions — {submissionsAssignment?.title}</DialogTitle></DialogHeader>
           {submissionsAssignment && <SubmissionsModal assignment={submissionsAssignment} />}
+        </DialogContent>
+      </Dialog>
+
+      {/* Cohort student management modal */}
+      <Dialog
+        open={cohortStudentsModal.open}
+        onOpenChange={o => { if (!o) setCohortStudentsModal({ open: false }); }}
+      >
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              {cohortStudentsModal.cohort?.cohort_label} — Students
+            </DialogTitle>
+          </DialogHeader>
+
+          {cohortStudentsLoading ? (
+            <div className="flex justify-center py-10"><Loader2 className="animate-spin h-6 w-6 text-primary" /></div>
+          ) : (
+            <div className="space-y-6 mt-1">
+              {/* Search */}
+              <Input
+                placeholder="Search students by name or email..."
+                value={cohortStudentSearch}
+                onChange={e => setCohortStudentSearch(e.target.value)}
+              />
+
+              {/* Current cohort members */}
+              <div>
+                <p className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+                  <UserCheck className="h-4 w-4 text-success" />
+                  In this cohort ({cohortMembers.length})
+                </p>
+                {cohortMembers.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-3 text-center">No students assigned yet</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {cohortMembers
+                      .filter(m => {
+                        const q = cohortStudentSearch.toLowerCase();
+                        return !q || m.profiles?.full_name?.toLowerCase().includes(q) || m.profiles?.email?.toLowerCase().includes(q);
+                      })
+                      .map(m => (
+                        <div key={m.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+                          <div>
+                            <p className="text-sm font-medium">{m.profiles?.full_name || '—'}</p>
+                            <p className="text-xs text-muted-foreground">{m.profiles?.email}</p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-destructive h-7 px-2"
+                            onClick={() => handleRemoveFromCohort(m.id, m.profiles?.full_name || 'Student')}
+                          >
+                            <UserMinus className="h-3.5 w-3.5 mr-1" />Remove
+                          </Button>
+                        </div>
+                      ))
+                    }
+                  </div>
+                )}
+              </div>
+
+              {/* Available classroom students not in cohort */}
+              <div>
+                <p className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+                  <UserPlus className="h-4 w-4 text-primary" />
+                  Available from classroom pool
+                </p>
+                {(() => {
+                  const memberIds = new Set(cohortMembers.map(m => m.student_id));
+                  const available = students.filter(s => !memberIds.has(s.student_id));
+                  const filtered = available.filter(s => {
+                    const q = cohortStudentSearch.toLowerCase();
+                    return !q || s.profiles?.full_name?.toLowerCase().includes(q) || s.profiles?.email?.toLowerCase().includes(q);
+                  });
+                  if (filtered.length === 0) return (
+                    <p className="text-sm text-muted-foreground py-3 text-center">
+                      {available.length === 0 ? 'All classroom students are already in this cohort' : 'No students match your search'}
+                    </p>
+                  );
+                  return (
+                    <div className="space-y-1.5">
+                      {filtered.map(s => (
+                        <div key={s.student_id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+                          <div>
+                            <p className="text-sm font-medium">{s.profiles?.full_name || '—'}</p>
+                            <p className="text-xs text-muted-foreground">{s.profiles?.email}</p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2"
+                            onClick={() => handleAddToCohort(s)}
+                          >
+                            <UserPlus className="h-3.5 w-3.5 mr-1" />Add
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

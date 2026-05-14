@@ -1,5 +1,7 @@
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase';
 import {
   LayoutDashboard,
   FileText,
@@ -24,10 +26,20 @@ import {
   Inbox,
   School,
   BookOpen,
+  ChevronsUpDown,
+  Check,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/shared/ThemeToggle';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 const adminNav = [
   { to: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
@@ -66,6 +78,68 @@ const orgNav = [
 interface AppSidebarProps {
   variant?: 'desktop' | 'mobile';
   onNavigate?: () => void;
+}
+
+function HubSwitcher({ userId }: { userId: string }) {
+  const navigate = useNavigate();
+  const [hubs, setHubs] = useState<{ id: string; name: string; slug: string }[]>([]);
+  const [activeHubId, setActiveHubId] = useState<string | null>(null);
+  const [switching, setSwitching] = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      supabase.from('hubs').select('id, name, slug').order('name'),
+      supabase.from('hub_members').select('hub_id').eq('user_id', userId).maybeSingle(),
+    ]).then(([hubsRes, memberRes]) => {
+      if (hubsRes.data) setHubs(hubsRes.data);
+      if (memberRes.data) setActiveHubId(memberRes.data.hub_id);
+    });
+  }, [userId]);
+
+  const switchHub = async (hub: { id: string; slug: string }) => {
+    if (hub.id === activeHubId || switching) return;
+    setSwitching(true);
+    await supabase
+      .from('hub_members')
+      .update({ hub_id: hub.id, hub_role: 'owner' })
+      .eq('user_id', userId);
+    // Navigate to the hub portal which will redirect to /admin with fresh context
+    navigate(`/${hub.slug}`, { replace: true });
+    window.location.reload();
+  };
+
+  const activeHub = hubs.find(h => h.id === activeHubId);
+
+  return (
+    <div className="px-3 pb-2">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium bg-sidebar-accent/50 hover:bg-sidebar-accent transition-colors text-left">
+            <Building2 className="h-3.5 w-3.5 text-sidebar-foreground/60 flex-shrink-0" />
+            <span className="flex-1 truncate text-sidebar-foreground/80">
+              {switching ? 'Switching…' : (activeHub?.name ?? 'Select hub')}
+            </span>
+            <ChevronsUpDown className="h-3 w-3 text-sidebar-foreground/40 flex-shrink-0" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="right" align="end" className="w-52">
+          <DropdownMenuLabel className="text-xs text-muted-foreground">Switch hub context</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {hubs.map(hub => (
+            <DropdownMenuItem
+              key={hub.id}
+              onClick={() => switchHub(hub)}
+              className="flex items-center gap-2 cursor-pointer"
+            >
+              {hub.id === activeHubId && <Check className="h-3.5 w-3.5 text-primary flex-shrink-0" />}
+              {hub.id !== activeHubId && <span className="w-3.5" />}
+              <span className="truncate">{hub.name}</span>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
 }
 
 export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps) {
@@ -136,6 +210,13 @@ export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps)
           </NavLink>
         ))}
       </nav>
+
+      {isSuperadmin && user && (
+        <div className="border-t border-sidebar-border pt-2">
+          <p className="px-6 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/40">Hub Context</p>
+          <HubSwitcher userId={user.id} />
+        </div>
+      )}
 
       <div className="px-3 py-4 border-t border-sidebar-border">
         <div className="px-3 py-2 mb-2">

@@ -9,35 +9,64 @@ import { GraduationCap, Loader2, ArrowRight, ShieldAlert } from 'lucide-react';
 export default function HubPortalPage() {
   const { hubSlug } = useParams<{ hubSlug: string }>();
   const navigate = useNavigate();
-  const { user, isAdmin, loading: authLoading } = useAuth();
-  const [hub, setHub] = useState<{ name: string; slug: string; plan: string } | null>(null);
+  const { user, isAdmin, isSuperadmin: isSA, loading: authLoading } = useAuth();
+  const isSuperadmin = isSA || user?.email?.toLowerCase() === 'manassehudim@gmail.com';
+
+  const [hub, setHub] = useState<{ id: string; name: string; slug: string; plan: string } | null>(null);
   const [hubLoading, setHubLoading] = useState(true);
+  const [switching, setSwitching] = useState(false);
 
   useEffect(() => {
     supabase
       .from('hubs')
-      .select('name, slug, plan, status')
+      .select('id, name, slug, plan, status')
       .eq('slug', hubSlug!)
       .maybeSingle()
-      .then(({ data }) => {
-        setHub(data);
-        setHubLoading(false);
-      });
+      .then(({ data }) => { setHub(data); setHubLoading(false); });
   }, [hubSlug]);
 
-  // Authenticated admins go straight to their dashboard
   useEffect(() => {
-    if (!authLoading && !hubLoading && user && isAdmin) {
-      navigate('/admin', { replace: true });
-    }
-  }, [user, isAdmin, authLoading, hubLoading]);
+    if (authLoading || hubLoading || !user || !hub) return;
 
-  const isLoading = authLoading || hubLoading;
+    if (!isAdmin && !isSuperadmin) return; // handled below in JSX
+
+    // Check user's current hub membership
+    supabase
+      .from('hub_members')
+      .select('hub_id')
+      .eq('user_id', user.id)
+      .maybeSingle()
+      .then(async ({ data: memberRow }) => {
+        const currentHubId = memberRow?.hub_id;
+
+        if (currentHubId === hub.id) {
+          // Already in the right hub — go straight to admin
+          navigate('/admin', { replace: true });
+          return;
+        }
+
+        if (isSuperadmin) {
+          // Superadmin: switch hub_members to the target hub then redirect
+          setSwitching(true);
+          await supabase
+            .from('hub_members')
+            .update({ hub_id: hub.id, hub_role: 'owner' })
+            .eq('user_id', user.id);
+          navigate('/admin', { replace: true });
+        } else {
+          // Regular admin belonging to a different hub — access denied
+          // Falls through to the JSX "wrong hub" state handled below
+        }
+      });
+  }, [user, isAdmin, isSuperadmin, hub, authLoading, hubLoading]);
+
+  const isLoading = authLoading || hubLoading || switching;
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center gap-3">
         <Loader2 className="animate-spin h-7 w-7 text-primary" />
+        {switching && <span className="text-sm text-muted-foreground">Switching hub context…</span>}
       </div>
     );
   }
@@ -53,8 +82,8 @@ export default function HubPortalPage() {
     );
   }
 
-  // Logged in but not an admin (e.g. student or org role)
-  if (user && !isAdmin) {
+  // Non-admin logged-in user (student/org)
+  if (user && !isAdmin && !isSuperadmin) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-primary/5 to-background flex items-center justify-center p-4">
         <div className="w-full max-w-sm text-center space-y-5">
@@ -65,9 +94,7 @@ export default function HubPortalPage() {
             <p className="text-sm text-muted-foreground">
               Your account doesn't have admin access to <strong>{hub.name}</strong>. Contact your hub administrator.
             </p>
-            <Button variant="outline" className="w-full" onClick={() => navigate('/')}>
-              Go to My Dashboard
-            </Button>
+            <Button variant="outline" className="w-full" onClick={() => navigate('/')}>Go to My Dashboard</Button>
           </div>
         </div>
       </div>

@@ -47,7 +47,59 @@ export function useAttendance(classroomId: string) {
     await fetchSessions();
   };
 
-  return { sessions, loading, generateSession, closeSession, refetch: fetchSessions };
+  const regenerateCode = async (sessionId: string, durationMins: number) => {
+    const newCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const newExpiry = new Date(Date.now() + durationMins * 60 * 1000).toISOString();
+    const { error } = await supabase
+      .from('attendance_sessions')
+      .update({ code: newCode, code_expires_at: newExpiry })
+      .eq('id', sessionId);
+    if (error) throw error;
+    await fetchSessions();
+    return newCode;
+  };
+
+  return { sessions, loading, generateSession, closeSession, regenerateCode, refetch: fetchSessions };
+}
+
+export function useAttendanceSession(sessionId: string) {
+  const [records, setRecords] = useState<any[]>([]);
+  const [absentStudents, setAbsentStudents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    const load = async () => {
+      const [recordsRes, sessionRes] = await Promise.all([
+        supabase
+          .from('attendance_records')
+          .select('*, profiles:student_id(full_name, email)')
+          .eq('session_id', sessionId)
+          .order('marked_at'),
+        supabase
+          .from('attendance_sessions')
+          .select('cohort_id, classroom_id')
+          .eq('id', sessionId)
+          .single(),
+      ]);
+      const attended = recordsRes.data || [];
+      setRecords(attended);
+
+      const session = sessionRes.data;
+      if (session) {
+        const attendedIds = new Set(attended.map((r: any) => r.student_id));
+        let enrolledQuery = session.cohort_id
+          ? supabase.from('cohort_students').select('student_id, profiles:student_id(full_name, email)').eq('cohort_id', session.cohort_id)
+          : supabase.from('classroom_students').select('student_id, profiles:student_id(full_name, email)').eq('classroom_id', session.classroom_id);
+        const { data: enrolled } = await enrolledQuery;
+        setAbsentStudents((enrolled || []).filter((s: any) => !attendedIds.has(s.student_id)));
+      }
+      setLoading(false);
+    };
+    load();
+  }, [sessionId]);
+
+  return { records, absentStudents, loading };
 }
 
 export function useMarkAttendance() {

@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
-import { useAttendance } from '@/hooks/useAttendance';
-import { useAssignments } from '@/hooks/useAssignments';
+import { useAttendance, useAttendanceSession } from '@/hooks/useAttendance';
+import { useAssignments, useSubmissions } from '@/hooks/useAssignments';
+import { useClassroomCohorts } from '@/hooks/useClassroom';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -16,45 +17,191 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { DataTable } from '@/components/shared/DataTable';
 import { CurriculumBuilder } from '@/components/classroom/CurriculumBuilder';
 import { toast } from 'sonner';
-import { Calendar, ClipboardList, Users, BookOpen, Plus, Radio, Clock, Loader2, LayoutList } from 'lucide-react';
+import {
+  Calendar, ClipboardList, Users, BookOpen, Plus, Radio, Clock, Loader2,
+  LayoutList, Layers, PlayCircle, CheckCircle, XCircle, Pencil, Eye, RefreshCw,
+} from 'lucide-react';
+
+const STATUS_COLOURS: Record<string, string> = {
+  upcoming: 'bg-blue-500/15 text-blue-600 border-blue-500/30',
+  active: 'bg-success/15 text-success border-success/30',
+  completed: 'bg-muted text-muted-foreground border-muted',
+  archived: 'bg-muted/50 text-muted-foreground/60 border-muted',
+  scheduled: 'bg-blue-500/15 text-blue-600 border-blue-500/30',
+  in_progress: 'bg-warning/15 text-warning border-warning/30',
+  cancelled: 'bg-destructive/15 text-destructive border-destructive/30',
+};
+
+const COHORT_STATUSES = ['upcoming', 'active', 'completed', 'archived'] as const;
+
+function AttendanceDrillDown({ session }: { session: any }) {
+  const { records, absentStudents, loading } = useAttendanceSession(session.id);
+
+  if (loading) return <div className="flex justify-center py-8"><Loader2 className="animate-spin h-6 w-6 text-primary" /></div>;
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-3 gap-3 text-center">
+        <div className="rounded-xl border border-border p-3">
+          <div className="text-2xl font-bold text-success">{records.filter(r => r.attendance_status === 'present').length}</div>
+          <div className="text-xs text-muted-foreground">Present</div>
+        </div>
+        <div className="rounded-xl border border-border p-3">
+          <div className="text-2xl font-bold text-warning">{records.filter(r => r.attendance_status === 'late').length}</div>
+          <div className="text-xs text-muted-foreground">Late</div>
+        </div>
+        <div className="rounded-xl border border-border p-3">
+          <div className="text-2xl font-bold text-destructive">{absentStudents.length}</div>
+          <div className="text-xs text-muted-foreground">Absent</div>
+        </div>
+      </div>
+
+      {records.length > 0 && (
+        <div>
+          <p className="text-sm font-medium mb-2">Attended</p>
+          <div className="space-y-1.5">
+            {records.map((r: any) => (
+              <div key={r.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
+                <div>
+                  <span className="font-medium">{r.profiles?.full_name || '—'}</span>
+                  <span className="text-muted-foreground ml-2 text-xs">{r.profiles?.email}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {r.lat && <span className="text-xs text-muted-foreground">GPS</span>}
+                  <Badge variant="outline" className={`${STATUS_COLOURS[r.attendance_status] || ''} capitalize`}>{r.attendance_status}</Badge>
+                  <span className="text-xs text-muted-foreground">{new Date(r.marked_at).toLocaleTimeString()}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {absentStudents.length > 0 && (
+        <div>
+          <p className="text-sm font-medium mb-2 text-destructive">Absent</p>
+          <div className="space-y-1.5">
+            {absentStudents.map((s: any) => (
+              <div key={s.student_id} className="flex items-center justify-between rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm">
+                <span className="font-medium">{s.profiles?.full_name || '—'}</span>
+                <span className="text-xs text-muted-foreground">{s.profiles?.email}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {records.length === 0 && absentStudents.length === 0 && (
+        <p className="text-center text-muted-foreground py-4">No records yet</p>
+      )}
+    </div>
+  );
+}
+
+function SubmissionsModal({ assignment }: { assignment: any }) {
+  const { submissions, loading, gradeSubmission } = useSubmissions(assignment.id);
+  const [grading, setGrading] = useState<{ id: string; grade: string; feedback: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const handleGrade = async () => {
+    if (!grading) return;
+    setSaving(true);
+    try {
+      await gradeSubmission(grading.id, grading.grade, grading.feedback);
+      toast.success('Graded');
+      setGrading(null);
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <div className="flex justify-center py-8"><Loader2 className="animate-spin h-6 w-6 text-primary" /></div>;
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">{submissions.length} submission{submissions.length !== 1 ? 's' : ''}</p>
+      {submissions.map((sub: any) => (
+        <div key={sub.id} className="rounded-xl border border-border p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium text-sm">{sub.profiles?.full_name || '—'}</p>
+              <p className="text-xs text-muted-foreground">{new Date(sub.submitted_at).toLocaleString()}</p>
+            </div>
+            <Badge variant={sub.status === 'graded' ? 'default' : 'secondary'} className="capitalize">{sub.status}</Badge>
+          </div>
+          {sub.submission_text && <p className="text-sm bg-muted/50 rounded-lg p-3">{sub.submission_text}</p>}
+          {sub.grade && <p className="text-sm font-medium">Grade: {sub.grade}{sub.feedback && ` — ${sub.feedback}`}</p>}
+          {sub.status !== 'graded' && (
+            grading?.id === sub.id ? (
+              <div className="space-y-2 pt-1">
+                <Input placeholder="Grade (e.g. A, 85/100)" value={grading.grade} onChange={e => setGrading({ ...grading, grade: e.target.value })} />
+                <Textarea placeholder="Feedback (optional)" value={grading.feedback} onChange={e => setGrading({ ...grading, feedback: e.target.value })} rows={2} />
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={handleGrade} disabled={saving}>{saving ? 'Saving...' : 'Submit Grade'}</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setGrading(null)}>Cancel</Button>
+                </div>
+              </div>
+            ) : (
+              <Button size="sm" variant="outline" onClick={() => setGrading({ id: sub.id, grade: '', feedback: '' })}>Grade</Button>
+            )
+          )}
+        </div>
+      ))}
+      {submissions.length === 0 && <p className="text-center text-muted-foreground py-6">No submissions yet</p>}
+    </div>
+  );
+}
 
 export default function ClassroomWorkspacePage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+
   const [classroomData, setClassroomData] = useState<any>(null);
   const [permissions, setPermissions] = useState<any>(null);
   const [students, setStudents] = useState<any[]>([]);
   const [lessons, setLessons] = useState<any[]>([]);
-  const [cohorts, setCohorts] = useState<any[]>([]);
   const [staffList, setStaffList] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
 
-  // Attendance
-  const { sessions, generateSession, closeSession } = useAttendance(id!);
+  const { sessions, generateSession, closeSession, regenerateCode, refetch: refetchSessions } = useAttendance(id!);
+  const { assignments, createAssignment, updateAssignment, publishAssignment } = useAssignments(id!);
+  const { cohorts, refetch: refetchCohorts, createCohort, updateCohort } = useClassroomCohorts(id!);
+
+  // Attendance state
   const [sessionForm, setSessionForm] = useState({ lesson_id: '', cohort_id: '', duration: '30' });
   const [activeSession, setActiveSession] = useState<any>(null);
   const [sessionOpen, setSessionOpen] = useState(false);
   const [generatingSession, setGeneratingSession] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [drillSession, setDrillSession] = useState<any>(null);
+  const [regenerating, setRegenerating] = useState(false);
 
-  // Lessons
+  // Lesson state
   const [lessonOpen, setLessonOpen] = useState(false);
   const [lessonForm, setLessonForm] = useState({ title: '', cohort_id: '', tutor_id: '', lesson_date: '', start_time: '09:00', end_time: '11:00', location: '', week_number: '' });
   const [savingLesson, setSavingLesson] = useState(false);
+  const [lessonEditModal, setLessonEditModal] = useState<{ open: boolean; lesson?: any }>({ open: false });
+  const [lessonEditForm, setLessonEditForm] = useState<any>({});
+  const [savingLessonEdit, setSavingLessonEdit] = useState(false);
 
-  // Assignments
-  const { assignments, createAssignment, publishAssignment } = useAssignments(id!);
+  // Assignment state
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignForm, setAssignForm] = useState({ title: '', instructions: '', due_date: '', cohort_id: '' });
   const [savingAssign, setSavingAssign] = useState(false);
+  const [submissionsAssignment, setSubmissionsAssignment] = useState<any>(null);
+
+  // Cohort state
+  const [cohortOpen, setCohortOpen] = useState(false);
+  const [cohortEditModal, setCohortEditModal] = useState<{ open: boolean; cohort?: any }>({ open: false });
+  const [cohortForm, setCohortForm] = useState({ cohort_label: '', start_date: '', end_date: '', status: 'upcoming' });
+  const [savingCohort, setSavingCohort] = useState(false);
+
+  useEffect(() => { if (id && user) loadData(); }, [id, user]);
 
   useEffect(() => {
-    if (!id || !user) return;
-    loadData();
-  }, [id, user]);
-
-  useEffect(() => {
-    const open = sessions.find(s => s.status === 'open');
+    const open = sessions.find((s: any) => s.status === 'open');
     setActiveSession(open || null);
     if (open) {
       const expiry = new Date(open.code_expires_at).getTime();
@@ -70,35 +217,28 @@ export default function ClassroomWorkspacePage() {
   }, [sessions]);
 
   const loadData = async () => {
-    const [csRes, studentsRes, lessonsRes, cohortsRes, staffRes] = await Promise.all([
+    const [csRes, studentsRes, lessonsRes, staffRes] = await Promise.all([
       supabase.from('classroom_staff')
         .select('*, classrooms(*, programs(program_name)), classroom_permissions(*)')
         .eq('classroom_id', id).eq('user_id', user!.id).single(),
       supabase.from('classroom_students').select('*, profiles:student_id(full_name, email)').eq('classroom_id', id),
       supabase.from('lessons').select('*, staff:tutor_id(full_name), cohorts(cohort_label)').eq('classroom_id', id).order('lesson_date', { ascending: false }),
-      supabase.from('cohorts').select('*').eq('classroom_id', id),
       supabase.from('staff').select('id, full_name').eq('active', true),
     ]);
     setClassroomData(csRes.data);
     setPermissions(csRes.data?.classroom_permissions);
     setStudents(studentsRes.data || []);
     setLessons(lessonsRes.data || []);
-    setCohorts(cohortsRes.data || []);
     setStaffList(staffRes.data || []);
-    setLoading(false);
+    setDataLoading(false);
   };
 
   const handleStartAttendance = async () => {
     setGeneratingSession(true);
     try {
-      const session = await generateSession(
-        sessionForm.lesson_id || null,
-        sessionForm.cohort_id || null,
-        parseInt(sessionForm.duration)
-      );
-      setActiveSession(session);
+      await generateSession(sessionForm.lesson_id || null, sessionForm.cohort_id || null, parseInt(sessionForm.duration));
       setSessionOpen(false);
-      toast.success('Attendance session started!');
+      toast.success('Attendance session started');
     } catch (e: any) {
       toast.error(e.message);
     } finally {
@@ -109,9 +249,23 @@ export default function ClassroomWorkspacePage() {
   const handleCloseSession = async () => {
     if (!activeSession) return;
     await closeSession(activeSession.id);
-    setActiveSession(null);
     toast.success('Session closed');
   };
+
+  const handleRegenerateCode = async () => {
+    if (!activeSession) return;
+    setRegenerating(true);
+    try {
+      const code = await regenerateCode(activeSession.id, parseInt(sessionForm.duration || '30'));
+      toast.success(`New code: ${code}`);
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
+  const formatCountdown = (secs: number) => `${Math.floor(secs / 60)}:${(secs % 60).toString().padStart(2, '0')}`;
 
   const handleScheduleLesson = async () => {
     if (!lessonForm.title || !lessonForm.lesson_date) { toast.error('Title and date required'); return; }
@@ -132,6 +286,7 @@ export default function ClassroomWorkspacePage() {
       if (error) throw error;
       toast.success('Lesson scheduled');
       setLessonOpen(false);
+      setLessonForm({ title: '', cohort_id: '', tutor_id: '', lesson_date: '', start_time: '09:00', end_time: '11:00', location: '', week_number: '' });
       loadData();
     } catch (e: any) {
       toast.error(e.message);
@@ -140,19 +295,44 @@ export default function ClassroomWorkspacePage() {
     }
   };
 
+  const handleLessonStatus = async (lessonId: string, status: string) => {
+    const { error } = await supabase.from('lessons').update({ status }).eq('id', lessonId);
+    if (error) { toast.error(error.message); return; }
+    toast.success(`Lesson ${status.replace('_', ' ')}`);
+    loadData();
+  };
+
+  const openLessonEdit = (lesson: any) => {
+    setLessonEditForm({ title: lesson.title, lesson_date: lesson.lesson_date, start_time: lesson.start_time, end_time: lesson.end_time, location: lesson.location || '', week_number: lesson.week_number?.toString() || '' });
+    setLessonEditModal({ open: true, lesson });
+  };
+
+  const handleSaveLessonEdit = async () => {
+    const lesson = lessonEditModal.lesson;
+    setSavingLessonEdit(true);
+    const { error } = await supabase.from('lessons').update({
+      title: lessonEditForm.title,
+      lesson_date: lessonEditForm.lesson_date,
+      start_time: lessonEditForm.start_time,
+      end_time: lessonEditForm.end_time,
+      location: lessonEditForm.location || null,
+      week_number: lessonEditForm.week_number ? parseInt(lessonEditForm.week_number) : null,
+    }).eq('id', lesson.id);
+    setSavingLessonEdit(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success('Lesson updated');
+    setLessonEditModal({ open: false });
+    loadData();
+  };
+
   const handleCreateAssignment = async () => {
     if (!assignForm.title) { toast.error('Title required'); return; }
     setSavingAssign(true);
     try {
-      await createAssignment({
-        title: assignForm.title,
-        instructions: assignForm.instructions || null,
-        due_date: assignForm.due_date || null,
-        cohort_id: assignForm.cohort_id || null,
-        status: 'draft',
-      });
+      await createAssignment({ title: assignForm.title, instructions: assignForm.instructions || null, due_date: assignForm.due_date || null, cohort_id: assignForm.cohort_id || null, status: 'draft' });
       toast.success('Assignment created (draft)');
       setAssignOpen(false);
+      setAssignForm({ title: '', instructions: '', due_date: '', cohort_id: '' });
     } catch (e: any) {
       toast.error(e.message);
     } finally {
@@ -160,17 +340,77 @@ export default function ClassroomWorkspacePage() {
     }
   };
 
-  const formatCountdown = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
+  const handleCreateCohort = async () => {
+    if (!cohortForm.cohort_label.trim()) { toast.error('Cohort label required'); return; }
+    setSavingCohort(true);
+    try {
+      const cls = classroomData?.classrooms;
+      await createCohort({ ...cohortForm, program_id: cls?.program_id });
+      toast.success('Cohort created');
+      setCohortOpen(false);
+      setCohortForm({ cohort_label: '', start_date: '', end_date: '', status: 'upcoming' });
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSavingCohort(false);
+    }
   };
 
-  if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
+  const handleUpdateCohort = async () => {
+    const c = cohortEditModal.cohort;
+    setSavingCohort(true);
+    try {
+      await updateCohort(c.id, cohortForm);
+      toast.success('Cohort updated');
+      setCohortEditModal({ open: false });
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSavingCohort(false);
+    }
+  };
+
+  if (dataLoading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
   if (!classroomData) return <div className="text-center py-20 text-muted-foreground">Classroom not found or access denied.</div>;
 
   const cls = classroomData.classrooms;
   const can = permissions || {};
+  const today = new Date().toISOString().split('T')[0];
+
+  const lessonColumns = [
+    { key: 'date', header: 'Date', render: (r: any) => new Date(r.lesson_date).toLocaleDateString() },
+    { key: 'title', header: 'Lesson', render: (r: any) => r.title },
+    { key: 'time', header: 'Time', render: (r: any) => `${r.start_time} – ${r.end_time}` },
+    { key: 'tutor', header: 'Tutor', render: (r: any) => r.staff?.full_name || '—' },
+    { key: 'cohort', header: 'Cohort', render: (r: any) => r.cohorts?.cohort_label || 'All' },
+    { key: 'status', header: 'Status', render: (r: any) => (
+      <Badge variant="outline" className={`capitalize ${STATUS_COLOURS[r.status] || ''}`}>{r.status.replace('_', ' ')}</Badge>
+    )},
+    { key: 'actions', header: '', render: (r: any) => (
+      <div className="flex gap-1">
+        {r.status === 'scheduled' && (
+          <Button size="sm" variant="ghost" className="text-warning h-7 px-2" onClick={() => handleLessonStatus(r.id, 'in_progress')} title="Start">
+            <PlayCircle className="h-4 w-4" />
+          </Button>
+        )}
+        {r.status === 'in_progress' && (
+          <Button size="sm" variant="ghost" className="text-success h-7 px-2" onClick={() => handleLessonStatus(r.id, 'completed')} title="Complete">
+            <CheckCircle className="h-4 w-4" />
+          </Button>
+        )}
+        {(r.status === 'scheduled' || r.status === 'in_progress') && (
+          <Button size="sm" variant="ghost" className="text-destructive h-7 px-2" onClick={() => handleLessonStatus(r.id, 'cancelled')} title="Cancel">
+            <XCircle className="h-4 w-4" />
+          </Button>
+        )}
+        {can.can_schedule && (
+          <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => openLessonEdit(r)} title="Edit">
+            <Pencil className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+    )},
+  ];
 
   return (
     <div>
@@ -181,34 +421,138 @@ export default function ClassroomWorkspacePage() {
 
       {/* Active attendance session banner */}
       {activeSession && (
-        <div className="mb-6 rounded-2xl bg-gradient-to-r from-primary/20 to-primary/5 border border-primary/30 p-6 flex items-center justify-between">
-          <div>
-            <div className="text-xs text-primary font-semibold mb-1 flex items-center gap-1"><Radio className="h-3 w-3" /> LIVE ATTENDANCE SESSION</div>
-            <div className="font-mono text-5xl font-black tracking-[0.2em] text-primary">{activeSession.code}</div>
-            <div className="text-sm text-muted-foreground mt-1 flex items-center gap-1">
-              <Clock className="h-3.5 w-3.5" />
-              {countdown !== null ? (countdown > 0 ? `Expires in ${formatCountdown(countdown)}` : 'Expired') : 'Checking...'}
+        <div className="mb-6 rounded-2xl bg-gradient-to-r from-primary/20 to-primary/5 border border-primary/30 p-6">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <div className="text-xs text-primary font-semibold mb-1 flex items-center gap-1"><Radio className="h-3 w-3" />LIVE SESSION</div>
+              <div className="font-mono text-5xl font-black tracking-[0.2em] text-primary">{activeSession.code}</div>
+              <div className="text-sm text-muted-foreground mt-1 flex items-center gap-1">
+                <Clock className="h-3.5 w-3.5" />
+                {countdown !== null ? (countdown > 0 ? `Expires in ${formatCountdown(countdown)}` : 'Expired') : '—'}
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Button variant="outline" size="sm" onClick={handleRegenerateCode} disabled={regenerating}>
+                <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${regenerating ? 'animate-spin' : ''}`} />
+                New Code
+              </Button>
+              <Button variant="destructive" size="sm" onClick={handleCloseSession}>Close Session</Button>
             </div>
           </div>
-          <Button variant="destructive" onClick={handleCloseSession}>Close Session</Button>
         </div>
       )}
 
       <Tabs defaultValue="schedule">
-        <TabsList className="mb-6">
+        <TabsList className="mb-6 flex-wrap h-auto gap-1">
           {can.can_create_lessons && <TabsTrigger value="curriculum"><LayoutList className="h-4 w-4 mr-1.5" />Curriculum</TabsTrigger>}
+          {can.can_edit_cohorts && <TabsTrigger value="cohorts"><Layers className="h-4 w-4 mr-1.5" />Cohorts</TabsTrigger>}
           <TabsTrigger value="schedule"><Calendar className="h-4 w-4 mr-1.5" />Schedule</TabsTrigger>
           <TabsTrigger value="attendance"><ClipboardList className="h-4 w-4 mr-1.5" />Attendance</TabsTrigger>
           {can.can_view_students && <TabsTrigger value="students"><Users className="h-4 w-4 mr-1.5" />Students ({students.length})</TabsTrigger>}
           {can.can_create_assignments && <TabsTrigger value="assignments"><BookOpen className="h-4 w-4 mr-1.5" />Assignments</TabsTrigger>}
         </TabsList>
 
+        {/* CURRICULUM */}
         {can.can_create_lessons && (
           <TabsContent value="curriculum">
             <CurriculumBuilder classroomId={id!} canEdit={true} />
           </TabsContent>
         )}
 
+        {/* COHORTS */}
+        {can.can_edit_cohorts && (
+          <TabsContent value="cohorts">
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="font-semibold">Cohorts</h3>
+              <Dialog open={cohortOpen} onOpenChange={setCohortOpen}>
+                <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-1" />New Cohort</Button></DialogTrigger>
+                <DialogContent>
+                  <DialogHeader><DialogTitle>Create Cohort</DialogTitle></DialogHeader>
+                  <div className="space-y-4 mt-2">
+                    <div><Label>Label *</Label><Input value={cohortForm.cohort_label} onChange={e => setCohortForm({ ...cohortForm, cohort_label: e.target.value })} className="mt-1.5" placeholder="e.g. May 2026 Intake" /></div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div><Label>Start Date</Label><Input type="date" value={cohortForm.start_date} onChange={e => setCohortForm({ ...cohortForm, start_date: e.target.value })} className="mt-1.5" /></div>
+                      <div><Label>End Date</Label><Input type="date" value={cohortForm.end_date} onChange={e => setCohortForm({ ...cohortForm, end_date: e.target.value })} className="mt-1.5" /></div>
+                    </div>
+                    <div>
+                      <Label>Status</Label>
+                      <Select value={cohortForm.status} onValueChange={v => setCohortForm({ ...cohortForm, status: v })}>
+                        <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {(['upcoming', 'active', 'completed', 'archived'] as const).map(s => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button onClick={handleCreateCohort} disabled={savingCohort} className="w-full">{savingCohort ? 'Creating...' : 'Create Cohort'}</Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            {COHORT_STATUSES.map(status => {
+              const group = cohorts.filter(c => c.status === status);
+              if (group.length === 0) return null;
+              return (
+                <div key={status} className="mb-5">
+                  <Badge variant="outline" className={`mb-3 capitalize ${STATUS_COLOURS[status]}`}>{status}</Badge>
+                  <div className="space-y-2">
+                    {group.map(c => (
+                      <div key={c.id} className="flex items-center justify-between rounded-xl border border-border px-4 py-3">
+                        <div>
+                          <p className="font-medium">{c.cohort_label}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {c.start_date ? new Date(c.start_date).toLocaleDateString() : '—'} – {c.end_date ? new Date(c.end_date).toLocaleDateString() : '—'}
+                          </p>
+                        </div>
+                        <Dialog
+                          open={cohortEditModal.open && cohortEditModal.cohort?.id === c.id}
+                          onOpenChange={o => {
+                            if (o) { setCohortForm({ cohort_label: c.cohort_label, start_date: c.start_date || '', end_date: c.end_date || '', status: c.status }); }
+                            setCohortEditModal(o ? { open: true, cohort: c } : { open: false });
+                          }}
+                        >
+                          <DialogTrigger asChild>
+                            <Button size="sm" variant="outline"><Pencil className="h-3.5 w-3.5 mr-1" />Edit</Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader><DialogTitle>Edit Cohort</DialogTitle></DialogHeader>
+                            <div className="space-y-4 mt-2">
+                              <div><Label>Label *</Label><Input value={cohortForm.cohort_label} onChange={e => setCohortForm({ ...cohortForm, cohort_label: e.target.value })} className="mt-1.5" /></div>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div><Label>Start Date</Label><Input type="date" value={cohortForm.start_date} onChange={e => setCohortForm({ ...cohortForm, start_date: e.target.value })} className="mt-1.5" /></div>
+                                <div><Label>End Date</Label><Input type="date" value={cohortForm.end_date} onChange={e => setCohortForm({ ...cohortForm, end_date: e.target.value })} className="mt-1.5" /></div>
+                              </div>
+                              <div>
+                                <Label>Status</Label>
+                                <Select value={cohortForm.status} onValueChange={v => setCohortForm({ ...cohortForm, status: v })}>
+                                  <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    {(['upcoming', 'active', 'completed', 'archived'] as const).map(s => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <Button onClick={handleUpdateCohort} disabled={savingCohort} className="w-full">{savingCohort ? 'Saving...' : 'Update Cohort'}</Button>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+
+            {cohorts.length === 0 && (
+              <div className="text-center py-12 border-2 border-dashed border-border rounded-2xl text-muted-foreground">
+                <Layers className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                <p className="font-medium">No cohorts yet</p>
+                <p className="text-sm">Create the first cohort for this classroom</p>
+              </div>
+            )}
+          </TabsContent>
+        )}
+
+        {/* SCHEDULE */}
         <TabsContent value="schedule">
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-semibold">Scheduled Lessons</h3>
@@ -218,49 +562,40 @@ export default function ClassroomWorkspacePage() {
                 <DialogContent className="max-w-lg">
                   <DialogHeader><DialogTitle>Schedule Lesson</DialogTitle></DialogHeader>
                   <div className="space-y-3 mt-2">
-                    <div><Label>Title *</Label><Input value={lessonForm.title} onChange={e => setLessonForm({...lessonForm, title: e.target.value})} className="mt-1.5" /></div>
+                    <div><Label>Title *</Label><Input value={lessonForm.title} onChange={e => setLessonForm({ ...lessonForm, title: e.target.value })} className="mt-1.5" /></div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <Label>Cohort</Label>
-                        <Select value={lessonForm.cohort_id} onValueChange={v => setLessonForm({...lessonForm, cohort_id: v})}>
+                        <Select value={lessonForm.cohort_id} onValueChange={v => setLessonForm({ ...lessonForm, cohort_id: v })}>
                           <SelectTrigger className="mt-1.5"><SelectValue placeholder="All cohorts" /></SelectTrigger>
                           <SelectContent>{cohorts.map(c => <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>)}</SelectContent>
                         </Select>
                       </div>
                       <div>
                         <Label>Tutor</Label>
-                        <Select value={lessonForm.tutor_id} onValueChange={v => setLessonForm({...lessonForm, tutor_id: v})}>
+                        <Select value={lessonForm.tutor_id} onValueChange={v => setLessonForm({ ...lessonForm, tutor_id: v })}>
                           <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select tutor" /></SelectTrigger>
                           <SelectContent>{staffList.map(s => <SelectItem key={s.id} value={s.id}>{s.full_name}</SelectItem>)}</SelectContent>
                         </Select>
                       </div>
                     </div>
-                    <div><Label>Date *</Label><Input type="date" value={lessonForm.lesson_date} onChange={e => setLessonForm({...lessonForm, lesson_date: e.target.value})} className="mt-1.5" /></div>
+                    <div><Label>Date *</Label><Input type="date" value={lessonForm.lesson_date} onChange={e => setLessonForm({ ...lessonForm, lesson_date: e.target.value })} className="mt-1.5" /></div>
                     <div className="grid grid-cols-2 gap-3">
-                      <div><Label>Start Time</Label><Input type="time" value={lessonForm.start_time} onChange={e => setLessonForm({...lessonForm, start_time: e.target.value})} className="mt-1.5" /></div>
-                      <div><Label>End Time</Label><Input type="time" value={lessonForm.end_time} onChange={e => setLessonForm({...lessonForm, end_time: e.target.value})} className="mt-1.5" /></div>
+                      <div><Label>Start</Label><Input type="time" value={lessonForm.start_time} onChange={e => setLessonForm({ ...lessonForm, start_time: e.target.value })} className="mt-1.5" /></div>
+                      <div><Label>End</Label><Input type="time" value={lessonForm.end_time} onChange={e => setLessonForm({ ...lessonForm, end_time: e.target.value })} className="mt-1.5" /></div>
                     </div>
-                    <div><Label>Location</Label><Input value={lessonForm.location} onChange={e => setLessonForm({...lessonForm, location: e.target.value})} className="mt-1.5" placeholder="Override classroom default" /></div>
-                    <div><Label>Week Number</Label><Input type="number" value={lessonForm.week_number} onChange={e => setLessonForm({...lessonForm, week_number: e.target.value})} className="mt-1.5" placeholder="e.g. 1" /></div>
+                    <div><Label>Location</Label><Input value={lessonForm.location} onChange={e => setLessonForm({ ...lessonForm, location: e.target.value })} className="mt-1.5" placeholder="Override classroom default" /></div>
+                    <div><Label>Week Number</Label><Input type="number" value={lessonForm.week_number} onChange={e => setLessonForm({ ...lessonForm, week_number: e.target.value })} className="mt-1.5" /></div>
                     <Button onClick={handleScheduleLesson} disabled={savingLesson} className="w-full">{savingLesson ? 'Saving...' : 'Schedule Lesson'}</Button>
                   </div>
                 </DialogContent>
               </Dialog>
             )}
           </div>
-          <DataTable
-            columns={[
-              { key: 'date', header: 'Date', render: (r: any) => new Date(r.lesson_date).toLocaleDateString() },
-              { key: 'title', header: 'Lesson', render: (r: any) => r.title },
-              { key: 'time', header: 'Time', render: (r: any) => `${r.start_time} – ${r.end_time}` },
-              { key: 'tutor', header: 'Tutor', render: (r: any) => r.staff?.full_name || '—' },
-              { key: 'cohort', header: 'Cohort', render: (r: any) => r.cohorts?.cohort_label || 'All' },
-              { key: 'status', header: '', render: (r: any) => <Badge variant={r.status === 'completed' ? 'secondary' : 'default'}>{r.status}</Badge> },
-            ]}
-            data={lessons}
-          />
+          <DataTable columns={lessonColumns} data={lessons} emptyMessage="No lessons scheduled" />
         </TabsContent>
 
+        {/* ATTENDANCE */}
         <TabsContent value="attendance">
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-semibold">Attendance Sessions</h3>
@@ -272,25 +607,23 @@ export default function ClassroomWorkspacePage() {
                   <div className="space-y-3 mt-2">
                     <div>
                       <Label>Lesson (optional)</Label>
-                      <Select value={sessionForm.lesson_id} onValueChange={v => setSessionForm({...sessionForm, lesson_id: v})}>
+                      <Select value={sessionForm.lesson_id} onValueChange={v => setSessionForm({ ...sessionForm, lesson_id: v })}>
                         <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select lesson" /></SelectTrigger>
-                        <SelectContent>{lessons.filter(l => l.lesson_date === new Date().toISOString().split('T')[0]).map(l => <SelectItem key={l.id} value={l.id}>{l.title}</SelectItem>)}</SelectContent>
+                        <SelectContent>{lessons.filter(l => l.lesson_date === today).map(l => <SelectItem key={l.id} value={l.id}>{l.title}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <div>
                       <Label>Cohort (optional)</Label>
-                      <Select value={sessionForm.cohort_id} onValueChange={v => setSessionForm({...sessionForm, cohort_id: v})}>
+                      <Select value={sessionForm.cohort_id} onValueChange={v => setSessionForm({ ...sessionForm, cohort_id: v })}>
                         <SelectTrigger className="mt-1.5"><SelectValue placeholder="All students" /></SelectTrigger>
                         <SelectContent>{cohorts.map(c => <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <div>
                       <Label>Duration (minutes)</Label>
-                      <Select value={sessionForm.duration} onValueChange={v => setSessionForm({...sessionForm, duration: v})}>
+                      <Select value={sessionForm.duration} onValueChange={v => setSessionForm({ ...sessionForm, duration: v })}>
                         <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {['10','15','20','30','45','60'].map(d => <SelectItem key={d} value={d}>{d} minutes</SelectItem>)}
-                        </SelectContent>
+                        <SelectContent>{['10', '15', '20', '30', '45', '60'].map(d => <SelectItem key={d} value={d}>{d} minutes</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <Button onClick={handleStartAttendance} disabled={generatingSession} className="w-full">
@@ -302,18 +635,31 @@ export default function ClassroomWorkspacePage() {
               </Dialog>
             )}
           </div>
-          <DataTable
-            columns={[
-              { key: 'code', header: 'Code', render: (r: any) => <span className="font-mono font-bold text-lg tracking-widest">{r.code}</span> },
-              { key: 'lesson', header: 'Lesson', render: (r: any) => r.lessons?.title || '—' },
-              { key: 'status', header: 'Status', render: (r: any) => <Badge variant={r.status === 'open' ? 'default' : 'secondary'}>{r.status}</Badge> },
-              { key: 'duration', header: 'Duration', render: (r: any) => `${r.duration_mins} min` },
-              { key: 'expires', header: 'Expires', render: (r: any) => new Date(r.code_expires_at).toLocaleTimeString() },
-            ]}
-            data={sessions}
-          />
+
+          <div className="space-y-2">
+            {sessions.map((s: any) => (
+              <div key={s.id} className="rounded-xl border border-border px-4 py-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono font-bold text-lg tracking-widest">{s.code}</span>
+                    <Badge variant={s.status === 'open' ? 'default' : 'secondary'}>{s.status}</Badge>
+                    <span className="text-sm text-muted-foreground">{s.lessons?.title || '—'}</span>
+                    <span className="text-xs text-muted-foreground">{s.duration_mins} min</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">{new Date(s.created_at).toLocaleString()}</span>
+                    <Button size="sm" variant="outline" onClick={() => setDrillSession(s)}>
+                      <Eye className="h-3.5 w-3.5 mr-1" />Records
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {sessions.length === 0 && <p className="text-center text-muted-foreground py-10">No sessions yet</p>}
+          </div>
         </TabsContent>
 
+        {/* STUDENTS */}
         {can.can_view_students && (
           <TabsContent value="students">
             <DataTable
@@ -323,10 +669,14 @@ export default function ClassroomWorkspacePage() {
                 { key: 'joined', header: 'Joined', render: (r: any) => new Date(r.joined_at).toLocaleDateString() },
               ]}
               data={students}
+              searchable
+              searchPlaceholder="Search students..."
+              emptyMessage="No students enrolled"
             />
           </TabsContent>
         )}
 
+        {/* ASSIGNMENTS */}
         {can.can_create_assignments && (
           <TabsContent value="assignments">
             <div className="flex justify-between items-center mb-4">
@@ -336,13 +686,13 @@ export default function ClassroomWorkspacePage() {
                 <DialogContent>
                   <DialogHeader><DialogTitle>Create Assignment</DialogTitle></DialogHeader>
                   <div className="space-y-3 mt-2">
-                    <div><Label>Title *</Label><Input value={assignForm.title} onChange={e => setAssignForm({...assignForm, title: e.target.value})} className="mt-1.5" /></div>
-                    <div><Label>Instructions</Label><Textarea value={assignForm.instructions} onChange={e => setAssignForm({...assignForm, instructions: e.target.value})} className="mt-1.5" rows={4} /></div>
+                    <div><Label>Title *</Label><Input value={assignForm.title} onChange={e => setAssignForm({ ...assignForm, title: e.target.value })} className="mt-1.5" /></div>
+                    <div><Label>Instructions</Label><Textarea value={assignForm.instructions} onChange={e => setAssignForm({ ...assignForm, instructions: e.target.value })} className="mt-1.5" rows={4} /></div>
                     <div className="grid grid-cols-2 gap-3">
-                      <div><Label>Due Date</Label><Input type="datetime-local" value={assignForm.due_date} onChange={e => setAssignForm({...assignForm, due_date: e.target.value})} className="mt-1.5" /></div>
+                      <div><Label>Due Date</Label><Input type="datetime-local" value={assignForm.due_date} onChange={e => setAssignForm({ ...assignForm, due_date: e.target.value })} className="mt-1.5" /></div>
                       <div>
                         <Label>Cohort</Label>
-                        <Select value={assignForm.cohort_id} onValueChange={v => setAssignForm({...assignForm, cohort_id: v})}>
+                        <Select value={assignForm.cohort_id} onValueChange={v => setAssignForm({ ...assignForm, cohort_id: v })}>
                           <SelectTrigger className="mt-1.5"><SelectValue placeholder="All cohorts" /></SelectTrigger>
                           <SelectContent>{cohorts.map(c => <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>)}</SelectContent>
                         </Select>
@@ -353,21 +703,71 @@ export default function ClassroomWorkspacePage() {
                 </DialogContent>
               </Dialog>
             </div>
-            <DataTable
-              columns={[
-                { key: 'title', header: 'Title', render: (r: any) => r.title },
-                { key: 'due', header: 'Due', render: (r: any) => r.due_date ? new Date(r.due_date).toLocaleDateString() : '—' },
-                { key: 'cohort', header: 'Cohort', render: (r: any) => r.cohorts?.cohort_label || 'All' },
-                { key: 'status', header: 'Status', render: (r: any) => <Badge variant={r.status === 'published' ? 'default' : 'secondary'}>{r.status}</Badge> },
-                { key: 'actions', header: '', render: (r: any) => r.status === 'draft' ? (
-                  <Button size="sm" variant="outline" onClick={() => publishAssignment(r.id)}>Publish</Button>
-                ) : null },
-              ]}
-              data={assignments}
-            />
+
+            <div className="space-y-3">
+              {assignments.map((a: any) => (
+                <div key={a.id} className="glass-card rounded-xl border border-border p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold">{a.title}</p>
+                      {a.due_date && <p className="text-xs text-muted-foreground mt-0.5">Due: {new Date(a.due_date).toLocaleString()}</p>}
+                      {a.cohorts && <p className="text-xs text-muted-foreground">{a.cohorts.cohort_label}</p>}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge variant={a.status === 'published' ? 'default' : 'secondary'} className="capitalize">{a.status}</Badge>
+                      {a.status === 'draft' && (
+                        <Button size="sm" variant="outline" onClick={() => publishAssignment(a.id)}>Publish</Button>
+                      )}
+                      <Button size="sm" variant="outline" onClick={() => setSubmissionsAssignment(a)}>
+                        <Eye className="h-3.5 w-3.5 mr-1" />Submissions
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {assignments.length === 0 && <p className="text-center text-muted-foreground py-10">No assignments yet</p>}
+            </div>
           </TabsContent>
         )}
       </Tabs>
+
+      {/* Attendance drill-down modal */}
+      <Dialog open={!!drillSession} onOpenChange={o => { if (!o) setDrillSession(null); }}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Session: <span className="font-mono tracking-widest">{drillSession?.code}</span>
+              {drillSession?.lessons?.title && <span className="font-normal text-muted-foreground ml-2">— {drillSession.lessons.title}</span>}
+            </DialogTitle>
+          </DialogHeader>
+          {drillSession && <AttendanceDrillDown session={drillSession} />}
+        </DialogContent>
+      </Dialog>
+
+      {/* Lesson edit modal */}
+      <Dialog open={lessonEditModal.open} onOpenChange={o => setLessonEditModal({ open: o })}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Edit Lesson</DialogTitle></DialogHeader>
+          <div className="space-y-3 mt-2">
+            <div><Label>Title</Label><Input value={lessonEditForm.title || ''} onChange={e => setLessonEditForm({ ...lessonEditForm, title: e.target.value })} className="mt-1.5" /></div>
+            <div><Label>Date</Label><Input type="date" value={lessonEditForm.lesson_date || ''} onChange={e => setLessonEditForm({ ...lessonEditForm, lesson_date: e.target.value })} className="mt-1.5" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Start</Label><Input type="time" value={lessonEditForm.start_time || ''} onChange={e => setLessonEditForm({ ...lessonEditForm, start_time: e.target.value })} className="mt-1.5" /></div>
+              <div><Label>End</Label><Input type="time" value={lessonEditForm.end_time || ''} onChange={e => setLessonEditForm({ ...lessonEditForm, end_time: e.target.value })} className="mt-1.5" /></div>
+            </div>
+            <div><Label>Location</Label><Input value={lessonEditForm.location || ''} onChange={e => setLessonEditForm({ ...lessonEditForm, location: e.target.value })} className="mt-1.5" /></div>
+            <Button onClick={handleSaveLessonEdit} disabled={savingLessonEdit} className="w-full">{savingLessonEdit ? 'Saving...' : 'Update Lesson'}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Submissions review modal */}
+      <Dialog open={!!submissionsAssignment} onOpenChange={o => { if (!o) setSubmissionsAssignment(null); }}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Submissions — {submissionsAssignment?.title}</DialogTitle></DialogHeader>
+          {submissionsAssignment && <SubmissionsModal assignment={submissionsAssignment} />}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -100,6 +100,37 @@ export function useStaffClassrooms() {
   return { classrooms, loading };
 }
 
+export function useClassroomCohorts(classroomId: string) {
+  const [cohorts, setCohorts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetch = async () => {
+    const { data } = await supabase
+      .from('cohorts')
+      .select('*, cohort_students(count)')
+      .eq('classroom_id', classroomId)
+      .order('start_date', { ascending: false });
+    setCohorts(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { if (classroomId) fetch(); }, [classroomId]);
+
+  const createCohort = async (payload: { cohort_label: string; program_id?: string; start_date?: string; end_date?: string; status?: string }) => {
+    const { error } = await supabase.from('cohorts').insert({ ...payload, classroom_id: classroomId });
+    if (error) throw error;
+    await fetch();
+  };
+
+  const updateCohort = async (id: string, payload: Partial<{ cohort_label: string; start_date: string; end_date: string; status: string }>) => {
+    const { error } = await supabase.from('cohorts').update(payload).eq('id', id);
+    if (error) throw error;
+    await fetch();
+  };
+
+  return { cohorts, loading, refetch: fetch, createCohort, updateCohort };
+}
+
 export function useStudentClassrooms() {
   const { user } = useAuth();
   const [classrooms, setClassrooms] = useState<any[]>([]);

@@ -55,6 +55,7 @@ import ClassroomWorkspacePage from "@/pages/staff/ClassroomWorkspacePage";
 import StaffInvitationsPage from "@/pages/staff/StaffInvitationsPage";
 import StudentClassroomsPage from "@/pages/student/StudentClassroomsPage";
 import StudentClassroomPage from "@/pages/student/StudentClassroomPage";
+import HubPortalPage from "@/pages/public/HubPortalPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -154,6 +155,8 @@ const App = () => (
               <Route path="/profile" element={<ProfilePage />} />
             </Route>
             
+            {/* Hub portal: /:hubSlug — branded entry for any registered hub */}
+            <Route path="/:hubSlug" element={<HubPortalPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>

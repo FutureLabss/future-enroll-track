@@ -22,6 +22,8 @@ export default function AcceptHubInvitationPage() {
   const token = new URLSearchParams(window.location.search).get('token');
   const isInviteRef = useRef(window.location.hash.includes('type=invite'));
   const handledRef = useRef(false);
+  // Ref so doAccept always reads the latest hub slug even from stale closures
+  const hubSlugRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!token) { setError('Missing invitation token'); setStep('error'); return; }
@@ -41,6 +43,7 @@ export default function AcceptHubInvitationPage() {
 
     setInvitation(data);
     setEmail(data.email);
+    hubSlugRef.current = data.hubs?.slug ?? null;
 
     // Check if user is already logged in
     const { data: { session } } = await supabase.auth.getSession();
@@ -85,7 +88,9 @@ export default function AcceptHubInvitationPage() {
     // Grant admin role in user_roles if not already present
     await supabase.from('user_roles').upsert({ user_id: userId, role: 'admin' }, { onConflict: 'user_id,role' });
 
-    setStep('done');
+    // Navigate to the hub's portal URL (/:hubSlug) so users land on a branded page
+    const destination = hubSlugRef.current ? `/${hubSlugRef.current}` : '/admin';
+    navigate(destination, { replace: true });
   };
 
   const handleSetPassword = async () => {
@@ -207,7 +212,9 @@ export default function AcceptHubInvitationPage() {
                   Welcome to <strong>{invitation?.hubs?.name}</strong>. You now have admin access to this hub.
                 </p>
               </div>
-              <Button className="w-full" onClick={() => navigate('/admin')}>Go to Dashboard</Button>
+              <Button className="w-full" onClick={() => navigate(hubSlugRef.current ? `/${hubSlugRef.current}` : '/admin')}>
+                Go to Dashboard
+              </Button>
             </div>
           )}
 

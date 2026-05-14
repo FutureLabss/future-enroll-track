@@ -192,7 +192,7 @@ export default function ClassroomDetailPage() {
       supabase.from('lessons')
         .select('*, staff:tutor_id(full_name), cohorts(cohort_label)')
         .eq('classroom_id', id).order('lesson_date', { ascending: false }),
-      supabase.from('staff').select('id, full_name, role_title, email').eq('active', true),
+      supabase.from('staff').select('id, full_name, role_title, email, program_id').eq('active', true),
     ]);
     setStaff(staffRes.data || []);
     setStudents(studentsRes.data || []);
@@ -417,12 +417,26 @@ export default function ClassroomDetailPage() {
               <div className="space-y-4 mt-3">
                 <div>
                   <Label>Staff Member *</Label>
-                  <Select value={inviteForm.staff_id} onValueChange={v => setInviteForm({ ...inviteForm, staff_id: v })}>
-                    <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select staff..." /></SelectTrigger>
-                    <SelectContent>
-                      {staffRoster.map(s => <SelectItem key={s.id} value={s.id}>{s.full_name} — {s.role_title || s.email}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  {(() => {
+                    const cpId = (classroom as any).program_id;
+                    const matched = cpId ? staffRoster.filter(s => !s.program_id || s.program_id === cpId) : staffRoster;
+                    const other = cpId ? staffRoster.filter(s => s.program_id && s.program_id !== cpId) : [];
+                    return (
+                      <>
+                        <Select value={inviteForm.staff_id} onValueChange={v => setInviteForm({ ...inviteForm, staff_id: v })}>
+                          <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select staff..." /></SelectTrigger>
+                          <SelectContent>
+                            {matched.map(s => <SelectItem key={s.id} value={s.id}>{s.full_name} — {s.role_title || s.email}</SelectItem>)}
+                            {other.length > 0 && <div className="px-2 py-1 text-xs text-muted-foreground border-t mt-1">Other programs</div>}
+                            {other.map(s => <SelectItem key={s.id} value={s.id} className="text-muted-foreground">{s.full_name} — {s.role_title || s.email}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        {cpId && matched.length === 0 && (
+                          <p className="text-xs text-muted-foreground mt-1">No staff assigned to this program. Set a program on staff members in Payroll → Staff.</p>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
                 <div>
                   <Label>Role in Classroom *</Label>

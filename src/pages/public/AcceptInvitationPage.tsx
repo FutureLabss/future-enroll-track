@@ -5,9 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { CheckCircle2, Loader2, GraduationCap, Lock } from 'lucide-react';
+import { CheckCircle2, Loader2, GraduationCap, Lock, LogIn } from 'lucide-react';
 
-type Step = 'loading' | 'set-password' | 'needs-account' | 'accepting' | 'done' | 'error';
+type Step = 'loading' | 'set-password' | 'needs-account' | 'sign-in' | 'accepting' | 'done' | 'error';
 
 export default function AcceptInvitationPage() {
   const [params] = useSearchParams();
@@ -69,7 +69,7 @@ export default function AcceptInvitationPage() {
   const fetchInvitation = async () => {
     const { data, error } = await supabase
       .from('staff_invitations')
-      .select('*, staff(full_name, email), classrooms(name, location, programs(program_name))')
+      .select('*, staff!left(full_name, email), classrooms!left(name, location, programs!left(program_name))')
       .eq('token', token)
       .single();
 
@@ -122,12 +122,31 @@ export default function AcceptInvitationPage() {
     }
   };
 
+  const handleSignIn = async () => {
+    if (!password) { toast.error('Enter your password'); return; }
+    const email = invitation?.staff?.email;
+    if (!email) { toast.error('Could not determine your email address'); return; }
+    setProcessing(true);
+    try {
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) throw signInError;
+      if (!signInData.user) throw new Error('Sign in failed');
+      handledRef.current = true;
+      await doAccept(signInData.user.id, invitation);
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   const handleCreateAccount = async () => {
     if (!password || password.length < 8) { toast.error('Password must be at least 8 characters'); return; }
     if (!fullName.trim()) { toast.error('Enter your full name'); return; }
     setProcessing(true);
     try {
-      const email = invitation.staff.email;
+      const email = invitation.staff?.email;
+      if (!email) throw new Error('Could not determine your email address');
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
@@ -202,7 +221,7 @@ export default function AcceptInvitationPage() {
           <h1 className="text-2xl font-bold font-heading">Set Your Password</h1>
           <p className="text-muted-foreground mt-2">
             You've joined <strong>{invitation?.classrooms?.name}</strong>.
-            Set a password to complete your account.
+            Set a password to complete your account setup.
           </p>
         </div>
         <div className="glass-card rounded-2xl p-6 space-y-4">
@@ -230,12 +249,52 @@ export default function AcceptInvitationPage() {
             {processing && <Loader2 className="animate-spin h-4 w-4 mr-2" />}
             {processing ? 'Saving...' : 'Set Password & Continue'}
           </Button>
+          <Button variant="ghost" className="w-full text-muted-foreground" onClick={() => setStep('done')}>
+            I already have a password — skip this step
+          </Button>
         </div>
       </div>
     </div>
   );
 
-  // needs-account — existing user who received a Resend fallback email (no active session)
+  if (step === 'sign-in') return (
+    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+      <div className="max-w-md w-full">
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+            <LogIn className="h-8 w-8 text-primary" />
+          </div>
+          <h1 className="text-2xl font-bold font-heading">Sign In to Accept</h1>
+          <p className="text-muted-foreground mt-2">
+            Sign in with your existing account to join <strong>{invitation?.classrooms?.name}</strong>.
+          </p>
+        </div>
+        <div className="glass-card rounded-2xl p-6 space-y-4">
+          <p className="text-sm text-muted-foreground">Email: <strong>{invitation?.staff?.email}</strong></p>
+          <div>
+            <Label>Password</Label>
+            <Input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              className="mt-1.5"
+              placeholder="Your password"
+              onKeyDown={e => e.key === 'Enter' && handleSignIn()}
+            />
+          </div>
+          <Button onClick={handleSignIn} disabled={processing} className="w-full">
+            {processing && <Loader2 className="animate-spin h-4 w-4 mr-2" />}
+            {processing ? 'Signing in...' : 'Sign In & Accept Invitation'}
+          </Button>
+          <Button variant="ghost" className="w-full text-muted-foreground" onClick={() => { setPassword(''); setStep('needs-account'); }}>
+            I don't have an account yet
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // needs-account — no session, no invite hash
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-background">
       <div className="max-w-md w-full">
@@ -254,9 +313,19 @@ export default function AcceptInvitationPage() {
             </p>
           )}
         </div>
+
+        {/* Existing account path */}
+        <div className="glass-card rounded-2xl p-6 space-y-3 mb-4">
+          <h2 className="font-semibold">Already have an account?</h2>
+          <p className="text-sm text-muted-foreground">{invitation?.staff?.email}</p>
+          <Button variant="outline" className="w-full" onClick={() => { setPassword(''); setStep('sign-in'); }}>
+            <LogIn className="h-4 w-4 mr-2" /> Sign In to Accept
+          </Button>
+        </div>
+
+        {/* New account path */}
         <div className="glass-card rounded-2xl p-6 space-y-4">
-          <h2 className="font-semibold">Create your account</h2>
-          <p className="text-sm text-muted-foreground">Email: <strong>{invitation?.staff?.email}</strong></p>
+          <h2 className="font-semibold">New here? Create your account</h2>
           <div>
             <Label>Full Name</Label>
             <Input
@@ -278,7 +347,7 @@ export default function AcceptInvitationPage() {
           </div>
           <Button onClick={handleCreateAccount} disabled={processing} className="w-full">
             {processing && <Loader2 className="animate-spin h-4 w-4 mr-2" />}
-            {processing ? 'Creating Account...' : 'Accept Invitation & Join Classroom'}
+            {processing ? 'Creating Account...' : 'Create Account & Join Classroom'}
           </Button>
         </div>
       </div>

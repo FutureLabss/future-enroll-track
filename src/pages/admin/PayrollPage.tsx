@@ -38,10 +38,12 @@ export default function PayrollPage() {
   });
   const [loading, setLoading] = useState(true);
 
+  const [programs, setPrograms] = useState<any[]>([]);
+
   // Staff dialog
   const [staffOpen, setStaffOpen] = useState(false);
   const [editingStaffId, setEditingStaffId] = useState<string | null>(null);
-  const [staffForm, setStaffForm] = useState({ full_name: '', role_title: '', base_salary: '', email: '', phone: '', bank_name: '', account_number: '' });
+  const [staffForm, setStaffForm] = useState({ full_name: '', role_title: '', base_salary: '', email: '', phone: '', bank_name: '', account_number: '', program_id: '' });
 
   // Run dialog
   const [runOpen, setRunOpen] = useState(false);
@@ -50,12 +52,14 @@ export default function PayrollPage() {
   const months = monthOptions();
 
   const fetchAll = async () => {
-    const [s, r] = await Promise.all([
-      supabase.from('staff').select('*').order('full_name'),
+    const [s, r, p] = await Promise.all([
+      supabase.from('staff').select('*, programs(program_name)').order('full_name'),
       supabase.from('payroll_runs').select('*, staff(full_name, role_title)').eq('pay_month', selectedMonth).order('created_at', { ascending: false }),
+      supabase.from('programs').select('id, program_name').eq('active', true),
     ]);
     setStaff(s.data || []);
     setRuns(r.data || []);
+    setPrograms(p.data || []);
     setLoading(false);
   };
 
@@ -63,7 +67,7 @@ export default function PayrollPage() {
 
   const resetStaffForm = () => {
     setEditingStaffId(null);
-    setStaffForm({ full_name: '', role_title: '', base_salary: '', email: '', phone: '', bank_name: '', account_number: '' });
+    setStaffForm({ full_name: '', role_title: '', base_salary: '', email: '', phone: '', bank_name: '', account_number: '', program_id: '' });
   };
 
   const openEditStaff = (s: any) => {
@@ -76,6 +80,7 @@ export default function PayrollPage() {
       phone: s.phone || '',
       bank_name: s.bank_name || '',
       account_number: s.account_number || '',
+      program_id: s.program_id || '',
     });
     setStaffOpen(true);
   };
@@ -92,6 +97,7 @@ export default function PayrollPage() {
         phone: staffForm.phone || null,
         bank_name: staffForm.bank_name || null,
         account_number: staffForm.account_number || null,
+        program_id: staffForm.program_id || null,
       };
       const { error } = editingStaffId
         ? await supabase.from('staff').update(payload).eq('id', editingStaffId)
@@ -179,6 +185,7 @@ export default function PayrollPage() {
   const staffColumns = [
     { key: 'full_name', header: 'Name' },
     { key: 'role_title', header: 'Role', render: (r: any) => r.role_title || '—' },
+    { key: 'program', header: 'Program', render: (r: any) => r.programs?.program_name || <span className="text-muted-foreground text-sm">—</span> },
     { key: 'base_salary', header: 'Base Salary', render: (r: any) => formatCurrency(Number(r.base_salary)) },
     { key: 'email', header: 'Email', render: (r: any) => r.email || '—' },
     { key: 'phone', header: 'Phone', render: (r: any) => r.phone || '—' },
@@ -303,6 +310,15 @@ export default function PayrollPage() {
                       <Label>Phone</Label>
                       <Input value={staffForm.phone} onChange={e => setStaffForm({ ...staffForm, phone: e.target.value })} className="mt-1.5" />
                     </div>
+                  </div>
+                  <div>
+                    <Label>Program</Label>
+                    <Select value={staffForm.program_id} onValueChange={v => setStaffForm({ ...staffForm, program_id: v })}>
+                      <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select program (optional)" /></SelectTrigger>
+                      <SelectContent>
+                        {programs.map(p => <SelectItem key={p.id} value={p.id}>{p.program_name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>

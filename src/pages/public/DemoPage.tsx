@@ -5,8 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { supabase } from '@/lib/supabase';
 import {
   LayoutDashboard, BookOpen, Calendar, Users, Layers,
   CheckCircle, Clock, Radio, Play, FileText, Video, Link2,
@@ -213,115 +213,116 @@ function WeekCard({ week }: { week: typeof DEMO_CURRICULUM.weeks[0] }) {
 // ─────────────────────────────────────────────────────────────────────
 
 function GetStartedModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [form, setForm] = useState({ name: '', email: '', school: '', phone: '', students: '', message: '' });
+  const [email, setEmail] = useState('');
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = async () => {
-    if (!form.name.trim() || !form.email.trim() || !form.school.trim()) {
-      toast.error('Name, email and school name are required');
+    if (!email.trim() || !email.includes('@')) {
+      setError('Please enter a valid email address');
       return;
     }
+    setError('');
     setSending(true);
     try {
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          // Public emails via Resend's test mode don't require auth on client side —
-          // we use our own edge function instead to keep the key server-side
-          'Content-Type': 'application/json',
-        },
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+
+      const res = await supabase.functions.invoke('send-demo-invite', {
+        body: { email: email.trim().toLowerCase() },
       });
-      // Since we can't call Resend directly from the browser without exposing the key,
-      // use a lightweight fetch to the existing send-notification edge function or
-      // fall back to a mailto link. Here we proxy via our own edge function.
-      throw new Error('proxy');
-    } catch {
-      // Fallback: open pre-filled mailto
-      const body = encodeURIComponent(
-        `New Demo Request\n\nName: ${form.name}\nEmail: ${form.email}\nSchool: ${form.school}\nPhone: ${form.phone}\nEstimated Students: ${form.students}\n\nMessage:\n${form.message}`
-      );
-      window.open(
-        `mailto:manny@futurelabs.com.ng?subject=FutureLabs LMS Demo Request from ${form.school}&body=${body}`,
-        '_blank'
-      );
+
+      if (res.error) throw new Error(res.error.message || 'Failed to send invite');
+      setSent(true);
+    } catch (err: any) {
+      setError(err.message || 'Something went wrong. Please try again.');
+    } finally {
+      setSending(false);
     }
-    setSent(true);
+  };
+
+  const handleClose = () => {
+    setEmail('');
     setSending(false);
+    setSent(false);
+    setError('');
+    onClose();
   };
 
   if (sent) return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-sm text-center">
         <div className="py-6 space-y-4">
           <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mx-auto">
             <CheckCircle className="h-8 w-8 text-success" />
           </div>
           <div>
-            <h2 className="font-bold text-xl">We'll be in touch!</h2>
+            <h2 className="font-bold text-xl">Check your inbox!</h2>
             <p className="text-muted-foreground text-sm mt-1">
-              Your enquiry has been sent to our team at FutureLabs. Expect a response within 24 hours.
+              We've sent a magic link to <strong>{email}</strong>. Click it to instantly access your
+              demo hub — <strong>RhemaHub</strong> — preloaded with students, programs, curriculum, and finance data.
             </p>
           </div>
-          <Button className="w-full" onClick={onClose}>Close</Button>
+          <p className="text-xs text-muted-foreground">Link expires in 7 days · Check your spam folder if you don't see it</p>
+          <Button className="w-full" onClick={handleClose}>Close</Button>
         </div>
       </DialogContent>
     </Dialog>
   );
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
             <Sparkles className="h-5 w-5 text-primary" />
-            Get Started with FutureLabs LMS
+            Try FutureLabs LMS — Free Demo
           </DialogTitle>
-          <p className="text-sm text-muted-foreground">Tell us about your academy and we'll set you up with a live instance.</p>
+          <p className="text-sm text-muted-foreground">
+            Enter your email and we'll send you a magic link to log straight into
+            <strong> RhemaHub</strong>, our fully loaded demo academy.
+          </p>
         </DialogHeader>
         <div className="space-y-4 mt-2">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>Your Name *</Label>
-              <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="mt-1.5" placeholder="John Doe" />
-            </div>
-            <div>
-              <Label>Email *</Label>
-              <Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className="mt-1.5" placeholder="you@school.com" />
-            </div>
+          <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-1.5">
+            <p className="text-xs font-semibold text-foreground/70 uppercase tracking-wide">What's inside RhemaHub</p>
+            {[
+              '3 programs & 2 classrooms with live cohorts',
+              'Full curriculum with lessons & materials',
+              'Finance: invoices, payments & expenses',
+              'Student roster & enrollment management',
+            ].map(f => (
+              <div key={f} className="flex items-center gap-2 text-sm text-muted-foreground">
+                <CheckCircle className="h-3.5 w-3.5 text-success flex-shrink-0" />
+                {f}
+              </div>
+            ))}
           </div>
           <div>
-            <Label>Academy / School Name *</Label>
-            <Input value={form.school} onChange={e => setForm({ ...form, school: e.target.value })} className="mt-1.5" placeholder="e.g. TechBridge Academy" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>Phone</Label>
-              <Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} className="mt-1.5" placeholder="+234..." />
-            </div>
-            <div>
-              <Label>Est. Students</Label>
-              <Input type="number" value={form.students} onChange={e => setForm({ ...form, students: e.target.value })} className="mt-1.5" placeholder="50" />
-            </div>
-          </div>
-          <div>
-            <Label>Message (optional)</Label>
-            <Textarea
-              value={form.message}
-              onChange={e => setForm({ ...form, message: e.target.value })}
+            <Label htmlFor="demo-email">Your Email</Label>
+            <Input
+              id="demo-email"
+              type="email"
+              value={email}
+              onChange={e => { setEmail(e.target.value); setError(''); }}
+              onKeyDown={e => e.key === 'Enter' && handleSubmit()}
               className="mt-1.5"
-              rows={3}
-              placeholder="Tell us about your needs, current tools, timeline..."
+              placeholder="you@academy.com"
+              disabled={sending}
             />
+            {error && <p className="text-xs text-destructive mt-1.5">{error}</p>}
           </div>
           <Button onClick={handleSubmit} disabled={sending} className="w-full" size="lg">
             {sending
-              ? <><Loader2 className="animate-spin h-4 w-4 mr-2" />Sending…</>
-              : <><ArrowRight className="h-4 w-4 mr-2" />Send Request</>
+              ? <><Loader2 className="animate-spin h-4 w-4 mr-2" />Sending magic link…</>
+              : <><ArrowRight className="h-4 w-4 mr-2" />Send me the demo link</>
             }
           </Button>
           <p className="text-xs text-center text-muted-foreground">
-            We'll respond within 24 hours · <a href="mailto:manny@futurelabs.com.ng" className="underline">manny@futurelabs.com.ng</a>
+            No password needed · Instant access · Questions?{' '}
+            <a href="mailto:manny@futurelabs.com.ng" className="underline">manny@futurelabs.com.ng</a>
           </p>
         </div>
       </DialogContent>

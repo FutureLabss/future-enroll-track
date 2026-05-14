@@ -62,13 +62,17 @@ export default function AcceptHubInvitationPage() {
       if (handledRef.current) return;
       if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session?.user) {
         handledRef.current = true;
-        if (isInviteRef.current && step !== 'done') {
+        if (isInviteRef.current) {
+          // Supabase invite flow: user must set a password first
           setStep('set-password');
+        } else {
+          // Magic link / OTP flow: already authenticated, auto-accept
+          await doAccept(session.user.id);
         }
       }
     });
     return () => subscription.unsubscribe();
-  }, [step]);
+  }, []);
 
   const doAccept = async (userId: string) => {
     setStep('accepting');

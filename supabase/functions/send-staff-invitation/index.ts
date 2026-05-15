@@ -67,16 +67,21 @@ Deno.serve(async (req) => {
 
     const isClassroomInvite = !!(body.token && body.classroom);
 
-    // Redirect target depends on invite type
-    const redirectTo = isClassroomInvite
-      ? `${FRONTEND_URL}/accept-invitation?token=${body.token}`
-      : `${FRONTEND_URL}/staff/classrooms`;
+    // Final destination after account setup
+    const finalDest = isClassroomInvite
+      ? `/accept-invitation?token=${body.token}`
+      : `/staff/classrooms`;
+
+    // New users go through /set-password first, then on to their destination.
+    // Existing users (Resend path) already have a password — go straight there.
+    const newUserRedirectTo = `${FRONTEND_URL}/set-password?next=${encodeURIComponent(finalDest)}`;
+    const existingUserRedirectTo = `${FRONTEND_URL}${finalDest}`;
 
     // Primary path: Supabase invite flow.
     // New users → account created, Supabase-managed email sent.
     // Existing users → falls back to Resend.
     const { error: inviteError } = await admin.auth.admin.inviteUserByEmail(body.email, {
-      redirectTo,
+      redirectTo: newUserRedirectTo,
       data: { full_name: body.name },
     });
 
@@ -98,10 +103,10 @@ Deno.serve(async (req) => {
             <p style="font-size:15px;line-height:1.6;margin-bottom:24px;">
               You have been added to <strong>${body.classroom}</strong> as <strong>${role}</strong>.
             </p>
-            <a href="${redirectTo}" style="display:inline-block;background:#4f46e5;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:600;font-size:15px;">
+            <a href="${existingUserRedirectTo}" style="display:inline-block;background:#4f46e5;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:600;font-size:15px;">
               Accept Invitation
             </a>
-            <p style="font-size:13px;color:#64748b;margin-top:24px;word-break:break-all;">${redirectTo}</p>
+            <p style="font-size:13px;color:#64748b;margin-top:24px;word-break:break-all;">${existingUserRedirectTo}</p>
             <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;"/>
             <p style="font-size:12px;color:#94a3b8;margin:0;">FutureLabs · This link expires in 7 days.</p>
           </div></body></html>`;
@@ -114,10 +119,10 @@ Deno.serve(async (req) => {
             <p style="font-size:15px;line-height:1.6;margin-bottom:24px;">
               You have been added as a staff member. Click the button below to access your staff portal.
             </p>
-            <a href="${redirectTo}" style="display:inline-block;background:#4f46e5;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:600;font-size:15px;">
+            <a href="${existingUserRedirectTo}" style="display:inline-block;background:#4f46e5;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:600;font-size:15px;">
               Go to Staff Portal
             </a>
-            <p style="font-size:13px;color:#64748b;margin-top:24px;word-break:break-all;">${redirectTo}</p>
+            <p style="font-size:13px;color:#64748b;margin-top:24px;word-break:break-all;">${existingUserRedirectTo}</p>
             <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;"/>
             <p style="font-size:12px;color:#94a3b8;margin:0;">FutureLabs · If you were not expecting this email, you can ignore it.</p>
           </div></body></html>`;

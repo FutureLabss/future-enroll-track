@@ -56,6 +56,7 @@ import StaffInvitationsPage from "@/pages/staff/StaffInvitationsPage";
 import StudentClassroomsPage from "@/pages/student/StudentClassroomsPage";
 import StudentClassroomPage from "@/pages/student/StudentClassroomPage";
 import HubPortalPage from "@/pages/public/HubPortalPage";
+import SetPasswordPage from "@/pages/auth/SetPasswordPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -95,6 +96,7 @@ const App = () => (
             <Route path="/students/:id" element={<StudentSignupPage />} />
             <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
             <Route path="/accept-hub-invitation" element={<AcceptHubInvitationPage />} />
+            <Route path="/set-password" element={<SetPasswordPage />} />
             <Route path="/demo" element={<DemoPage />} />
             {/* Backward compatibility: old invitation links */}
             <Route path="/enroll/complete/:id" element={<LegacyEnrollRedirect />} />

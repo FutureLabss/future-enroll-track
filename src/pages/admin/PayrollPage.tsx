@@ -15,14 +15,19 @@ import { StatCard } from '@/components/shared/StatCard';
 import { Wallet, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
+const toMonthValue = (d: Date) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  return `${y}-${m}-01`;
+};
+
 const monthOptions = () => {
   const out: { value: string; label: string }[] = [];
   const d = new Date();
-  d.setDate(1);
   for (let i = 0; i < 18; i++) {
     const dt = new Date(d.getFullYear(), d.getMonth() - i, 1);
     out.push({
-      value: dt.toISOString().slice(0, 10),
+      value: toMonthValue(dt),
       label: dt.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
     });
   }
@@ -32,10 +37,7 @@ const monthOptions = () => {
 export default function PayrollPage() {
   const [staff, setStaff] = useState<any[]>([]);
   const [runs, setRuns] = useState<any[]>([]);
-  const [selectedMonth, setSelectedMonth] = useState(() => {
-    const d = new Date(); d.setDate(1);
-    return d.toISOString().slice(0, 10);
-  });
+  const [selectedMonth, setSelectedMonth] = useState(() => toMonthValue(new Date()));
   const [loading, setLoading] = useState(true);
 
   const [programs, setPrograms] = useState<any[]>([]);

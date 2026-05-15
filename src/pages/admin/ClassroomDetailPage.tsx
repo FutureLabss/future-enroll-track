@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { DataTable } from '@/components/shared/DataTable';
 import { CurriculumBuilder } from '@/components/classroom/CurriculumBuilder';
+import { CurriculumMultiPicker } from '@/components/cohort/CurriculumMultiPicker';
 import { toast } from 'sonner';
 import {
   Users, BookOpen, Calendar, ClipboardList, BarChart2, UserPlus, Loader2,
@@ -40,7 +41,24 @@ function CohortModal({ classroomId, programId, existing, onClose, onSaved }: any
     end_date: existing?.end_date || '',
     status: existing?.status || 'upcoming',
   });
+  const [selectedCurricula, setSelectedCurricula] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!existing?.id) return;
+    supabase
+      .from('curriculums')
+      .select('id')
+      .eq('cohort_id', existing.id)
+      .then(({ data }) => setSelectedCurricula((data || []).map((c: any) => c.id)));
+  }, [existing?.id]);
+
+  const syncCurricula = async (cohortId: string, prevIds: string[]) => {
+    const toAdd = selectedCurricula.filter(id => !prevIds.includes(id));
+    const toRemove = prevIds.filter(id => !selectedCurricula.includes(id));
+    if (toAdd.length > 0) await supabase.from('curriculums').update({ cohort_id: cohortId }).in('id', toAdd);
+    if (toRemove.length > 0) await supabase.from('curriculums').update({ cohort_id: null }).in('id', toRemove);
+  };
 
   const handleSave = async () => {
     if (!form.cohort_label.trim()) { toast.error('Cohort label is required'); return; }
@@ -48,8 +66,17 @@ function CohortModal({ classroomId, programId, existing, onClose, onSaved }: any
     try {
       if (existing) {
         await updateCohort(existing.id, form);
+        const { data: prevData } = await supabase.from('curriculums').select('id').eq('cohort_id', existing.id);
+        await syncCurricula(existing.id, (prevData || []).map((c: any) => c.id));
       } else {
-        await createCohort({ ...form, program_id: programId });
+        const { data: newCohort, error: createErr } = await supabase
+          .from('cohorts')
+          .insert({ ...form, program_id: programId, classroom_id: classroomId })
+          .select('id').single();
+        if (createErr) throw createErr;
+        if (newCohort && selectedCurricula.length > 0) {
+          await supabase.from('curriculums').update({ cohort_id: newCohort.id }).in('id', selectedCurricula);
+        }
       }
       toast.success(existing ? 'Cohort updated' : 'Cohort created');
       onSaved();
@@ -76,6 +103,11 @@ function CohortModal({ classroomId, programId, existing, onClose, onSaved }: any
             {COHORT_STATUSES.map(s => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}
           </SelectContent>
         </Select>
+      </div>
+      <div>
+        <Label>Curricula</Label>
+        <p className="text-xs text-muted-foreground mb-1.5 mt-0.5">Select one or more curricula to assign to this cohort.</p>
+        <CurriculumMultiPicker cohortId={existing?.id} selectedIds={selectedCurricula} onChange={setSelectedCurricula} />
       </div>
       <Button onClick={handleSave} disabled={saving} className="w-full">
         {saving ? 'Saving...' : existing ? 'Update Cohort' : 'Create Cohort'}

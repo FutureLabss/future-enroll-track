@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CurriculumMultiPicker } from '@/components/cohort/CurriculumMultiPicker';
 import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -16,6 +17,7 @@ export default function CohortsPage() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ cohort_label: '', program_id: '', start_date: '', end_date: '' });
+  const [selectedCurricula, setSelectedCurricula] = useState<string[]>([]);
 
   const fetch = async () => {
     const { data } = await supabase.from('cohorts').select('*, programs(program_name)').order('created_at', { ascending: false });
@@ -30,16 +32,20 @@ export default function CohortsPage() {
 
   const handleCreate = async () => {
     if (!form.cohort_label.trim() || !form.program_id) { toast.error('Fill required fields'); return; }
-    const { error } = await supabase.from('cohorts').insert({
+    const { data: newCohort, error } = await supabase.from('cohorts').insert({
       cohort_label: form.cohort_label,
       program_id: form.program_id,
       start_date: form.start_date || null,
       end_date: form.end_date || null,
-    });
+    }).select('id').single();
     if (error) { toast.error(error.message); return; }
+    if (selectedCurricula.length > 0) {
+      await supabase.from('curriculums').update({ cohort_id: newCohort.id }).in('id', selectedCurricula);
+    }
     toast.success('Cohort created');
     setOpen(false);
     setForm({ cohort_label: '', program_id: '', start_date: '', end_date: '' });
+    setSelectedCurricula([]);
     fetch();
   };
 
@@ -56,7 +62,7 @@ export default function CohortsPage() {
         title="Cohorts"
         description="Manage cohorts and intakes"
         actions={
-          <Dialog open={open} onOpenChange={setOpen}>
+          <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) setSelectedCurricula([]); }}>
             <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" /> New Cohort</Button></DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>Create Cohort</DialogTitle></DialogHeader>
@@ -72,6 +78,11 @@ export default function CohortsPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div><Label>Start Date</Label><Input type="date" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} className="mt-1.5" /></div>
                   <div><Label>End Date</Label><Input type="date" value={form.end_date} onChange={e => setForm({ ...form, end_date: e.target.value })} className="mt-1.5" /></div>
+                </div>
+                <div>
+                  <Label>Curricula</Label>
+                  <p className="text-xs text-muted-foreground mb-1.5 mt-0.5">Select one or more curricula to assign to this cohort.</p>
+                  <CurriculumMultiPicker selectedIds={selectedCurricula} onChange={setSelectedCurricula} />
                 </div>
                 <Button onClick={handleCreate} className="w-full">Create Cohort</Button>
               </div>

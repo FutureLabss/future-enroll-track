@@ -105,22 +105,19 @@ function HubSwitcher({ userId }: { userId: string }) {
 
   useEffect(() => {
     Promise.all([
-      supabase.from('hubs').select('id, name, slug').order('name'),
-      supabase.from('hub_members').select('hub_id').eq('user_id', userId).maybeSingle(),
-    ]).then(([hubsRes, memberRes]) => {
-      if (hubsRes.data) setHubs(hubsRes.data);
-      if (memberRes.data) setActiveHubId(memberRes.data.hub_id);
+      supabase.rpc('list_hubs' as any),
+      supabase.rpc('get_my_hub_context' as any).maybeSingle(),
+    ]).then(([hubsRes, ctxRes]) => {
+      if (hubsRes.data) setHubs(hubsRes.data as { id: string; name: string; slug: string }[]);
+      if (ctxRes.data) setActiveHubId((ctxRes.data as any).hub_id);
     });
   }, [userId]);
 
   const switchHub = async (hub: { id: string; slug: string }) => {
     if (hub.id === activeHubId || switching) return;
     setSwitching(true);
-    await supabase
-      .from('hub_members')
-      .update({ hub_id: hub.id, hub_role: 'owner' })
-      .eq('user_id', userId);
-    // Navigate to the hub portal which will redirect to /admin with fresh context
+    const { error } = await supabase.rpc('switch_hub_context' as any, { p_hub_id: hub.id });
+    if (error) { setSwitching(false); return; }
     navigate(`/${hub.slug}`, { replace: true });
     window.location.reload();
   };

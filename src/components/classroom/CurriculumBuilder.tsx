@@ -70,19 +70,24 @@ export function CurriculumBuilder({
 }) {
   const {
     curriculum, weeks, loading,
-    createCurriculum, addWeek, addLesson,
-    updateLesson, deleteLesson,
+    createCurriculum, updateCurriculum, deleteCurriculum,
+    addWeek, updateWeek, deleteWeek,
+    addLesson, updateLesson, deleteLesson,
     addMaterial, deleteMaterial,
   } = useCurriculum(cohortId);
 
   const [initOpen, setInitOpen] = useState(false);
+  const [editCurriculumOpen, setEditCurriculumOpen] = useState(false);
   const [weekOpen, setWeekOpen] = useState(false);
+  const [editWeekModal, setEditWeekModal] = useState<{ open: boolean; week?: any }>({ open: false });
   const [lessonModal, setLessonModal] = useState<{ open: boolean; weekId?: string }>({ open: false });
   const [editLessonModal, setEditLessonModal] = useState<{ open: boolean; lesson?: any }>({ open: false });
   const [materialModal, setMaterialModal] = useState<{ open: boolean; lessonId?: string }>({ open: false });
 
   const [initTitle, setInitTitle] = useState('');
+  const [editCurriculumForm, setEditCurriculumForm] = useState({ title: '', description: '' });
   const [weekForm, setWeekForm] = useState({ number: '', title: '', objectives: '' });
+  const [editWeekForm, setEditWeekForm] = useState({ number: '', title: '', objectives: '' });
   const [lessonForm, setLessonForm] = useState({ title: '', objectives: '', order: '' });
   const [editForm, setEditForm] = useState({ title: '', objectives: '', order: '' });
   const [matForm, setMatForm] = useState({ type: 'pdf', title: '', url: '' });
@@ -106,11 +111,40 @@ export function CurriculumBuilder({
     setInitTitle('');
   }, () => setInitOpen(false));
 
+  const handleEditCurriculum = () => run(async () => {
+    if (!editCurriculumForm.title.trim()) throw new Error('Title is required');
+    await updateCurriculum({ title: editCurriculumForm.title, description: editCurriculumForm.description || undefined });
+  }, () => setEditCurriculumOpen(false));
+
+  const handleDeleteCurriculum = async () => {
+    if (!confirm('Delete the entire curriculum including all weeks, lessons, and materials?')) return;
+    try { await deleteCurriculum(); toast.success('Curriculum deleted'); } catch (e: any) { toast.error(e.message); }
+  };
+
   const handleAddWeek = () => run(async () => {
     if (!weekForm.number || !weekForm.title) throw new Error('Week number and title are required');
     await addWeek(parseInt(weekForm.number), weekForm.title, weekForm.objectives);
     setWeekForm({ number: '', title: '', objectives: '' });
   }, () => setWeekOpen(false));
+
+  const handleEditWeek = () => run(async () => {
+    if (!editWeekForm.title) throw new Error('Week title is required');
+    await updateWeek(editWeekModal.week.id, {
+      week_number: parseInt(editWeekForm.number) || editWeekModal.week.week_number,
+      title: editWeekForm.title,
+      objectives: editWeekForm.objectives || null,
+    });
+  }, () => setEditWeekModal({ open: false }));
+
+  const handleDeleteWeek = async (weekId: string) => {
+    if (!confirm('Delete this week and all its lessons?')) return;
+    try { await deleteWeek(weekId); toast.success('Week deleted'); } catch (e: any) { toast.error(e.message); }
+  };
+
+  const openEditWeek = (week: any) => {
+    setEditWeekForm({ number: String(week.week_number), title: week.title, objectives: week.objectives || '' });
+    setEditWeekModal({ open: true, week });
+  };
 
   const handleAddLesson = () => run(async () => {
     if (!lessonForm.title) throw new Error('Lesson title is required');
@@ -211,7 +245,21 @@ export function CurriculumBuilder({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h3 className="font-semibold text-lg">{curriculum.title}</h3>
+        <div className="flex items-center gap-2 min-w-0">
+          <h3 className="font-semibold text-lg truncate">{curriculum.title}</h3>
+          {canEdit && (
+            <>
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 flex-shrink-0" title="Edit curriculum"
+                onClick={() => { setEditCurriculumForm({ title: curriculum.title, description: curriculum.description || '' }); setEditCurriculumOpen(true); }}>
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 flex-shrink-0 text-destructive hover:text-destructive" title="Delete curriculum"
+                onClick={handleDeleteCurriculum}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           {cohorts.filter(c => c.id !== cohortId).length > 0 && (
             <Button size="sm" variant="outline" onClick={() => { setCloneTargetId(''); setCloneOpen(true); }}>
@@ -235,19 +283,29 @@ export function CurriculumBuilder({
 
       {weeks.map(w => (
         <div key={w.id} className="glass-card rounded-2xl p-5 border border-border">
-          <div className="flex items-start justify-between mb-4">
-            <div>
+          <div className="flex items-start justify-between mb-4 gap-2">
+            <div className="flex-1 min-w-0">
               <h4 className="font-semibold">Week {w.week_number}: {w.title}</h4>
               {w.objectives && <p className="text-sm text-muted-foreground mt-0.5">{w.objectives}</p>}
             </div>
-            {canEdit && (
-              <Button
-                variant="outline" size="sm"
-                onClick={() => { setLessonForm({ title: '', objectives: '', order: '' }); setLessonModal({ open: true, weekId: w.id }); }}
-              >
-                <Plus className="h-3 w-3 mr-1" /> Lesson
-              </Button>
-            )}
+            <div className="flex items-center gap-1 flex-shrink-0">
+              {canEdit && (
+                <>
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Edit week" onClick={() => openEditWeek(w)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive" title="Delete week" onClick={() => handleDeleteWeek(w.id)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="outline" size="sm"
+                    onClick={() => { setLessonForm({ title: '', objectives: '', order: '' }); setLessonModal({ open: true, weekId: w.id }); }}
+                  >
+                    <Plus className="h-3 w-3 mr-1" /> Lesson
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
 
           <div className="space-y-3 pl-4 border-l-2 border-primary/20">
@@ -310,6 +368,20 @@ export function CurriculumBuilder({
         </div>
       ))}
 
+      {/* Edit Curriculum modal */}
+      <Dialog open={editCurriculumOpen} onOpenChange={setEditCurriculumOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Edit Curriculum</DialogTitle></DialogHeader>
+          <div className="space-y-3 mt-2">
+            <div><Label>Title *</Label><Input value={editCurriculumForm.title} onChange={e => setEditCurriculumForm({ ...editCurriculumForm, title: e.target.value })} className="mt-1.5" /></div>
+            <div><Label>Description</Label><Textarea value={editCurriculumForm.description} onChange={e => setEditCurriculumForm({ ...editCurriculumForm, description: e.target.value })} className="mt-1.5" rows={2} /></div>
+            <Button onClick={handleEditCurriculum} disabled={saving} className="w-full">
+              {saving && <Loader2 className="animate-spin h-4 w-4 mr-2" />}Save Changes
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Add Week modal */}
       <Dialog open={weekOpen} onOpenChange={setWeekOpen}>
         <DialogContent>
@@ -320,6 +392,21 @@ export function CurriculumBuilder({
             <div><Label>Objectives</Label><Textarea value={weekForm.objectives} onChange={e => setWeekForm({ ...weekForm, objectives: e.target.value })} className="mt-1.5" rows={2} /></div>
             <Button onClick={handleAddWeek} disabled={saving} className="w-full">
               {saving && <Loader2 className="animate-spin h-4 w-4 mr-2" />}Add Week
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Week modal */}
+      <Dialog open={editWeekModal.open} onOpenChange={o => setEditWeekModal({ open: o })}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Edit Week</DialogTitle></DialogHeader>
+          <div className="space-y-3 mt-2">
+            <div><Label>Week Number *</Label><Input type="number" value={editWeekForm.number} onChange={e => setEditWeekForm({ ...editWeekForm, number: e.target.value })} className="mt-1.5" /></div>
+            <div><Label>Title *</Label><Input value={editWeekForm.title} onChange={e => setEditWeekForm({ ...editWeekForm, title: e.target.value })} className="mt-1.5" /></div>
+            <div><Label>Objectives</Label><Textarea value={editWeekForm.objectives} onChange={e => setEditWeekForm({ ...editWeekForm, objectives: e.target.value })} className="mt-1.5" rows={2} /></div>
+            <Button onClick={handleEditWeek} disabled={saving} className="w-full">
+              {saving && <Loader2 className="animate-spin h-4 w-4 mr-2" />}Save Changes
             </Button>
           </div>
         </DialogContent>

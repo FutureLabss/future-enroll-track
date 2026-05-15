@@ -59,6 +59,27 @@ export function useCurriculum(cohortId: string) {
     await fetchCurriculum();
   };
 
+  const updateCurriculum = async (payload: { title?: string; description?: string }) => {
+    if (!curriculum) throw new Error('No curriculum found');
+    const { error } = await supabase
+      .from('curriculums')
+      .update({ ...payload, updated_at: new Date().toISOString() })
+      .eq('id', curriculum.id);
+    if (error) throw error;
+    await fetchCurriculum();
+  };
+
+  const deleteCurriculum = async () => {
+    if (!curriculum) throw new Error('No curriculum found');
+    const { error } = await supabase
+      .from('curriculums')
+      .delete()
+      .eq('id', curriculum.id);
+    if (error) throw error;
+    setCurriculum(null);
+    setWeeks([]);
+  };
+
   const addWeek = async (weekNumber: number, title: string, objectives: string) => {
     if (!curriculum) throw new Error('No curriculum found');
     const { error } = await supabase.from('curriculum_weeks').insert({
@@ -67,6 +88,27 @@ export function useCurriculum(cohortId: string) {
       title,
       objectives: objectives || null,
     });
+    if (error) throw error;
+    await fetchCurriculum();
+  };
+
+  const updateWeek = async (
+    weekId: string,
+    payload: { week_number?: number; title?: string; objectives?: string }
+  ) => {
+    const { error } = await supabase
+      .from('curriculum_weeks')
+      .update(payload)
+      .eq('id', weekId);
+    if (error) throw error;
+    await fetchCurriculum();
+  };
+
+  const deleteWeek = async (weekId: string) => {
+    const { error } = await supabase
+      .from('curriculum_weeks')
+      .delete()
+      .eq('id', weekId);
     if (error) throw error;
     await fetchCurriculum();
   };
@@ -145,7 +187,11 @@ export function useCurriculum(cohortId: string) {
     loading,
     refetch: fetchCurriculum,
     createCurriculum,
+    updateCurriculum,
+    deleteCurriculum,
     addWeek,
+    updateWeek,
+    deleteWeek,
     addLesson,
     updateLesson,
     deleteLesson,

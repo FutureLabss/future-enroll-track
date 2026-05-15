@@ -8,9 +8,10 @@ const corsHeaders = {
 interface Payload {
   email: string;
   name: string;
-  classroom: string;
-  token: string;
-  staffType: string;
+  // Classroom invitation fields (optional for payroll-only onboarding)
+  classroom?: string;
+  token?: string;
+  staffType?: string;
 }
 
 Deno.serve(async (req) => {
@@ -44,7 +45,12 @@ Deno.serve(async (req) => {
       .eq("role", "admin")
       .maybeSingle();
 
-    if (!roleRow) {
+    // Also allow superadmins
+    const { data: saRow } = !roleRow
+      ? await admin.from("superadmins").select("user_id").eq("user_id", userRes.user.id).maybeSingle()
+      : { data: null };
+
+    if (!roleRow && !saRow) {
       return new Response(JSON.stringify({ error: "Admin only" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -52,20 +58,23 @@ Deno.serve(async (req) => {
     }
 
     const body = (await req.json()) as Payload;
-    if (!body.email || !body.token || !body.classroom) {
-      return new Response(JSON.stringify({ error: "Missing required fields" }), {
+    if (!body.email || !body.name) {
+      return new Response(JSON.stringify({ error: "email and name are required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Primary path: Supabase invite flow.
-    // - New users: creates account, sends Supabase-managed email via configured SMTP.
-    //   User clicks link → auto-authenticated → Accept page completes assignment
-    //   and prompts them to set a password.
-    // - Existing users: inviteUserByEmail returns an error; we fall back to Resend.
-    const redirectTo = `${FRONTEND_URL}/accept-invitation?token=${body.token}`;
+    const isClassroomInvite = !!(body.token && body.classroom);
 
+    // Redirect target depends on invite type
+    const redirectTo = isClassroomInvite
+      ? `${FRONTEND_URL}/accept-invitation?token=${body.token}`
+      : `${FRONTEND_URL}/staff/classrooms`;
+
+    // Primary path: Supabase invite flow.
+    // New users → account created, Supabase-managed email sent.
+    // Existing users → falls back to Resend.
     const { error: inviteError } = await admin.auth.admin.inviteUserByEmail(body.email, {
       redirectTo,
       data: { full_name: body.name },
@@ -76,21 +85,43 @@ Deno.serve(async (req) => {
       const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
       if (!RESEND_API_KEY) throw new Error("RESEND_API_KEY not configured");
 
-      const role = body.staffType === "teaching" ? "Teaching Staff" : "Non-Teaching Staff";
-      const html = `<!DOCTYPE html><html><body style="font-family:Inter,Arial,sans-serif;background:#f7f7fb;padding:24px;color:#0f172a;">
-        <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:14px;padding:28px;box-shadow:0 4px 16px rgba(15,23,42,0.06);">
-          <h1 style="font-size:20px;margin:0 0 16px;color:#1e1b4b;">Classroom Invitation</h1>
-          <p style="font-size:15px;line-height:1.6;margin-bottom:16px;">Hello ${body.name},</p>
-          <p style="font-size:15px;line-height:1.6;margin-bottom:24px;">
-            You have been added to <strong>${body.classroom}</strong> as <strong>${role}</strong>.
-          </p>
-          <a href="${redirectTo}" style="display:inline-block;background:#4f46e5;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:600;font-size:15px;">
-            Accept Invitation
-          </a>
-          <p style="font-size:13px;color:#64748b;margin-top:24px;word-break:break-all;">${redirectTo}</p>
-          <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;"/>
-          <p style="font-size:12px;color:#94a3b8;margin:0;">FutureLabs · This link expires in 7 days.</p>
-        </div></body></html>`;
+      let subject: string;
+      let html: string;
+
+      if (isClassroomInvite) {
+        const role = body.staffType === "teaching" ? "Teaching Staff" : "Non-Teaching Staff";
+        subject = `You've been invited to ${body.classroom}`;
+        html = `<!DOCTYPE html><html><body style="font-family:Inter,Arial,sans-serif;background:#f7f7fb;padding:24px;color:#0f172a;">
+          <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:14px;padding:28px;box-shadow:0 4px 16px rgba(15,23,42,0.06);">
+            <h1 style="font-size:20px;margin:0 0 16px;color:#1e1b4b;">Classroom Invitation</h1>
+            <p style="font-size:15px;line-height:1.6;margin-bottom:16px;">Hello ${body.name},</p>
+            <p style="font-size:15px;line-height:1.6;margin-bottom:24px;">
+              You have been added to <strong>${body.classroom}</strong> as <strong>${role}</strong>.
+            </p>
+            <a href="${redirectTo}" style="display:inline-block;background:#4f46e5;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:600;font-size:15px;">
+              Accept Invitation
+            </a>
+            <p style="font-size:13px;color:#64748b;margin-top:24px;word-break:break-all;">${redirectTo}</p>
+            <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;"/>
+            <p style="font-size:12px;color:#94a3b8;margin:0;">FutureLabs · This link expires in 7 days.</p>
+          </div></body></html>`;
+      } else {
+        subject = "You've been added as staff — access your account";
+        html = `<!DOCTYPE html><html><body style="font-family:Inter,Arial,sans-serif;background:#f7f7fb;padding:24px;color:#0f172a;">
+          <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:14px;padding:28px;box-shadow:0 4px 16px rgba(15,23,42,0.06);">
+            <h1 style="font-size:20px;margin:0 0 16px;color:#1e1b4b;">Welcome to the Team</h1>
+            <p style="font-size:15px;line-height:1.6;margin-bottom:16px;">Hello ${body.name},</p>
+            <p style="font-size:15px;line-height:1.6;margin-bottom:24px;">
+              You have been added as a staff member. Click the button below to access your staff portal.
+            </p>
+            <a href="${redirectTo}" style="display:inline-block;background:#4f46e5;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:600;font-size:15px;">
+              Go to Staff Portal
+            </a>
+            <p style="font-size:13px;color:#64748b;margin-top:24px;word-break:break-all;">${redirectTo}</p>
+            <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;"/>
+            <p style="font-size:12px;color:#94a3b8;margin:0;">FutureLabs · If you were not expecting this email, you can ignore it.</p>
+          </div></body></html>`;
+      }
 
       const resendRes = await fetch("https://api.resend.com/emails", {
         method: "POST",
@@ -101,18 +132,22 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           from: "FutureLabs <noreply@futurelabs.ng>",
           to: [body.email],
-          subject: `You've been invited to ${body.classroom}`,
+          subject,
           html,
         }),
       });
       if (!resendRes.ok) throw new Error(`Resend error: ${await resendRes.text()}`);
     }
 
+    const notifMessage = isClassroomInvite
+      ? `${body.name} invited to ${body.classroom} as ${body.staffType}`
+      : `${body.name} invited as staff (payroll onboarding)`;
+
     await admin.from("notifications").insert({
       user_id: null,
       type: "staff_invitation",
       title: `Invitation sent to ${body.email}`,
-      message: `${body.name} invited to ${body.classroom} as ${body.staffType}`,
+      message: notifMessage,
       channel: "email",
       sent_at: new Date().toISOString(),
     });

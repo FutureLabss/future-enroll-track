@@ -119,7 +119,19 @@ export default function PayrollPage() {
         ? await supabase.from('staff').update(payload).eq('id', editingStaffId)
         : await supabase.from('staff').insert(payload);
       if (error) throw error;
-      toast.success(editingStaffId ? 'Staff updated' : 'Staff added');
+
+      // Send onboarding email to new staff members who have an email address
+      if (!editingStaffId && staffForm.email) {
+        const { data: { session } } = await supabase.auth.getSession();
+        supabase.functions.invoke('send-staff-invitation', {
+          body: { email: staffForm.email, name: staffForm.full_name },
+          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+        }).catch(() => {}); // fire-and-forget; don't block the save
+        toast.success('Staff added — invitation email sent');
+      } else {
+        toast.success(editingStaffId ? 'Staff updated' : 'Staff added');
+      }
+
       setStaffOpen(false);
       resetStaffForm();
       fetchAll();

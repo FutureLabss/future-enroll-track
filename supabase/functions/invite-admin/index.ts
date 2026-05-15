@@ -37,8 +37,10 @@ Deno.serve(async (req) => {
     const { error: rpcErr } = await userClient.rpc("create_admin_invite" as any, { p_email: email });
     if (rpcErr) return json({ error: rpcErr.message }, 400);
 
-    // Try to send Supabase invitation email (works if user doesn't exist)
-    const redirectTo = (Deno.env.get("FRONTEND_URL") || "https://admin.futurelabs.ng") + "/login";
+    // Try to send Supabase invitation email (works if user doesn't exist).
+    // New users land on /set-password to choose a password, then go to /admin.
+    const FRONTEND_URL = Deno.env.get("FRONTEND_URL") || "https://admin.futurelabs.ng";
+    const redirectTo = `${FRONTEND_URL}/set-password?next=%2Fadmin`;
     const { data: inviteData, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
       redirectTo,
     });

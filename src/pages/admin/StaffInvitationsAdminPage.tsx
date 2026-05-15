@@ -5,7 +5,7 @@ import { DataTable } from '@/components/shared/DataTable';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { Mail, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { Mail, CheckCircle2, XCircle, Clock, ShieldCheck } from 'lucide-react';
 
 export default function StaffInvitationsAdminPage() {
   const [invitations, setInvitations] = useState<any[]>([]);
@@ -24,6 +24,27 @@ export default function StaffInvitationsAdminPage() {
   useEffect(() => {
     fetchInvitations();
   }, []);
+
+  const handlePromoteToAdmin = async (invitation: any) => {
+    if (!confirm(`Promote ${invitation.staff?.full_name} to admin? They'll have full admin access to this hub.`)) return;
+    const { data: cs, error: csErr } = await supabase
+      .from('classroom_staff')
+      .select('user_id')
+      .eq('classroom_id', invitation.classroom_id)
+      .eq('staff_id', invitation.staff_id)
+      .maybeSingle();
+    if (csErr || !cs?.user_id) {
+      toast.error('Could not find user account — has this person accepted their invitation?');
+      return;
+    }
+    const { error } = await supabase.rpc('promote_staff_to_admin' as any, { p_user_id: cs.user_id });
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success(`${invitation.staff?.full_name} is now an admin.`);
+      fetchInvitations();
+    }
+  };
 
   const handleRevoke = async (id: string) => {
     const { error } = await supabase
@@ -81,12 +102,21 @@ export default function StaffInvitationsAdminPage() {
         {r.status === 'accepted' && <p className="text-success">Accepted: {new Date(r.accepted_at).toLocaleDateString()}</p>}
       </div>
     )},
-    { key: 'actions', header: '', render: (r: any) => r.status === 'pending' ? (
+    { key: 'actions', header: '', render: (r: any) => (
       <div className="flex gap-2 justify-end">
-        <Button size="sm" variant="outline" onClick={() => handleResend(r)}><Mail className="h-4 w-4" /></Button>
-        <Button size="sm" variant="destructive" onClick={() => handleRevoke(r.id)}>Revoke</Button>
+        {r.status === 'pending' && (
+          <>
+            <Button size="sm" variant="outline" onClick={() => handleResend(r)}><Mail className="h-4 w-4" /></Button>
+            <Button size="sm" variant="destructive" onClick={() => handleRevoke(r.id)}>Revoke</Button>
+          </>
+        )}
+        {r.status === 'accepted' && (
+          <Button size="sm" variant="outline" onClick={() => handlePromoteToAdmin(r)}>
+            <ShieldCheck className="h-4 w-4 mr-1" /> Promote to Admin
+          </Button>
+        )}
       </div>
-    ) : null }
+    )}
   ];
 
   return (

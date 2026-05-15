@@ -53,6 +53,19 @@ export default function PayrollPage() {
 
   const months = monthOptions();
 
+  // On first load, jump to the most recent month that has payroll data
+  useEffect(() => {
+    supabase
+      .from('payroll_runs')
+      .select('pay_month')
+      .order('pay_month', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.pay_month) setSelectedMonth(data.pay_month);
+      });
+  }, []);
+
   const fetchAll = async () => {
     const [s, r, p] = await Promise.all([
       supabase.from('staff').select('*, programs(program_name)').order('full_name'),
@@ -60,6 +73,7 @@ export default function PayrollPage() {
       supabase.from('programs').select('id, program_name').eq('active', true),
     ]);
     setStaff(s.data || []);
+    if (r.error) toast.error('Failed to load payroll: ' + r.error.message);
     setRuns(r.data || []);
     setPrograms(p.data || []);
     setLoading(false);

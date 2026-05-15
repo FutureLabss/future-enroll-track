@@ -80,6 +80,12 @@ const studentNav = [
   { to: '/student/payments', icon: CreditCard, label: 'Payment History' },
 ];
 
+const staffNav = [
+  { to: '/staff/classrooms', icon: School, label: 'My Classrooms' },
+  { to: '/staff/invitations', icon: Inbox, label: 'My Invitations' },
+  { to: '/staff/invoices', icon: FileText, label: 'Invoice Company' },
+];
+
 const orgNav = [
   { to: '/org', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/org/enrollments', icon: Users, label: 'Sponsored Learners' },
@@ -154,11 +160,11 @@ function HubSwitcher({ userId }: { userId: string }) {
 }
 
 export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps) {
-  const { isAdmin, isOrganization, isSuperadmin: isSA, isDemo, signOut, user } = useAuth();
+  const { isAdmin, isOrganization, isStaff, isSuperadmin: isSA, isDemo, signOut, user } = useAuth();
   const location = useLocation();
 
   const isSuperadmin = isSA || user?.email?.toLowerCase() === 'manassehudim@gmail.com';
-  const rawBaseNav = isAdmin ? adminNav : isOrganization ? orgNav : studentNav;
+  const rawBaseNav = isAdmin ? adminNav : isOrganization ? orgNav : isStaff ? staffNav : studentNav;
   const baseNav = isDemo ? rawBaseNav.filter(item => !DEMO_HIDDEN_ROUTES.has(item.to)) : rawBaseNav;
   const adminExtras = isAdmin
     ? [
@@ -173,15 +179,7 @@ export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps)
           : []),
       ]
     : [];
-  // Allow non-admins (staff) to see their submission page and classrooms
-  const staffExtras = !isAdmin && !isOrganization
-    ? [
-        { to: '/staff/classrooms', icon: School, label: 'My Classrooms' },
-        { to: '/staff/invitations', icon: Inbox, label: 'My Invitations' },
-        { to: '/staff/invoices', icon: FileText, label: 'Invoice Company' },
-      ]
-    : [];
-  const nav = [...baseNav, ...adminExtras, ...staffExtras];
+  const nav = [...baseNav, ...adminExtras];
 
   const containerClass =
     variant === 'mobile'
@@ -197,7 +195,7 @@ export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps)
           <span className="text-sidebar-primary">Future</span>Labs
         </h1>
         <p className="text-xs text-sidebar-foreground/60 mt-1">
-          {isAdmin ? 'Admin Portal' : isOrganization ? 'Sponsor Portal' : 'Student Portal'}
+          {isAdmin ? 'Admin Portal' : isOrganization ? 'Sponsor Portal' : isStaff ? 'Staff Portal' : 'Student Portal'}
         </p>
       </div>
 

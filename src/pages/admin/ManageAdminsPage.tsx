@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { ShieldCheck, Trash2, UserPlus, Clock } from 'lucide-react';
+import { ShieldCheck, Trash2, UserPlus, Clock, ArrowUpCircle, School } from 'lucide-react';
 
 const SUPERADMIN_EMAIL = 'manassehudim@gmail.com';
 
@@ -19,12 +19,22 @@ interface AdminRow {
   pending: boolean;
 }
 
+interface StaffRow {
+  user_id: string;
+  email: string;
+  full_name: string;
+  classrooms: string[] | null;
+}
+
 export default function ManageAdminsPage() {
   const { user, loading: authLoading } = useAuth();
   const [admins, setAdmins] = useState<AdminRow[]>([]);
+  const [staffUsers, setStaffUsers] = useState<StaffRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [staffLoading, setStaffLoading] = useState(true);
   const [inviteEmail, setInviteEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [promoting, setPromoting] = useState<string | null>(null);
 
   const isSuperadmin = user?.email?.toLowerCase() === SUPERADMIN_EMAIL;
 
@@ -39,8 +49,29 @@ export default function ManageAdminsPage() {
     setLoading(false);
   };
 
+  const loadStaff = async () => {
+    setStaffLoading(true);
+    const { data, error } = await supabase.rpc('list_staff_users' as any);
+    if (!error) setStaffUsers((data as StaffRow[]) || []);
+    setStaffLoading(false);
+  };
+
+  const promoteToAdmin = async (row: StaffRow) => {
+    if (!confirm(`Promote ${row.full_name} to Admin? They will get full admin access to this hub.`)) return;
+    setPromoting(row.user_id);
+    const { error } = await supabase.rpc('promote_staff_to_admin' as any, { p_user_id: row.user_id });
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success(`${row.full_name} promoted to admin`);
+      loadAdmins();
+      loadStaff();
+    }
+    setPromoting(null);
+  };
+
   useEffect(() => {
-    if (isSuperadmin) loadAdmins();
+    if (isSuperadmin) { loadAdmins(); loadStaff(); }
   }, [isSuperadmin]);
 
   if (authLoading) return null;
@@ -117,6 +148,49 @@ export default function ManageAdminsPage() {
         <p className="text-xs text-muted-foreground mt-3">
           They'll receive an email to set up their account. If they already have an account, they'll be promoted instantly.
         </p>
+      </div>
+
+      <div className="glass-card rounded-xl p-6">
+        <h2 className="font-heading font-semibold text-lg mb-4 flex items-center gap-2">
+          <ArrowUpCircle className="h-5 w-5 text-primary" /> Promote Staff to Admin
+        </h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          Staff members who accepted classroom invitations can be promoted to full admins.
+        </p>
+        {staffLoading ? (
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        ) : staffUsers.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No staff members found in this hub.</p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {staffUsers.map(s => (
+              <li key={s.user_id} className="py-3 flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium truncate">{s.full_name}</p>
+                  <p className="text-xs text-muted-foreground truncate">{s.email}</p>
+                  {s.classrooms && s.classrooms.length > 0 && (
+                    <div className="flex gap-1 mt-1 flex-wrap">
+                      {s.classrooms.map(c => (
+                        <Badge key={c} variant="outline" className="text-xs gap-1">
+                          <School className="h-3 w-3" />{c}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={promoting === s.user_id}
+                  onClick={() => promoteToAdmin(s)}
+                >
+                  <ArrowUpCircle className="h-4 w-4 mr-1" />
+                  {promoting === s.user_id ? 'Promoting...' : 'Promote to Admin'}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div className="glass-card rounded-xl p-6">

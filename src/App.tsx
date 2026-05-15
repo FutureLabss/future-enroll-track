@@ -68,10 +68,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function RoleRedirect() {
-  const { isAdmin, isOrganization, loading } = useAuth();
+  const { isAdmin, isOrganization, isStaff, loading } = useAuth();
   if (loading) return <div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
   if (isAdmin) return <Navigate to="/admin" replace />;
   if (isOrganization) return <Navigate to="/org" replace />;
+  if (isStaff) return <Navigate to="/staff/classrooms" replace />;
   return <Navigate to="/student" replace />;
 }
 

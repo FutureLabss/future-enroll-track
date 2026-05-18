@@ -58,10 +58,7 @@ export function useCurriculumV2(classroomId: string) {
     setLoading(true);
     try {
       const { data, error } = await supabase
-        .from('curricula')
-        .select('*')
-        .eq('classroom_id', classroomId)
-        .order('created_at', { ascending: true });
+        .rpc('get_classroom_curricula', { p_classroom_id: classroomId });
 
       if (error) {
         console.error('useCurriculumV2 fetchAll error:', error);
@@ -76,31 +73,19 @@ export function useCurriculumV2(classroomId: string) {
   }, [classroomId]);
 
   const fetchTree = useCallback(async (curriculumId: string) => {
-    const { data: tracks, error: tErr } = await supabase
-      .from('tracks').select('*').eq('curriculum_id', curriculumId).order('order_index');
-    if (tErr) { setFetchError(tErr.message); return []; }
+    const { data, error } = await supabase
+      .rpc('get_curriculum_tree', { p_curriculum_id: curriculumId });
+    if (error) { setFetchError(error.message); return []; }
 
-    const trackIds = (tracks || []).map((t: any) => t.id);
-    if (trackIds.length === 0) return [];
-
-    const { data: modules, error: mErr } = await supabase
-      .from('modules').select('*').in('track_id', trackIds).order('order_index');
-    if (mErr) { setFetchError(mErr.message); return []; }
-
-    const moduleIds = (modules || []).map((m: any) => m.id);
-    const { data: units, error: uErr } = moduleIds.length > 0
-      ? await supabase.from('units').select('*').in('module_id', moduleIds).order('order_index')
-      : { data: [], error: null };
-    if (uErr) { setFetchError(uErr.message); return []; }
-
+    const { tracks = [], modules = [], units = [] } = data as any;
     setFetchError(null);
-    return (tracks || []).map((t: any) => ({
+    return (tracks as any[]).map((t: any) => ({
       ...t,
-      modules: (modules || [])
+      modules: (modules as any[])
         .filter((m: any) => m.track_id === t.id)
         .map((m: any) => ({
           ...m,
-          units: (units || [])
+          units: (units as any[])
             .filter((u: any) => u.module_id === m.id)
             .map((u: any) => ({ ...u, lessons: [] })),
         })),

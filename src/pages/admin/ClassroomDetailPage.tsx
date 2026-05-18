@@ -14,7 +14,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { DataTable } from '@/components/shared/DataTable';
 import { CurriculumTreeV2 } from '@/components/classroom/CurriculumTreeV2';
-import { useCurriculumV2 } from '@/hooks/useCurriculumV2';
 import { toast } from 'sonner';
 import {
   Users, BookOpen, Calendar, ClipboardList, BarChart2, UserPlus, Loader2,
@@ -35,9 +34,12 @@ const STATUS_COLOURS: Record<string, string> = {
 
 function CohortModal({ classroomId, programId, existing, onClose, onSaved }: any) {
   const { createCohort, updateCohort } = useClassroomCohorts(classroomId);
-  const { curricula } = useCurriculumV2(classroomId);
-  const allTracks = curricula.flatMap(c => c.tracks);
-  const allModules = allTracks.flatMap(t => t.modules);
+  const [scopeOptions, setScopeOptions] = useState<{ curricula: any[]; tracks: any[]; modules: any[] }>({ curricula: [], tracks: [], modules: [] });
+
+  useEffect(() => {
+    supabase.rpc('get_classroom_scope_options', { p_classroom_id: classroomId })
+      .then(({ data }) => { if (data) setScopeOptions(data as any); });
+  }, [classroomId]);
 
   const [form, setForm] = useState({
     cohort_label: existing?.cohort_label || '',
@@ -89,7 +91,7 @@ function CohortModal({ classroomId, programId, existing, onClose, onSaved }: any
         </Select>
       </div>
       <div>
-        <Label>Scope Type</Label>
+        <Label>Scope</Label>
         <Select value={form.scope_type} onValueChange={v => setForm({ ...form, scope_type: v as any, scope_id: '' })}>
           <SelectTrigger className="mt-1.5"><SelectValue placeholder="Entire classroom (no scope)" /></SelectTrigger>
           <SelectContent>
@@ -99,36 +101,124 @@ function CohortModal({ classroomId, programId, existing, onClose, onSaved }: any
           </SelectContent>
         </Select>
       </div>
-      {form.scope_type === 'curriculum' && curricula.length > 0 && (
+      {form.scope_type === 'curriculum' && scopeOptions.curricula.length > 0 && (
         <div>
           <Label>Curriculum</Label>
           <Select value={form.scope_id} onValueChange={v => setForm({ ...form, scope_id: v })}>
             <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select curriculum" /></SelectTrigger>
-            <SelectContent>{curricula.map(c => <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>)}</SelectContent>
+            <SelectContent>{scopeOptions.curricula.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>)}</SelectContent>
           </Select>
         </div>
       )}
-      {form.scope_type === 'track' && allTracks.length > 0 && (
+      {form.scope_type === 'track' && scopeOptions.tracks.length > 0 && (
         <div>
           <Label>Track</Label>
           <Select value={form.scope_id} onValueChange={v => setForm({ ...form, scope_id: v })}>
             <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select track" /></SelectTrigger>
-            <SelectContent>{allTracks.map(t => <SelectItem key={t.id} value={t.id}>{t.title}</SelectItem>)}</SelectContent>
+            <SelectContent>{scopeOptions.tracks.map((t: any) => <SelectItem key={t.id} value={t.id}>{t.title}</SelectItem>)}</SelectContent>
           </Select>
         </div>
       )}
-      {form.scope_type === 'module' && allModules.length > 0 && (
+      {form.scope_type === 'module' && scopeOptions.modules.length > 0 && (
         <div>
           <Label>Module</Label>
           <Select value={form.scope_id} onValueChange={v => setForm({ ...form, scope_id: v })}>
             <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select module" /></SelectTrigger>
-            <SelectContent>{allModules.map(m => <SelectItem key={m.id} value={m.id}>{m.title}</SelectItem>)}</SelectContent>
+            <SelectContent>{scopeOptions.modules.map((m: any) => <SelectItem key={m.id} value={m.id}>{m.title}</SelectItem>)}</SelectContent>
           </Select>
         </div>
       )}
       <Button onClick={handleSave} disabled={saving} className="w-full">
         {saving ? 'Saving...' : existing ? 'Update Cohort' : 'Create Cohort'}
       </Button>
+    </div>
+  );
+}
+
+function CohortStudentsModal({ cohort, programId, onClose }: { cohort: any; programId: string; onClose: () => void }) {
+  const [enrolled, setEnrolled] = useState<any[]>([]);
+  const [members, setMembers] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      const [{ data: enr }, { data: mem }] = await Promise.all([
+        supabase.from('enrollments')
+          .select('id, full_name, email, enrollment_status, user_id')
+          .eq('program_id', programId)
+          .in('enrollment_status', ['active', 'pending'])
+          .order('full_name'),
+        supabase.from('cohort_students')
+          .select('student_id')
+          .eq('cohort_id', cohort.id),
+      ]);
+      setEnrolled(enr || []);
+      setMembers(new Set((mem || []).map((r: any) => r.student_id)));
+      setLoading(false);
+    };
+    load();
+  }, [cohort.id, programId]);
+
+  const toggle = async (enrollment: any) => {
+    if (!enrollment.user_id) return;
+    setBusy(enrollment.user_id);
+    try {
+      if (members.has(enrollment.user_id)) {
+        await supabase.from('cohort_students').delete()
+          .eq('cohort_id', cohort.id).eq('student_id', enrollment.user_id);
+        setMembers(prev => { const s = new Set(prev); s.delete(enrollment.user_id); return s; });
+      } else {
+        await supabase.from('cohort_students').insert({
+          cohort_id: cohort.id, student_id: enrollment.user_id,
+          enrollment_id: enrollment.id, joined_at: new Date().toISOString(), status: 'active',
+        });
+        await supabase.from('enrollments').update({ cohort_id: cohort.id })
+          .eq('id', enrollment.id);
+        setMembers(prev => new Set([...prev, enrollment.user_id]));
+      }
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="space-y-3 mt-2 max-h-[60vh] overflow-y-auto">
+      {loading ? (
+        <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+      ) : enrolled.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-6">No active or pending enrollments found.</p>
+      ) : (
+        enrolled.map(e => {
+          const inCohort = members.has(e.user_id);
+          return (
+            <div key={e.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
+              <div>
+                <p className="text-sm font-medium">{e.full_name || '—'}</p>
+                <p className="text-xs text-muted-foreground">{e.email}</p>
+              </div>
+              {!e.user_id ? (
+                <span className="text-xs text-muted-foreground border border-border rounded px-2 py-0.5">No account</span>
+              ) : (
+                <Button
+                  size="sm"
+                  variant={inCohort ? 'destructive' : 'outline'}
+                  className="h-7 text-xs"
+                  disabled={busy === e.user_id}
+                  onClick={() => toggle(e)}
+                >
+                  {busy === e.user_id
+                    ? <Loader2 className="h-3 w-3 animate-spin" />
+                    : inCohort ? 'Remove' : 'Add'}
+                </Button>
+              )}
+            </div>
+          );
+        })
+      )}
     </div>
   );
 }
@@ -217,6 +307,7 @@ export default function ClassroomDetailPage() {
   const [inviting, setInviting] = useState(false);
 
   const [cohortModal, setCohortModal] = useState<{ open: boolean; existing?: any }>({ open: false });
+  const [cohortStudentsModal, setCohortStudentsModal] = useState<{ open: boolean; cohort?: any }>({ open: false });
 
   const [permissionsModal, setPermissionsModal] = useState<{ open: boolean; cs?: any }>({ open: false });
   const [perms, setPerms] = useState<any>({});
@@ -629,24 +720,29 @@ export default function ClassroomDetailPage() {
                           <p className="text-xs text-primary/70 mt-0.5 capitalize">Scope: {c.scope_type}</p>
                         )}
                       </div>
-                      <Dialog
-                        open={cohortModal.open && cohortModal.existing?.id === c.id}
-                        onOpenChange={o => setCohortModal(o ? { open: true, existing: c } : { open: false })}
-                      >
-                        <DialogTrigger asChild>
-                          <Button size="sm" variant="outline"><Pencil className="h-3.5 w-3.5 mr-1" />Edit</Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader><DialogTitle>Edit Cohort</DialogTitle></DialogHeader>
-                          <CohortModal
-                            classroomId={id!}
-                            programId={programId}
-                            existing={c}
-                            onClose={() => setCohortModal({ open: false })}
-                            onSaved={refetchCohorts}
-                          />
-                        </DialogContent>
-                      </Dialog>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => setCohortStudentsModal({ open: true, cohort: c })}>
+                          <Users className="h-3.5 w-3.5 mr-1" />Students
+                        </Button>
+                        <Dialog
+                          open={cohortModal.open && cohortModal.existing?.id === c.id}
+                          onOpenChange={o => setCohortModal(o ? { open: true, existing: c } : { open: false })}
+                        >
+                          <DialogTrigger asChild>
+                            <Button size="sm" variant="outline"><Pencil className="h-3.5 w-3.5 mr-1" />Edit</Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader><DialogTitle>Edit Cohort</DialogTitle></DialogHeader>
+                            <CohortModal
+                              classroomId={id!}
+                              programId={programId}
+                              existing={c}
+                              onClose={() => setCohortModal({ open: false })}
+                              onSaved={refetchCohorts}
+                            />
+                          </DialogContent>
+                        </Dialog>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -661,6 +757,21 @@ export default function ClassroomDetailPage() {
               <p className="text-sm">Create the first cohort for this classroom</p>
             </div>
           )}
+
+          <Dialog open={cohortStudentsModal.open} onOpenChange={o => !o && setCohortStudentsModal({ open: false })}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Students — {cohortStudentsModal.cohort?.cohort_label}</DialogTitle>
+              </DialogHeader>
+              {cohortStudentsModal.cohort && classroom?.program_id && (
+                <CohortStudentsModal
+                  cohort={cohortStudentsModal.cohort}
+                  programId={classroom.program_id}
+                  onClose={() => setCohortStudentsModal({ open: false })}
+                />
+              )}
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         {/* CURRICULUM */}

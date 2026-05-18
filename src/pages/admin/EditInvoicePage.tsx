@@ -46,7 +46,16 @@ export default function EditInvoicePage() {
   }, [id]);
 
   const updateInst = (idx: number, patch: Partial<Inst>) => {
-    setInstallments(prev => prev.map((p, i) => (i === idx ? { ...p, ...patch } : p)));
+    setInstallments(prev => prev.map((p, i) => {
+      if (i !== idx) return p;
+      const updated = { ...p, ...patch };
+      // Auto-populate paid_at with due_date when status flips to paid and paid_at is not set
+      if (patch.status === 'paid' && !updated.paid_at) {
+        updated.paid_at = updated.due_date;
+      }
+      if (patch.status === 'pending') updated.paid_at = null;
+      return updated;
+    }));
   };
 
   const addInst = () => {
@@ -143,15 +152,15 @@ export default function EditInvoicePage() {
               {installments.map((inst, idx) => (
                 <div key={idx} className="grid grid-cols-12 gap-2 items-end p-3 rounded-lg bg-muted/30 border border-border">
                   <div className="col-span-12 sm:col-span-1 text-sm font-medium text-muted-foreground">{idx + 1}.</div>
-                  <div className="col-span-6 sm:col-span-3">
+                  <div className="col-span-6 sm:col-span-2">
                     <Label className="text-xs">Amount</Label>
                     <Input type="number" value={inst.amount} onChange={e => updateInst(idx, { amount: e.target.value })} className="mt-1" />
                   </div>
-                  <div className="col-span-6 sm:col-span-3">
+                  <div className="col-span-6 sm:col-span-2">
                     <Label className="text-xs">Due date</Label>
                     <Input type="date" value={inst.due_date} onChange={e => updateInst(idx, { due_date: e.target.value })} className="mt-1" />
                   </div>
-                  <div className="col-span-8 sm:col-span-3">
+                  <div className="col-span-6 sm:col-span-2">
                     <Label className="text-xs">Status</Label>
                     <Select value={inst.status} onValueChange={(v: 'pending' | 'paid') => updateInst(idx, { status: v })}>
                       <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
@@ -161,7 +170,18 @@ export default function EditInvoicePage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="col-span-4 sm:col-span-2 flex justify-end">
+                  {inst.status === 'paid' && (
+                    <div className="col-span-6 sm:col-span-3">
+                      <Label className="text-xs">Paid on</Label>
+                      <Input
+                        type="date"
+                        value={inst.paid_at ? inst.paid_at.slice(0, 10) : ''}
+                        onChange={e => updateInst(idx, { paid_at: e.target.value })}
+                        className="mt-1"
+                      />
+                    </div>
+                  )}
+                  <div className={`col-span-12 sm:col-span-2 flex justify-end ${inst.status === 'paid' ? '' : 'sm:col-start-11'}`}>
                     <Button variant="ghost" size="sm" onClick={() => removeInst(idx)}>
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>

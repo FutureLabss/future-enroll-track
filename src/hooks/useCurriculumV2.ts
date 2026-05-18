@@ -76,18 +76,34 @@ export function useCurriculumV2(classroomId: string) {
   }, [classroomId]);
 
   const fetchTree = useCallback(async (curriculumId: string) => {
-    const { data, error } = await supabase
-      .from('tracks')
-      .select('*, modules(*, units(*))')
-      .eq('curriculum_id', curriculumId)
-      .order('order_index');
-    if (error) { console.error('fetchTree error:', error); setFetchError(error.message); return []; }
-    return (data || []).sort((a: any, b: any) => a.order_index - b.order_index).map((t: any) => ({
+    const { data: tracks, error: tErr } = await supabase
+      .from('tracks').select('*').eq('curriculum_id', curriculumId).order('order_index');
+    if (tErr) { setFetchError(tErr.message); return []; }
+
+    const trackIds = (tracks || []).map((t: any) => t.id);
+    if (trackIds.length === 0) return [];
+
+    const { data: modules, error: mErr } = await supabase
+      .from('modules').select('*').in('track_id', trackIds).order('order_index');
+    if (mErr) { setFetchError(mErr.message); return []; }
+
+    const moduleIds = (modules || []).map((m: any) => m.id);
+    const { data: units, error: uErr } = moduleIds.length > 0
+      ? await supabase.from('units').select('*').in('module_id', moduleIds).order('order_index')
+      : { data: [], error: null };
+    if (uErr) { setFetchError(uErr.message); return []; }
+
+    setFetchError(null);
+    return (tracks || []).map((t: any) => ({
       ...t,
-      modules: (t.modules || []).sort((a: any, b: any) => a.order_index - b.order_index).map((m: any) => ({
-        ...m,
-        units: (m.units || []).sort((a: any, b: any) => a.order_index - b.order_index).map((u: any) => ({ ...u, lessons: [] })),
-      })),
+      modules: (modules || [])
+        .filter((m: any) => m.track_id === t.id)
+        .map((m: any) => ({
+          ...m,
+          units: (units || [])
+            .filter((u: any) => u.module_id === m.id)
+            .map((u: any) => ({ ...u, lessons: [] })),
+        })),
     }));
   }, []);
 

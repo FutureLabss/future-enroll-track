@@ -214,37 +214,33 @@ export default function ClassroomDetailPage() {
 
   useEffect(() => { if (id) loadAll(); }, [id]);
 
+  // Students come from enrollments so we see everyone, not just those with accounts.
+  // Triggers separately once classroom.program_id is known.
+  useEffect(() => {
+    if (classroom?.program_id) loadStudents(classroom.program_id);
+  }, [classroom?.program_id]);
+
+  const loadStudents = async (programId: string) => {
+    const { data } = await supabase
+      .from('enrollments')
+      .select('id, full_name, email, enrollment_status, user_id, cohort_id, cohorts(cohort_label)')
+      .eq('program_id', programId)
+      .in('enrollment_status', ['active', 'pending'])
+      .order('full_name', { ascending: true });
+    setStudents(data || []);
+  };
+
   const loadAll = async () => {
-    const [staffRes, studentsRes, cohortStudentsRes, lessonsRes, rosterRes] = await Promise.all([
+    const [staffRes, lessonsRes, rosterRes] = await Promise.all([
       supabase.from('classroom_staff')
         .select('*, staff(full_name, email, role_title), classroom_permissions(*)')
         .eq('classroom_id', id).eq('status', 'active'),
-      supabase.from('classroom_students')
-        .select('*, profiles:student_id(full_name, email)')
-        .eq('classroom_id', id),
-      // Separate query: cohort membership for students in this classroom's cohorts.
-      // classroom_students → cohort_students have no direct FK so can't be joined in one query.
-      supabase.from('cohort_students')
-        .select('student_id, cohort_id, cohorts!inner(cohort_label, classroom_id)')
-        .eq('cohorts.classroom_id', id),
       supabase.from('lessons')
         .select('*, staff:tutor_id(full_name), cohorts(cohort_label)')
         .eq('classroom_id', id).order('lesson_date', { ascending: false }),
       supabase.from('staff').select('id, full_name, role_title, email, program_id').eq('active', true),
     ]);
-
-    // Merge cohort info onto each student row so column renderers still work
-    const cohortMap = new Map<string, any>();
-    for (const cs of (cohortStudentsRes.data || [])) {
-      cohortMap.set(cs.student_id, cs);
-    }
-    const studentsWithCohort = (studentsRes.data || []).map((s: any) => ({
-      ...s,
-      cohort_students: cohortMap.has(s.student_id) ? [cohortMap.get(s.student_id)] : [],
-    }));
-
     setStaff(staffRes.data || []);
-    setStudents(studentsWithCohort);
     setLessons(lessonsRes.data || []);
     setStaffRoster(rosterRes.data || []);
   };
@@ -411,10 +407,16 @@ export default function ClassroomDetailPage() {
   ];
 
   const studentColumns = [
-    { key: 'name', header: 'Student', render: (r: any) => r.profiles?.full_name || '—' },
-    { key: 'email', header: 'Email', render: (r: any) => r.profiles?.email || '—' },
-    { key: 'cohort', header: 'Cohort', render: (r: any) => r.cohort_students?.[0]?.cohorts?.cohort_label || <span className="text-muted-foreground text-sm">—</span> },
-    { key: 'joined', header: 'Joined', render: (r: any) => new Date(r.joined_at).toLocaleDateString() },
+    { key: 'name', header: 'Student', render: (r: any) => r.full_name || <span className="text-muted-foreground text-sm">—</span> },
+    { key: 'email', header: 'Email', render: (r: any) => r.email || '—' },
+    { key: 'cohort', header: 'Cohort', render: (r: any) => (r.cohorts as any)?.cohort_label || <span className="text-muted-foreground text-sm">—</span> },
+    { key: 'status', header: 'Status', render: (r: any) => (
+      <Badge variant="outline" className={`capitalize ${STATUS_COLOURS[r.enrollment_status] || ''}`}>{r.enrollment_status}</Badge>
+    )},
+    { key: 'account', header: 'Account', render: (r: any) => r.user_id
+      ? <Badge variant="outline" className="bg-success/10 text-success border-success/30">Active</Badge>
+      : <Badge variant="outline" className="text-muted-foreground">No account</Badge>
+    },
   ];
 
   const lessonColumns = [

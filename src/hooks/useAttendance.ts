@@ -10,7 +10,7 @@ export function useAttendance(classroomId: string) {
   const fetchSessions = async () => {
     const { data } = await supabase
       .from('attendance_sessions')
-      .select('*, lessons(title, lesson_date), cohorts(cohort_label)')
+      .select('*, old_lessons(title, lesson_date), cohorts(cohort_label)')
       .eq('classroom_id', classroomId)
       .order('created_at', { ascending: false });
     setSessions(data || []);

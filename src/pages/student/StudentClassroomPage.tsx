@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useMarkAttendance } from '@/hooks/useAttendance';
 import { useStudentAssignments, useSubmissions } from '@/hooks/useAssignments';
 import { useStudentProgress } from '@/hooks/useAttendance';
+import { useSchedules } from '@/hooks/useSchedules';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -41,7 +42,7 @@ function AttendanceTab({ classroomId }: { classroomId: string }) {
     if (!user) return;
     const { data } = await supabase
       .from('attendance_records')
-      .select('*, attendance_sessions(code, created_at, duration_mins, lessons(title))')
+      .select('*, attendance_sessions(code, created_at, duration_mins, old_lessons(title))')
       .eq('student_id', user.id)
       .eq('classroom_id', classroomId)
       .order('marked_at', { ascending: false });
@@ -234,6 +235,7 @@ export default function StudentClassroomPage() {
   const [loading, setLoading] = useState(true);
   const [showPast, setShowPast] = useState(false);
   const { progress } = useStudentProgress(user?.id || '', cohortId);
+  const { schedules } = useSchedules(id!);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -242,7 +244,7 @@ export default function StudentClassroomPage() {
     Promise.all([
       supabase.from('classrooms').select('*, programs(program_name)').eq('id', id).single(),
       supabase.from('cohort_students').select('cohort_id').eq('student_id', user.id).limit(1).single(),
-      supabase.from('lessons')
+      supabase.from('old_lessons')
         .select('*, cohorts(cohort_label)')
         .eq('classroom_id', id)
         .neq('status', 'cancelled')
@@ -288,55 +290,80 @@ export default function StudentClassroomPage() {
     <div>
       <PageHeader title={classroom.name} description={classroom.programs?.program_name} />
 
-      <Tabs defaultValue="lessons">
-        <TabsList className="mb-6">
-          <TabsTrigger value="lessons"><BookOpen className="h-4 w-4 mr-1.5" />Lessons</TabsTrigger>
+      <Tabs defaultValue="schedule">
+        <TabsList className="mb-6 flex-wrap h-auto gap-1">
+          <TabsTrigger value="schedule"><Calendar className="h-4 w-4 mr-1.5" />Schedule</TabsTrigger>
           <TabsTrigger value="attendance"><ClipboardList className="h-4 w-4 mr-1.5" />Attendance</TabsTrigger>
-          <TabsTrigger value="assignments"><Calendar className="h-4 w-4 mr-1.5" />Assignments</TabsTrigger>
+          <TabsTrigger value="assignments"><BookOpen className="h-4 w-4 mr-1.5" />Assignments</TabsTrigger>
           <TabsTrigger value="progress"><BarChart2 className="h-4 w-4 mr-1.5" />Progress</TabsTrigger>
         </TabsList>
 
-        {/* LESSONS */}
-        <TabsContent value="lessons">
+        {/* SCHEDULE */}
+        <TabsContent value="schedule">
           <div className="space-y-6">
-            {todayLessons.length > 0 && (
-              <div>
-                <h3 className="font-semibold text-primary mb-3">Today</h3>
-                <div className="space-y-3">
-                  {todayLessons.map(l => <LessonCard key={l.id} lesson={l} />)}
-                </div>
-              </div>
-            )}
+            {(() => {
+              const todaySched = schedules.filter(s => s.scheduled_date === today && s.status !== 'cancelled');
+              const upcomingSched = schedules.filter(s => s.scheduled_date > today && s.status !== 'cancelled');
+              const pastSched = schedules.filter(s => s.scheduled_date < today);
 
-            <div>
-              <h3 className="font-semibold mb-3">
-                Upcoming
-                {upcomingLessons.length > 0 && <span className="text-muted-foreground font-normal ml-2">({upcomingLessons.length})</span>}
-              </h3>
-              {upcomingLessons.length > 0
-                ? <div className="space-y-3">{upcomingLessons.map(l => <LessonCard key={l.id} lesson={l} />)}</div>
-                : <p className="text-muted-foreground text-sm">No upcoming lessons</p>
-              }
-            </div>
-
-            {pastLessons.length > 0 && (
-              <div>
-                <button
-                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-3"
-                  onClick={() => setShowPast(v => !v)}
-                >
-                  {showPast ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                  Past lessons ({pastLessons.length})
-                </button>
-                {showPast && (
-                  <div className="space-y-3 opacity-70">
-                    {[...pastLessons].reverse().map(l => <LessonCard key={l.id} lesson={l} />)}
+              const ScheduleCard = ({ s }: { s: any }) => (
+                <div className={`rounded-xl p-4 flex items-center justify-between border ${s.scheduled_date === today ? 'border-primary/40 bg-primary/5' : 'border-border'}`}>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      {s.scheduled_date === today && <span className="text-xs font-semibold text-primary uppercase tracking-wide">Today</span>}
+                      <p className="font-semibold">{s.lessons?.title || 'Session'}</p>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      {new Date(s.scheduled_date + 'T00:00:00').toLocaleDateString('en-NG', { weekday: 'short', month: 'short', day: 'numeric' })}
+                      {' · '}{s.start_time} – {s.end_time}
+                    </p>
+                    {s.location && <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1"><MapPin className="h-3 w-3" />{s.location}</p>}
+                    {s.meeting_link && <a href={s.meeting_link} target="_blank" rel="noreferrer" className="text-xs text-primary mt-0.5 block">Join online →</a>}
                   </div>
-                )}
-              </div>
-            )}
+                  <div className="flex flex-col items-end gap-1">
+                    {s.cohorts && <Badge variant="outline" className="text-xs">{s.cohorts.cohort_label}</Badge>}
+                    {s.staff && <span className="text-xs text-muted-foreground">{s.staff.full_name}</span>}
+                  </div>
+                </div>
+              );
 
-            {lessons.length === 0 && <p className="text-center text-muted-foreground py-10">No lessons scheduled yet</p>}
+              if (schedules.length === 0 && lessons.length === 0) return (
+                <p className="text-center text-muted-foreground py-10">No sessions scheduled yet</p>
+              );
+
+              return (
+                <>
+                  {todaySched.length > 0 && (
+                    <div>
+                      <h3 className="font-semibold text-primary mb-3">Today</h3>
+                      <div className="space-y-3">{todaySched.map(s => <ScheduleCard key={s.id} s={s} />)}</div>
+                    </div>
+                  )}
+                  <div>
+                    <h3 className="font-semibold mb-3">Upcoming {upcomingSched.length > 0 && <span className="text-muted-foreground font-normal ml-1">({upcomingSched.length})</span>}</h3>
+                    {upcomingSched.length > 0
+                      ? <div className="space-y-3">{upcomingSched.map(s => <ScheduleCard key={s.id} s={s} />)}</div>
+                      : <p className="text-sm text-muted-foreground">No upcoming sessions</p>}
+                  </div>
+                  {pastSched.length > 0 && (
+                    <div>
+                      <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-3" onClick={() => setShowPast(v => !v)}>
+                        {showPast ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                        Past sessions ({pastSched.length})
+                      </button>
+                      {showPast && <div className="space-y-3 opacity-70">{[...pastSched].reverse().map(s => <ScheduleCard key={s.id} s={s} />)}</div>}
+                    </div>
+                  )}
+                  {schedules.length === 0 && lessons.length > 0 && (
+                    <div className="space-y-3">
+                      <p className="text-xs text-muted-foreground mb-1">Historical lessons</p>
+                      {todayLessons.map(l => <LessonCard key={l.id} lesson={l} />)}
+                      {upcomingLessons.map(l => <LessonCard key={l.id} lesson={l} />)}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </TabsContent>
 

@@ -10,7 +10,7 @@ export function useAssignments(classroomId: string) {
   const fetchAssignments = async () => {
     const { data } = await supabase
       .from('assignments')
-      .select('*, cohorts(cohort_label), lessons(title, lesson_date), assignment_resources(*)')
+      .select('*, cohorts(cohort_label), old_lessons(title, lesson_date), assignment_resources(*)')
       .eq('classroom_id', classroomId)
       .order('created_at', { ascending: false });
     setAssignments(data || []);

@@ -256,7 +256,7 @@ export default function ClassroomDetailPage() {
       supabase.from('classroom_staff')
         .select('*, staff(full_name, email, role_title), classroom_permissions(*)')
         .eq('classroom_id', id).eq('status', 'active'),
-      supabase.from('lessons')
+      supabase.from('old_lessons')
         .select('*, staff:tutor_id(full_name), cohorts(cohort_label)')
         .eq('classroom_id', id).order('lesson_date', { ascending: false }),
       supabase.from('staff').select('id, full_name, role_title, email, program_id').eq('active', true),
@@ -351,7 +351,7 @@ export default function ClassroomDetailPage() {
   };
 
   const handleLessonStatus = async (lessonId: string, status: string) => {
-    const { error } = await supabase.from('lessons').update({ status }).eq('id', lessonId);
+    const { error } = await supabase.from('old_lessons').update({ status }).eq('id', lessonId);
     if (error) { toast.error(error.message); return; }
     toast.success(`Lesson marked as ${status}`);
     loadAll();
@@ -373,7 +373,7 @@ export default function ClassroomDetailPage() {
     const lesson = lessonEditModal.lesson;
     if (!lesson) return;
     setSavingLesson(true);
-    const { error } = await supabase.from('lessons').update({
+    const { error } = await supabase.from('old_lessons').update({
       title: lessonForm.title,
       lesson_date: lessonForm.lesson_date,
       start_time: lessonForm.start_time,
@@ -389,7 +389,7 @@ export default function ClassroomDetailPage() {
   };
 
   const handleDeleteLesson = async (lessonId: string) => {
-    const { error } = await supabase.from('lessons').delete().eq('id', lessonId);
+    const { error } = await supabase.from('old_lessons').delete().eq('id', lessonId);
     if (error) { toast.error(error.message); return; }
     toast.success('Lesson deleted');
     loadAll();

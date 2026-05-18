@@ -19,7 +19,7 @@ import { toast } from 'sonner';
 import {
   Users, BookOpen, Calendar, ClipboardList, BarChart2, UserPlus, Loader2,
   GraduationCap, LayoutList, Layers, Plus, Pencil, Ban, CheckCircle, PlayCircle,
-  XCircle, ChevronDown, Eye,
+  XCircle, ChevronDown, Eye, Mail,
 } from 'lucide-react';
 
 const COHORT_STATUSES = ['upcoming', 'active', 'completed', 'archived'] as const;
@@ -211,6 +211,7 @@ export default function ClassroomDetailPage() {
   const [savingLesson, setSavingLesson] = useState(false);
 
   const [sessionModal, setSessionModal] = useState<{ open: boolean; session?: any }>({ open: false });
+  const [sendingReminders, setSendingReminders] = useState(false);
 
   useEffect(() => { if (id) loadAll(); }, [id]);
 
@@ -228,6 +229,26 @@ export default function ClassroomDetailPage() {
       .in('enrollment_status', ['active', 'pending'])
       .order('full_name', { ascending: true });
     setStudents(data || []);
+  };
+
+  const handleSendReminders = async () => {
+    if (!classroom?.program_id) return;
+    const needsReminder = students.filter(s => !s.user_id || !s.full_name?.trim());
+    if (needsReminder.length === 0) { toast.info('All students have accounts and complete profiles.'); return; }
+    if (!confirm(`Send reminder emails to ${needsReminder.length} student(s) who need to set up their account or complete their profile?`)) return;
+    setSendingReminders(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-account-reminders', {
+        body: { program_id: classroom.program_id },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`Sent ${data.signup_sent} account setup + ${data.profile_sent} profile reminders${data.failed ? ` (${data.failed} failed)` : ''}`);
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSendingReminders(false);
+    }
   };
 
   const loadAll = async () => {
@@ -655,6 +676,21 @@ export default function ClassroomDetailPage() {
 
         {/* STUDENTS */}
         <TabsContent value="students">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <div className="text-sm text-muted-foreground">
+              {(() => {
+                const noAccount = students.filter(s => !s.user_id).length;
+                const noProfile = students.filter(s => s.user_id && !s.full_name?.trim()).length;
+                const total = noAccount + noProfile;
+                if (total === 0) return null;
+                return <span className="text-warning">{noAccount > 0 && `${noAccount} no account`}{noAccount > 0 && noProfile > 0 && ' · '}{noProfile > 0 && `${noProfile} incomplete profile`}</span>;
+              })()}
+            </div>
+            <Button size="sm" variant="outline" onClick={handleSendReminders} disabled={sendingReminders}>
+              {sendingReminders ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Mail className="h-4 w-4 mr-1.5" />}
+              {sendingReminders ? 'Sending...' : 'Send Reminders'}
+            </Button>
+          </div>
           <DataTable columns={studentColumns} data={students} searchable searchPlaceholder="Search students..." emptyMessage="No students enrolled" />
         </TabsContent>
 

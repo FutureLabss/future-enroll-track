@@ -109,7 +109,7 @@ function LessonRow({ lesson, onUpdate, onDelete }: { lesson: LessonV2; onUpdate:
 }
 
 // ── Unit section ──────────────────────────────────────────────────────────────
-function UnitSection({ unit, hook }: { unit: UnitV2; hook: ReturnType<typeof useCurriculumV2> }) {
+function UnitSection({ unit, curriculumId, hook }: { unit: UnitV2; curriculumId: string; hook: ReturnType<typeof useCurriculumV2> }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [addLesson, setAddLesson] = useState(false);
@@ -148,7 +148,7 @@ function UnitSection({ unit, hook }: { unit: UnitV2; hook: ReturnType<typeof use
         <BookMarked className="h-3.5 w-3.5 text-violet-500 flex-shrink-0" />
         {editing ? (
           <InlineEdit value={unit.title}
-            onSave={async v => { await hook.updateUnit(unit.id, { title: v }); setEditing(false); }}
+            onSave={async v => { await hook.updateUnit(unit.id, curriculumId, { title: v }); setEditing(false); }}
             onCancel={() => setEditing(false)} />
         ) : (
           <>
@@ -159,7 +159,7 @@ function UnitSection({ unit, hook }: { unit: UnitV2; hook: ReturnType<typeof use
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditing(true)}><Pencil className="h-3 w-3" /></Button>
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={async () => {
                 if (!confirm(`Delete unit "${unit.title}" and all its lessons?`)) return;
-                try { await hook.deleteUnit(unit.id); } catch (e: any) { toast.error(e.message); }
+                try { await hook.deleteUnit(unit.id, curriculumId); } catch (e: any) { toast.error(e.message); }
               }}><Trash2 className="h-3 w-3 text-destructive" /></Button>
             </div>
           </>
@@ -191,7 +191,7 @@ function UnitSection({ unit, hook }: { unit: UnitV2; hook: ReturnType<typeof use
 }
 
 // ── Module section ────────────────────────────────────────────────────────────
-function ModuleSection({ mod, hook }: { mod: ModuleV2; hook: ReturnType<typeof useCurriculumV2> }) {
+function ModuleSection({ mod, curriculumId, hook }: { mod: ModuleV2; curriculumId: string; hook: ReturnType<typeof useCurriculumV2> }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [addUnit, setAddUnit] = useState(false);
@@ -209,7 +209,7 @@ function ModuleSection({ mod, hook }: { mod: ModuleV2; hook: ReturnType<typeof u
         <FolderOpen className="h-4 w-4 text-amber-500 flex-shrink-0" />
         {editing ? (
           <InlineEdit value={mod.title}
-            onSave={async v => { await hook.updateModule(mod.id, { title: v }); setEditing(false); }}
+            onSave={async v => { await hook.updateModule(mod.id, curriculumId, { title: v }); setEditing(false); }}
             onCancel={() => setEditing(false)} />
         ) : (
           <>
@@ -220,7 +220,7 @@ function ModuleSection({ mod, hook }: { mod: ModuleV2; hook: ReturnType<typeof u
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditing(true)}><Pencil className="h-3 w-3" /></Button>
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={async () => {
                 if (!confirm(`Delete module "${mod.title}" and all its units/lessons?`)) return;
-                try { await hook.deleteModule(mod.id); } catch (e: any) { toast.error(e.message); }
+                try { await hook.deleteModule(mod.id, curriculumId); } catch (e: any) { toast.error(e.message); }
               }}><Trash2 className="h-3 w-3 text-destructive" /></Button>
             </div>
           </>
@@ -231,7 +231,7 @@ function ModuleSection({ mod, hook }: { mod: ModuleV2; hook: ReturnType<typeof u
           {mod.units.length === 0 ? (
             <p className="text-xs text-muted-foreground">No units yet.</p>
           ) : (
-            mod.units.map(u => <UnitSection key={u.id} unit={u} hook={hook} />)
+            mod.units.map(u => <UnitSection key={u.id} unit={u} curriculumId={curriculumId} hook={hook} />)
           )}
           <Button variant="outline" size="sm" className="text-xs w-full" onClick={() => setAddUnit(true)}>
             <Plus className="h-3 w-3 mr-1" /> Add unit
@@ -241,14 +241,14 @@ function ModuleSection({ mod, hook }: { mod: ModuleV2; hook: ReturnType<typeof u
       <AddDialog
         open={addUnit} title={`Add unit to "${mod.title}"`} onClose={() => setAddUnit(false)}
         showDescription
-        onAdd={(title, description) => hook.addUnit(mod.id, title, description)}
+        onAdd={(title, description) => hook.addUnit(mod.id, curriculumId, title, description)}
       />
     </div>
   );
 }
 
 // ── Track section ─────────────────────────────────────────────────────────────
-function TrackSection({ track, hook }: { track: TrackV2; hook: ReturnType<typeof useCurriculumV2> }) {
+function TrackSection({ track, curriculumId, hook }: { track: TrackV2; curriculumId: string; hook: ReturnType<typeof useCurriculumV2> }) {
   const [open, setOpen] = useState(true);
   const [editing, setEditing] = useState(false);
   const [addModule, setAddModule] = useState(false);
@@ -265,7 +265,7 @@ function TrackSection({ track, hook }: { track: TrackV2; hook: ReturnType<typeof
         <Layers className="h-4 w-4 text-blue-500 flex-shrink-0" />
         {editing ? (
           <InlineEdit value={track.title}
-            onSave={async v => { await hook.updateTrack(track.id, { title: v }); setEditing(false); }}
+            onSave={async v => { await hook.updateTrack(track.id, curriculumId, { title: v }); setEditing(false); }}
             onCancel={() => setEditing(false)} />
         ) : (
           <>
@@ -276,7 +276,7 @@ function TrackSection({ track, hook }: { track: TrackV2; hook: ReturnType<typeof
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditing(true)}><Pencil className="h-3.5 w-3.5" /></Button>
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={async () => {
                 if (!confirm(`Delete track "${track.title}" and all its modules, units, and lessons?`)) return;
-                try { await hook.deleteTrack(track.id); } catch (e: any) { toast.error(e.message); }
+                try { await hook.deleteTrack(track.id, curriculumId); } catch (e: any) { toast.error(e.message); }
               }}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
             </div>
           </>
@@ -287,7 +287,7 @@ function TrackSection({ track, hook }: { track: TrackV2; hook: ReturnType<typeof
           {track.modules.length === 0 ? (
             <p className="text-sm text-muted-foreground">No modules yet.</p>
           ) : (
-            track.modules.map(m => <ModuleSection key={m.id} mod={m} hook={hook} />)
+            track.modules.map(m => <ModuleSection key={m.id} mod={m} curriculumId={curriculumId} hook={hook} />)
           )}
           <Button variant="outline" size="sm" className="w-full" onClick={() => setAddModule(true)}>
             <Plus className="h-3.5 w-3.5 mr-1" /> Add module
@@ -362,6 +362,13 @@ export function CurriculumTreeV2({ classroomId }: { classroomId: string }) {
   const [addCurriculum, setAddCurriculum] = useState(false);
 
   const selected = hook.curricula.find(c => c.id === selectedId) ?? hook.curricula[0] ?? null;
+
+  // Load tree when selection changes
+  useEffect(() => {
+    if (selected && selected.tracks.length === 0) {
+      hook.refreshCurriculum(selected.id);
+    }
+  }, [selected?.id]);
 
   if (hook.loading) {
     return (

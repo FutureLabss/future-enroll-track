@@ -59,16 +59,7 @@ export function useCurriculumV2(classroomId: string) {
     try {
       const { data, error } = await supabase
         .from('curricula')
-        .select(`
-          *,
-          tracks(
-            *,
-            modules(
-              *,
-              units(*)
-            )
-          )
-        `)
+        .select('*')
         .eq('classroom_id', classroomId)
         .order('created_at', { ascending: true });
 
@@ -78,29 +69,27 @@ export function useCurriculumV2(classroomId: string) {
         return;
       }
       setFetchError(null);
-
-      const sorted = (data || []).map((c: any) => ({
-        ...c,
-        tracks: (c.tracks || [])
-          .sort((a: any, b: any) => a.order_index - b.order_index)
-          .map((t: any) => ({
-            ...t,
-            modules: (t.modules || [])
-              .sort((a: any, b: any) => a.order_index - b.order_index)
-              .map((m: any) => ({
-                ...m,
-                units: (m.units || [])
-                  .sort((a: any, b: any) => a.order_index - b.order_index)
-                  .map((u: any) => ({ ...u, lessons: [] })),
-              })),
-          })),
-      }));
-
-      setCurricula(sorted);
+      setCurricula((data || []).map((c: any) => ({ ...c, tracks: [] })));
     } finally {
       setLoading(false);
     }
   }, [classroomId]);
+
+  const fetchTree = useCallback(async (curriculumId: string) => {
+    const { data, error } = await supabase
+      .from('tracks')
+      .select('*, modules(*, units(*))')
+      .eq('curriculum_id', curriculumId)
+      .order('order_index');
+    if (error) { console.error('fetchTree error:', error); return []; }
+    return (data || []).sort((a: any, b: any) => a.order_index - b.order_index).map((t: any) => ({
+      ...t,
+      modules: (t.modules || []).sort((a: any, b: any) => a.order_index - b.order_index).map((m: any) => ({
+        ...m,
+        units: (m.units || []).sort((a: any, b: any) => a.order_index - b.order_index).map((u: any) => ({ ...u, lessons: [] })),
+      })),
+    }));
+  }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -115,6 +104,11 @@ export function useCurriculumV2(classroomId: string) {
     await fetchAll();
     return data.id;
   };
+
+  const refreshCurriculum = useCallback(async (curriculumId: string) => {
+    const tracks = await fetchTree(curriculumId);
+    setCurricula(prev => prev.map(c => c.id === curriculumId ? { ...c, tracks } : c));
+  }, [fetchTree]);
 
   const updateCurriculum = async (id: string, patch: { title?: string; description?: string }) => {
     const { error } = await supabase.from('curricula').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id);
@@ -134,61 +128,61 @@ export function useCurriculumV2(classroomId: string) {
     const order_index = ((existing?.[0]?.order_index ?? -1) + 1);
     const { error } = await supabase.from('tracks').insert({ curriculum_id: curriculumId, title, description: description || null, order_index });
     if (error) throw error;
-    await fetchAll();
+    await refreshCurriculum(curriculumId);
   };
 
-  const updateTrack = async (id: string, patch: { title?: string; description?: string; order_index?: number }) => {
+  const updateTrack = async (id: string, curriculumId: string, patch: { title?: string; description?: string; order_index?: number }) => {
     const { error } = await supabase.from('tracks').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id);
     if (error) throw error;
-    await fetchAll();
+    await refreshCurriculum(curriculumId);
   };
 
-  const deleteTrack = async (id: string) => {
+  const deleteTrack = async (id: string, curriculumId: string) => {
     const { error } = await supabase.from('tracks').delete().eq('id', id);
     if (error) throw error;
-    await fetchAll();
+    await refreshCurriculum(curriculumId);
   };
 
   // ── Module CRUD ──────────────────────────────────────────────────────────────
-  const addModule = async (trackId: string, title: string, description?: string) => {
+  const addModule = async (trackId: string, curriculumId: string, title: string, description?: string) => {
     const { data: existing } = await supabase.from('modules').select('order_index').eq('track_id', trackId).order('order_index', { ascending: false }).limit(1);
     const order_index = ((existing?.[0]?.order_index ?? -1) + 1);
     const { error } = await supabase.from('modules').insert({ track_id: trackId, title, description: description || null, order_index });
     if (error) throw error;
-    await fetchAll();
+    await refreshCurriculum(curriculumId);
   };
 
-  const updateModule = async (id: string, patch: { title?: string; description?: string; order_index?: number }) => {
+  const updateModule = async (id: string, curriculumId: string, patch: { title?: string; description?: string; order_index?: number }) => {
     const { error } = await supabase.from('modules').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id);
     if (error) throw error;
-    await fetchAll();
+    await refreshCurriculum(curriculumId);
   };
 
-  const deleteModule = async (id: string) => {
+  const deleteModule = async (id: string, curriculumId: string) => {
     const { error } = await supabase.from('modules').delete().eq('id', id);
     if (error) throw error;
-    await fetchAll();
+    await refreshCurriculum(curriculumId);
   };
 
   // ── Unit CRUD ────────────────────────────────────────────────────────────────
-  const addUnit = async (moduleId: string, title: string, description?: string) => {
+  const addUnit = async (moduleId: string, curriculumId: string, title: string, description?: string) => {
     const { data: existing } = await supabase.from('units').select('order_index').eq('module_id', moduleId).order('order_index', { ascending: false }).limit(1);
     const order_index = ((existing?.[0]?.order_index ?? -1) + 1);
     const { error } = await supabase.from('units').insert({ module_id: moduleId, title, description: description || null, order_index });
     if (error) throw error;
-    await fetchAll();
+    await refreshCurriculum(curriculumId);
   };
 
-  const updateUnit = async (id: string, patch: { title?: string; description?: string; order_index?: number }) => {
+  const updateUnit = async (id: string, curriculumId: string, patch: { title?: string; description?: string; order_index?: number }) => {
     const { error } = await supabase.from('units').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id);
     if (error) throw error;
-    await fetchAll();
+    await refreshCurriculum(curriculumId);
   };
 
-  const deleteUnit = async (id: string) => {
+  const deleteUnit = async (id: string, curriculumId: string) => {
     const { error } = await supabase.from('units').delete().eq('id', id);
     if (error) throw error;
-    await fetchAll();
+    await refreshCurriculum(curriculumId);
   };
 
   // ── Lesson CRUD ──────────────────────────────────────────────────────────────
@@ -201,19 +195,16 @@ export function useCurriculumV2(classroomId: string) {
       objectives: opts?.objectives || null,
     });
     if (error) throw error;
-    await fetchAll();
   };
 
   const updateLesson = async (id: string, patch: { title?: string; content?: string; objectives?: string; resources?: any; order_index?: number }) => {
     const { error } = await supabase.from('lessons').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id);
     if (error) throw error;
-    await fetchAll();
   };
 
   const deleteLesson = async (id: string) => {
     const { error } = await supabase.from('lessons').delete().eq('id', id);
     if (error) throw error;
-    await fetchAll();
   };
 
   return {
@@ -221,6 +212,7 @@ export function useCurriculumV2(classroomId: string) {
     loading,
     fetchError,
     refetch: fetchAll,
+    refreshCurriculum,
     createCurriculum,
     updateCurriculum,
     deleteCurriculum,

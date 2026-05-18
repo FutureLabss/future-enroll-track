@@ -215,20 +215,36 @@ export default function ClassroomDetailPage() {
   useEffect(() => { if (id) loadAll(); }, [id]);
 
   const loadAll = async () => {
-    const [staffRes, studentsRes, lessonsRes, rosterRes] = await Promise.all([
+    const [staffRes, studentsRes, cohortStudentsRes, lessonsRes, rosterRes] = await Promise.all([
       supabase.from('classroom_staff')
         .select('*, staff(full_name, email, role_title), classroom_permissions(*)')
         .eq('classroom_id', id).eq('status', 'active'),
       supabase.from('classroom_students')
-        .select('*, profiles:student_id(full_name, email), cohort_students!left(cohort_id, cohorts(cohort_label))')
+        .select('*, profiles:student_id(full_name, email)')
         .eq('classroom_id', id),
+      // Separate query: cohort membership for students in this classroom's cohorts.
+      // classroom_students → cohort_students have no direct FK so can't be joined in one query.
+      supabase.from('cohort_students')
+        .select('student_id, cohort_id, cohorts!inner(cohort_label, classroom_id)')
+        .eq('cohorts.classroom_id', id),
       supabase.from('lessons')
         .select('*, staff:tutor_id(full_name), cohorts(cohort_label)')
         .eq('classroom_id', id).order('lesson_date', { ascending: false }),
       supabase.from('staff').select('id, full_name, role_title, email, program_id').eq('active', true),
     ]);
+
+    // Merge cohort info onto each student row so column renderers still work
+    const cohortMap = new Map<string, any>();
+    for (const cs of (cohortStudentsRes.data || [])) {
+      cohortMap.set(cs.student_id, cs);
+    }
+    const studentsWithCohort = (studentsRes.data || []).map((s: any) => ({
+      ...s,
+      cohort_students: cohortMap.has(s.student_id) ? [cohortMap.get(s.student_id)] : [],
+    }));
+
     setStaff(staffRes.data || []);
-    setStudents(studentsRes.data || []);
+    setStudents(studentsWithCohort);
     setLessons(lessonsRes.data || []);
     setStaffRoster(rosterRes.data || []);
   };

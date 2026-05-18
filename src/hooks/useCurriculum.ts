@@ -80,13 +80,14 @@ export function useCurriculum(cohortId: string) {
     setWeeks([]);
   };
 
-  const addWeek = async (weekNumber: number, title: string, objectives: string) => {
+  const addWeek = async (weekNumber: number, title: string, objectives: string, startDate?: string) => {
     if (!curriculum) throw new Error('No curriculum found');
     const { error } = await supabase.from('curriculum_weeks').insert({
       curriculum_id: curriculum.id,
       week_number: weekNumber,
       title,
       objectives: objectives || null,
+      start_date: startDate || null,
     });
     if (error) throw error;
     await fetchCurriculum();
@@ -94,7 +95,7 @@ export function useCurriculum(cohortId: string) {
 
   const updateWeek = async (
     weekId: string,
-    payload: { week_number?: number; title?: string; objectives?: string }
+    payload: { week_number?: number; title?: string; objectives?: string; start_date?: string | null }
   ) => {
     const { error } = await supabase
       .from('curriculum_weeks')

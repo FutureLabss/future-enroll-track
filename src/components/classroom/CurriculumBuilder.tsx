@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { supabase } from '@/lib/supabase';
 import {
   Plus, Book, LayoutList, Loader2, Pencil, Trash2,
-  FileText, Video, Link2, File, ExternalLink, Upload, X, Copy,
+  FileText, Video, Link2, File, ExternalLink, Upload, X, Copy, CalendarDays,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -86,8 +86,8 @@ export function CurriculumBuilder({
 
   const [initTitle, setInitTitle] = useState('');
   const [editCurriculumForm, setEditCurriculumForm] = useState({ title: '', description: '' });
-  const [weekForm, setWeekForm] = useState({ number: '', title: '', objectives: '' });
-  const [editWeekForm, setEditWeekForm] = useState({ number: '', title: '', objectives: '' });
+  const [weekForm, setWeekForm] = useState({ number: '', title: '', objectives: '', start_date: '' });
+  const [editWeekForm, setEditWeekForm] = useState({ number: '', title: '', objectives: '', start_date: '' });
   const [lessonForm, setLessonForm] = useState({ title: '', objectives: '', order: '' });
   const [editForm, setEditForm] = useState({ title: '', objectives: '', order: '' });
   const [matForm, setMatForm] = useState({ type: 'pdf', title: '', url: '' });
@@ -123,8 +123,8 @@ export function CurriculumBuilder({
 
   const handleAddWeek = () => run(async () => {
     if (!weekForm.number || !weekForm.title) throw new Error('Week number and title are required');
-    await addWeek(parseInt(weekForm.number), weekForm.title, weekForm.objectives);
-    setWeekForm({ number: '', title: '', objectives: '' });
+    await addWeek(parseInt(weekForm.number), weekForm.title, weekForm.objectives, weekForm.start_date || undefined);
+    setWeekForm({ number: '', title: '', objectives: '', start_date: '' });
   }, () => setWeekOpen(false));
 
   const handleEditWeek = () => run(async () => {
@@ -133,6 +133,7 @@ export function CurriculumBuilder({
       week_number: parseInt(editWeekForm.number) || editWeekModal.week.week_number,
       title: editWeekForm.title,
       objectives: editWeekForm.objectives || null,
+      start_date: editWeekForm.start_date || null,
     });
   }, () => setEditWeekModal({ open: false }));
 
@@ -142,7 +143,7 @@ export function CurriculumBuilder({
   };
 
   const openEditWeek = (week: any) => {
-    setEditWeekForm({ number: String(week.week_number), title: week.title, objectives: week.objectives || '' });
+    setEditWeekForm({ number: String(week.week_number), title: week.title, objectives: week.objectives || '', start_date: week.start_date || '' });
     setEditWeekModal({ open: true, week });
   };
 
@@ -285,7 +286,15 @@ export function CurriculumBuilder({
         <div key={w.id} className="glass-card rounded-2xl p-5 border border-border">
           <div className="flex items-start justify-between mb-4 gap-2">
             <div className="flex-1 min-w-0">
-              <h4 className="font-semibold">Week {w.week_number}: {w.title}</h4>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="font-semibold">Week {w.week_number}: {w.title}</h4>
+                {w.start_date && (
+                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                    <CalendarDays className="h-3 w-3" />
+                    {new Date(w.start_date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </span>
+                )}
+              </div>
               {w.objectives && <p className="text-sm text-muted-foreground mt-0.5">{w.objectives}</p>}
             </div>
             <div className="flex items-center gap-1 flex-shrink-0">
@@ -387,7 +396,10 @@ export function CurriculumBuilder({
         <DialogContent>
           <DialogHeader><DialogTitle>Add Week / Module</DialogTitle></DialogHeader>
           <div className="space-y-3 mt-2">
-            <div><Label>Week Number *</Label><Input type="number" value={weekForm.number} onChange={e => setWeekForm({ ...weekForm, number: e.target.value })} className="mt-1.5" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Week Number *</Label><Input type="number" value={weekForm.number} onChange={e => setWeekForm({ ...weekForm, number: e.target.value })} className="mt-1.5" /></div>
+              <div><Label>Start Date</Label><Input type="date" value={weekForm.start_date} onChange={e => setWeekForm({ ...weekForm, start_date: e.target.value })} className="mt-1.5" /></div>
+            </div>
             <div><Label>Title *</Label><Input value={weekForm.title} onChange={e => setWeekForm({ ...weekForm, title: e.target.value })} className="mt-1.5" placeholder="e.g. Frontend Basics" /></div>
             <div><Label>Objectives</Label><Textarea value={weekForm.objectives} onChange={e => setWeekForm({ ...weekForm, objectives: e.target.value })} className="mt-1.5" rows={2} /></div>
             <Button onClick={handleAddWeek} disabled={saving} className="w-full">
@@ -402,7 +414,10 @@ export function CurriculumBuilder({
         <DialogContent>
           <DialogHeader><DialogTitle>Edit Week</DialogTitle></DialogHeader>
           <div className="space-y-3 mt-2">
-            <div><Label>Week Number *</Label><Input type="number" value={editWeekForm.number} onChange={e => setEditWeekForm({ ...editWeekForm, number: e.target.value })} className="mt-1.5" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Week Number *</Label><Input type="number" value={editWeekForm.number} onChange={e => setEditWeekForm({ ...editWeekForm, number: e.target.value })} className="mt-1.5" /></div>
+              <div><Label>Start Date</Label><Input type="date" value={editWeekForm.start_date} onChange={e => setEditWeekForm({ ...editWeekForm, start_date: e.target.value })} className="mt-1.5" /></div>
+            </div>
             <div><Label>Title *</Label><Input value={editWeekForm.title} onChange={e => setEditWeekForm({ ...editWeekForm, title: e.target.value })} className="mt-1.5" /></div>
             <div><Label>Objectives</Label><Textarea value={editWeekForm.objectives} onChange={e => setEditWeekForm({ ...editWeekForm, objectives: e.target.value })} className="mt-1.5" rows={2} /></div>
             <Button onClick={handleEditWeek} disabled={saving} className="w-full">

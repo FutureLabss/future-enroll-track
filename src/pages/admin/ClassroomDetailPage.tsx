@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { DataTable } from '@/components/shared/DataTable';
 import { CurriculumTreeV2 } from '@/components/classroom/CurriculumTreeV2';
+import { useCurriculumV2 } from '@/hooks/useCurriculumV2';
 import { toast } from 'sonner';
 import {
   Users, BookOpen, Calendar, ClipboardList, BarChart2, UserPlus, Loader2,
@@ -34,11 +35,17 @@ const STATUS_COLOURS: Record<string, string> = {
 
 function CohortModal({ classroomId, programId, existing, onClose, onSaved }: any) {
   const { createCohort, updateCohort } = useClassroomCohorts(classroomId);
+  const { curricula } = useCurriculumV2(classroomId);
+  const allTracks = curricula.flatMap(c => c.tracks);
+  const allModules = allTracks.flatMap(t => t.modules);
+
   const [form, setForm] = useState({
     cohort_label: existing?.cohort_label || '',
     start_date: existing?.start_date || '',
     end_date: existing?.end_date || '',
     status: existing?.status || 'upcoming',
+    scope_type: (existing?.scope_type || '') as '' | 'curriculum' | 'track' | 'module',
+    scope_id: existing?.scope_id || '',
   });
   const [saving, setSaving] = useState(false);
 
@@ -46,12 +53,13 @@ function CohortModal({ classroomId, programId, existing, onClose, onSaved }: any
     if (!form.cohort_label.trim()) { toast.error('Cohort label is required'); return; }
     setSaving(true);
     try {
+      const payload = { ...form, scope_type: form.scope_type || null, scope_id: form.scope_id || null };
       if (existing) {
-        await updateCohort(existing.id, form);
+        await updateCohort(existing.id, payload);
       } else {
         const { error: createErr } = await supabase
           .from('cohorts')
-          .insert({ ...form, program_id: programId, classroom_id: classroomId });
+          .insert({ ...payload, program_id: programId, classroom_id: classroomId });
         if (createErr) throw createErr;
       }
       toast.success(existing ? 'Cohort updated' : 'Cohort created');
@@ -80,6 +88,44 @@ function CohortModal({ classroomId, programId, existing, onClose, onSaved }: any
           </SelectContent>
         </Select>
       </div>
+      <div>
+        <Label>Scope Type</Label>
+        <Select value={form.scope_type} onValueChange={v => setForm({ ...form, scope_type: v as any, scope_id: '' })}>
+          <SelectTrigger className="mt-1.5"><SelectValue placeholder="Entire classroom (no scope)" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="curriculum">Curriculum</SelectItem>
+            <SelectItem value="track">Track</SelectItem>
+            <SelectItem value="module">Module</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      {form.scope_type === 'curriculum' && curricula.length > 0 && (
+        <div>
+          <Label>Curriculum</Label>
+          <Select value={form.scope_id} onValueChange={v => setForm({ ...form, scope_id: v })}>
+            <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select curriculum" /></SelectTrigger>
+            <SelectContent>{curricula.map(c => <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+      )}
+      {form.scope_type === 'track' && allTracks.length > 0 && (
+        <div>
+          <Label>Track</Label>
+          <Select value={form.scope_id} onValueChange={v => setForm({ ...form, scope_id: v })}>
+            <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select track" /></SelectTrigger>
+            <SelectContent>{allTracks.map(t => <SelectItem key={t.id} value={t.id}>{t.title}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+      )}
+      {form.scope_type === 'module' && allModules.length > 0 && (
+        <div>
+          <Label>Module</Label>
+          <Select value={form.scope_id} onValueChange={v => setForm({ ...form, scope_id: v })}>
+            <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select module" /></SelectTrigger>
+            <SelectContent>{allModules.map(m => <SelectItem key={m.id} value={m.id}>{m.title}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+      )}
       <Button onClick={handleSave} disabled={saving} className="w-full">
         {saving ? 'Saving...' : existing ? 'Update Cohort' : 'Create Cohort'}
       </Button>
@@ -579,6 +625,9 @@ export default function ClassroomDetailPage() {
                           {' – '}
                           {c.end_date ? new Date(c.end_date).toLocaleDateString() : '—'}
                         </p>
+                        {c.scope_type && (
+                          <p className="text-xs text-primary/70 mt-0.5 capitalize">Scope: {c.scope_type}</p>
+                        )}
                       </div>
                       <Dialog
                         open={cohortModal.open && cohortModal.existing?.id === c.id}

@@ -15,7 +15,7 @@ export default function CohortsPage() {
   const [programs, setPrograms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ cohort_label: '', program_id: '', start_date: '', end_date: '' });
+  const [form, setForm] = useState({ cohort_label: '', program_id: '', start_date: '', end_date: '', scope_type: '' });
 
   const fetch = async () => {
     const { data } = await supabase.from('cohorts').select('*, programs(program_name)').order('created_at', { ascending: false });
@@ -35,17 +35,19 @@ export default function CohortsPage() {
       program_id: form.program_id,
       start_date: form.start_date || null,
       end_date: form.end_date || null,
+      scope_type: form.scope_type || null,
     }).select('id').single();
     if (error) { toast.error(error.message); return; }
     toast.success('Cohort created');
     setOpen(false);
-    setForm({ cohort_label: '', program_id: '', start_date: '', end_date: '' });
+    setForm({ cohort_label: '', program_id: '', start_date: '', end_date: '', scope_type: '' });
     fetch();
   };
 
   const columns = [
     { key: 'cohort_label', header: 'Cohort' },
     { key: 'program', header: 'Program', render: (r: any) => r.programs?.program_name || '—' },
+    { key: 'scope_type', header: 'Scope', render: (r: any) => r.scope_type ? <span className="capitalize text-primary/80">{r.scope_type}</span> : <span className="text-muted-foreground text-xs">—</span> },
     { key: 'start_date', header: 'Start', render: (r: any) => r.start_date ? new Date(r.start_date).toLocaleDateString() : '—' },
     { key: 'end_date', header: 'End', render: (r: any) => r.end_date ? new Date(r.end_date).toLocaleDateString() : '—' },
   ];
@@ -72,6 +74,17 @@ export default function CohortsPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div><Label>Start Date</Label><Input type="date" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} className="mt-1.5" /></div>
                   <div><Label>End Date</Label><Input type="date" value={form.end_date} onChange={e => setForm({ ...form, end_date: e.target.value })} className="mt-1.5" /></div>
+                </div>
+                <div>
+                  <Label>Scope Type</Label>
+                  <Select value={form.scope_type} onValueChange={v => setForm({ ...form, scope_type: v })}>
+                    <SelectTrigger className="mt-1.5"><SelectValue placeholder="Entire classroom (no scope)" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="curriculum">Curriculum</SelectItem>
+                      <SelectItem value="track">Track</SelectItem>
+                      <SelectItem value="module">Module</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <Button onClick={handleCreate} className="w-full">Create Cohort</Button>
               </div>

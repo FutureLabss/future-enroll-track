@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useCurriculumV2, CurriculumV2, TrackV2, ModuleV2, UnitV2, LessonV2 } from '@/hooks/useCurriculumV2';
+import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -112,6 +113,30 @@ function UnitSection({ unit, hook }: { unit: UnitV2; hook: ReturnType<typeof use
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [addLesson, setAddLesson] = useState(false);
+  const [lessons, setLessons] = useState<LessonV2[]>([]);
+  const [lessonsLoaded, setLessonsLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!open || lessonsLoaded) return;
+    supabase
+      .from('lessons')
+      .select('*')
+      .eq('unit_id', unit.id)
+      .order('order_index')
+      .then(({ data }) => {
+        setLessons((data as LessonV2[]) || []);
+        setLessonsLoaded(true);
+      });
+  }, [open, lessonsLoaded, unit.id]);
+
+  const refreshLessons = () => {
+    supabase
+      .from('lessons')
+      .select('*')
+      .eq('unit_id', unit.id)
+      .order('order_index')
+      .then(({ data }) => setLessons((data as LessonV2[]) || []));
+  };
 
   return (
     <div className="border border-border/60 rounded-lg overflow-hidden">
@@ -128,7 +153,7 @@ function UnitSection({ unit, hook }: { unit: UnitV2; hook: ReturnType<typeof use
         ) : (
           <>
             <span className="text-sm font-medium flex-1">{unit.title}</span>
-            <span className="text-xs text-muted-foreground mr-2">{unit.lessons.length} lesson{unit.lessons.length !== 1 ? 's' : ''}</span>
+            <span className="text-xs text-muted-foreground mr-2">{lessons.length} lesson{lessons.length !== 1 ? 's' : ''}</span>
             <div className="flex gap-0.5" onClick={e => e.stopPropagation()}>
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setAddLesson(true)} title="Add lesson"><Plus className="h-3 w-3" /></Button>
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditing(true)}><Pencil className="h-3 w-3" /></Button>
@@ -142,13 +167,13 @@ function UnitSection({ unit, hook }: { unit: UnitV2; hook: ReturnType<typeof use
       </div>
       {open && (
         <div className="px-3 py-2 space-y-0.5">
-          {unit.lessons.length === 0 ? (
+          {lessons.length === 0 ? (
             <p className="text-xs text-muted-foreground py-1 pl-5">No lessons yet.</p>
           ) : (
-            unit.lessons.map(l => (
+            lessons.map(l => (
               <LessonRow key={l.id} lesson={l}
-                onUpdate={p => hook.updateLesson(l.id, p)}
-                onDelete={() => hook.deleteLesson(l.id)} />
+                onUpdate={async p => { await hook.updateLesson(l.id, p); refreshLessons(); }}
+                onDelete={async () => { await hook.deleteLesson(l.id); refreshLessons(); }} />
             ))
           )}
           <Button variant="ghost" size="sm" className="text-xs h-6 mt-1 text-muted-foreground" onClick={() => setAddLesson(true)}>
@@ -159,7 +184,7 @@ function UnitSection({ unit, hook }: { unit: UnitV2; hook: ReturnType<typeof use
       <AddDialog
         open={addLesson} title={`Add lesson to "${unit.title}"`} onClose={() => setAddLesson(false)}
         showContent
-        onAdd={(title, _desc, content) => hook.addLesson(unit.id, title, { content })}
+        onAdd={async (title, _desc, content) => { await hook.addLesson(unit.id, title, { content }); refreshLessons(); }}
       />
     </div>
   );
@@ -279,7 +304,7 @@ function TrackSection({ track, hook }: { track: TrackV2; hook: ReturnType<typeof
 }
 
 // ── Curriculum panel ──────────────────────────────────────────────────────────
-function CurriculumPanel({ curriculum, hook }: { curriculum: CurriculumV2; hook: ReturnType<typeof useCurriculumV2> }) {
+function CurriculumPanel({ curriculum, hook, onDeleted }: { curriculum: CurriculumV2; hook: ReturnType<typeof useCurriculumV2>; onDeleted: () => void }) {
   const [addTrack, setAddTrack] = useState(false);
   const [editing, setEditing] = useState(false);
 
@@ -297,7 +322,10 @@ function CurriculumPanel({ curriculum, hook }: { curriculum: CurriculumV2; hook:
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditing(true)}><Pencil className="h-4 w-4" /></Button>
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={async () => {
               if (!confirm(`Delete curriculum "${curriculum.title}" and all its content?`)) return;
-              try { await hook.deleteCurriculum(curriculum.id); } catch (e: any) { toast.error(e.message); }
+              try {
+                await hook.deleteCurriculum(curriculum.id);
+                onDeleted();
+              } catch (e: any) { toast.error(e.message); }
             }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
           </>
         )}
@@ -343,6 +371,15 @@ export function CurriculumTreeV2({ classroomId }: { classroomId: string }) {
     );
   }
 
+  if (hook.fetchError) {
+    return (
+      <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
+        <p className="font-semibold mb-1">Failed to load curriculum</p>
+        <p className="font-mono text-xs opacity-80">{hook.fetchError}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex gap-6 min-h-[400px]">
       {/* Sidebar: curriculum list */}
@@ -376,7 +413,8 @@ export function CurriculumTreeV2({ classroomId }: { classroomId: string }) {
           open={addCurriculum} title="Create curriculum" onClose={() => setAddCurriculum(false)}
           showDescription
           onAdd={async (title, description) => {
-            await hook.createCurriculum(title, description);
+            const newId = await hook.createCurriculum(title, description);
+            setSelectedId(newId);
             toast.success('Curriculum created');
           }}
         />
@@ -385,7 +423,7 @@ export function CurriculumTreeV2({ classroomId }: { classroomId: string }) {
       {/* Main: selected curriculum tree */}
       <div className="flex-1 min-w-0">
         {selected ? (
-          <CurriculumPanel key={selected.id} curriculum={selected} hook={hook} />
+          <CurriculumPanel key={selected.id} curriculum={selected} hook={hook} onDeleted={() => setSelectedId(null)} />
         ) : (
           <div className="text-center py-16 text-muted-foreground">
             <BookOpen className="h-10 w-10 mx-auto mb-3 opacity-20" />

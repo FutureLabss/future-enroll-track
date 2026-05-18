@@ -12,24 +12,33 @@ import { Badge } from '@/components/ui/badge';
 export default function EnrollmentsPage() {
   const navigate = useNavigate();
   const [enrollments, setEnrollments] = useState<any[]>([]);
+  const [programs, setPrograms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const [paymentFilter, setPaymentFilter] = useState('all');
+  const [programFilter, setProgramFilter] = useState('all');
   const [groupByPayment, setGroupByPayment] = useState(false);
 
   useEffect(() => {
+    supabase.from('programs').select('id, program_name').eq('active', true).order('program_name')
+      .then(({ data }) => setPrograms(data || []));
+  }, []);
+
+  useEffect(() => {
     const fetchEnrollments = async () => {
+      setLoading(true);
       let query = supabase.from('enrollments')
         .select('*, programs(program_name), cohorts(cohort_label), organizations(organization_name)')
         .order('first_payment_date', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false });
       if (statusFilter !== 'all') query = query.eq('enrollment_status', statusFilter);
+      if (programFilter !== 'all') query = query.eq('program_id', programFilter);
       const { data } = await query;
       setEnrollments(data || []);
       setLoading(false);
     };
     fetchEnrollments();
-  }, [statusFilter]);
+  }, [statusFilter, programFilter]);
 
   const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
 
@@ -123,6 +132,14 @@ export default function EnrollmentsPage() {
             <SelectItem value="overdue">Overdue</SelectItem>
             <SelectItem value="completed">Completed</SelectItem>
             <SelectItem value="cancelled">Cancelled</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={programFilter} onValueChange={setProgramFilter}>
+          <SelectTrigger className="w-48"><SelectValue placeholder="All Programs" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Programs</SelectItem>
+            {programs.map(p => <SelectItem key={p.id} value={p.id}>{p.program_name}</SelectItem>)}
           </SelectContent>
         </Select>
 

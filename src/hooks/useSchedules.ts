@@ -6,7 +6,9 @@ export interface Schedule {
   classroom_id: string;
   cohort_id: string | null;
   lesson_id: string | null;
+  module_id: string | null;
   instructor_id: string | null;
+  title: string | null;
   scheduled_date: string;
   start_time: string;
   end_time: string;
@@ -15,6 +17,7 @@ export interface Schedule {
   status: 'scheduled' | 'completed' | 'cancelled';
   created_at: string;
   lessons?: { title: string; units?: { title: string } } | null;
+  modules?: { title: string } | null;
   cohorts?: { cohort_label: string } | null;
   staff?: { full_name: string } | null;
 }
@@ -28,7 +31,7 @@ export function useSchedules(classroomId: string) {
     setLoading(true);
     const { data } = await supabase
       .from('schedules')
-      .select('*, lessons(title, units(title)), cohorts(cohort_label), staff:instructor_id(full_name)')
+      .select('*, lessons(title, units(title)), modules(title), cohorts(cohort_label), staff:instructor_id(full_name)')
       .eq('classroom_id', classroomId)
       .order('scheduled_date', { ascending: true })
       .order('start_time', { ascending: true });
@@ -39,7 +42,9 @@ export function useSchedules(classroomId: string) {
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const createSchedule = async (payload: {
+    title?: string | null;
     lesson_id?: string | null;
+    module_id?: string | null;
     cohort_id?: string | null;
     instructor_id?: string | null;
     scheduled_date: string;

@@ -6,6 +6,7 @@ import { useAttendance, useAttendanceSession } from '@/hooks/useAttendance';
 import { useAssignments, useSubmissions } from '@/hooks/useAssignments';
 import { useClassroomCohorts } from '@/hooks/useClassroom';
 import { useSchedules } from '@/hooks/useSchedules';
+import { useCurriculumV2 } from '@/hooks/useCurriculumV2';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -170,6 +171,9 @@ export default function ClassroomWorkspacePage() {
   const { assignments, createAssignment, publishAssignment } = useAssignments(id!);
   const { cohorts, refetch: refetchCohorts, createCohort, updateCohort } = useClassroomCohorts(id!);
   const { schedules, createSchedule, updateSchedule, deleteSchedule } = useSchedules(id!);
+  const { curricula } = useCurriculumV2(id!);
+  const allTracks = curricula.flatMap(c => c.tracks);
+  const allModules = allTracks.flatMap(t => t.modules);
 
   // Attendance state
   const [sessionForm, setSessionForm] = useState({ schedule_id: '', cohort_id: '', duration: '30' });
@@ -183,7 +187,7 @@ export default function ClassroomWorkspacePage() {
   // Schedule state
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleEditModal, setScheduleEditModal] = useState<{ open: boolean; schedule?: any }>({ open: false });
-  const [scheduleForm, setScheduleForm] = useState({ cohort_id: '', instructor_id: '', scheduled_date: '', start_time: '09:00', end_time: '11:00', location: '', meeting_link: '' });
+  const [scheduleForm, setScheduleForm] = useState({ title: '', module_id: '', cohort_id: '', instructor_id: '', scheduled_date: '', start_time: '09:00', end_time: '11:00', location: '', meeting_link: '' });
   const [savingSchedule, setSavingSchedule] = useState(false);
 
   // Assignment state
@@ -195,7 +199,7 @@ export default function ClassroomWorkspacePage() {
   // Cohort state
   const [cohortOpen, setCohortOpen] = useState(false);
   const [cohortEditModal, setCohortEditModal] = useState<{ open: boolean; cohort?: any }>({ open: false });
-  const [cohortForm, setCohortForm] = useState({ cohort_label: '', start_date: '', end_date: '', status: 'upcoming' });
+  const [cohortForm, setCohortForm] = useState({ cohort_label: '', start_date: '', end_date: '', status: 'upcoming', scope_type: '' as '' | 'curriculum' | 'track' | 'module', scope_id: '' });
   const [savingCohort, setSavingCohort] = useState(false);
 
   // Cohort student management
@@ -249,7 +253,7 @@ export default function ClassroomWorkspacePage() {
   const handleStartAttendance = async () => {
     setGeneratingSession(true);
     try {
-      await generateSession(null, sessionForm.cohort_id || null, parseInt(sessionForm.duration));
+      await generateSession(null, sessionForm.cohort_id || null, parseInt(sessionForm.duration), sessionForm.schedule_id || null);
       setSessionOpen(false);
       toast.success('Attendance session started');
     } catch (e: any) {
@@ -285,6 +289,8 @@ export default function ClassroomWorkspacePage() {
     setSavingSchedule(true);
     try {
       await createSchedule({
+        title: scheduleForm.title || null,
+        module_id: scheduleForm.module_id || null,
         cohort_id: scheduleForm.cohort_id || null,
         instructor_id: scheduleForm.instructor_id || null,
         scheduled_date: scheduleForm.scheduled_date,
@@ -295,7 +301,7 @@ export default function ClassroomWorkspacePage() {
       });
       toast.success('Schedule added');
       setScheduleOpen(false);
-      setScheduleForm({ cohort_id: '', instructor_id: '', scheduled_date: '', start_time: '09:00', end_time: '11:00', location: '', meeting_link: '' });
+      setScheduleForm({ title: '', module_id: '', cohort_id: '', instructor_id: '', scheduled_date: '', start_time: '09:00', end_time: '11:00', location: '', meeting_link: '' });
     } catch (e: any) {
       toast.error(e.message);
     } finally {
@@ -332,10 +338,15 @@ export default function ClassroomWorkspacePage() {
     setSavingCohort(true);
     try {
       const cls = classroomData?.classrooms;
-      await createCohort({ ...cohortForm, program_id: cls?.program_id });
+      await createCohort({
+        ...cohortForm,
+        program_id: cls?.program_id,
+        scope_type: cohortForm.scope_type || null,
+        scope_id: cohortForm.scope_id || null,
+      });
       toast.success('Cohort created');
       setCohortOpen(false);
-      setCohortForm({ cohort_label: '', start_date: '', end_date: '', status: 'upcoming' });
+      setCohortForm({ cohort_label: '', start_date: '', end_date: '', status: 'upcoming', scope_type: '', scope_id: '' });
     } catch (e: any) {
       toast.error(e.message);
     } finally {
@@ -399,7 +410,7 @@ export default function ClassroomWorkspacePage() {
 
   const scheduleColumns = [
     { key: 'date', header: 'Date', render: (r: any) => new Date(r.scheduled_date + 'T00:00:00').toLocaleDateString() },
-    { key: 'lesson', header: 'Lesson', render: (r: any) => r.lessons?.title || <span className="text-muted-foreground text-xs">No lesson linked</span> },
+    { key: 'title', header: 'Session', render: (r: any) => r.title || r.lessons?.title || r.modules?.title || <span className="text-muted-foreground text-xs italic">Untitled</span> },
     { key: 'time', header: 'Time', render: (r: any) => `${r.start_time} – ${r.end_time}` },
     { key: 'instructor', header: 'Instructor', render: (r: any) => r.staff?.full_name || '—' },
     { key: 'cohort', header: 'Cohort', render: (r: any) => r.cohorts?.cohort_label || 'All' },
@@ -491,6 +502,44 @@ export default function ClassroomWorkspacePage() {
                         </SelectContent>
                       </Select>
                     </div>
+                    <div>
+                      <Label>Scope Type</Label>
+                      <Select value={cohortForm.scope_type} onValueChange={v => setCohortForm({ ...cohortForm, scope_type: v as any, scope_id: '' })}>
+                        <SelectTrigger className="mt-1.5"><SelectValue placeholder="Entire classroom (no scope)" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="curriculum">Curriculum</SelectItem>
+                          <SelectItem value="track">Track</SelectItem>
+                          <SelectItem value="module">Module</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {cohortForm.scope_type === 'curriculum' && curricula.length > 0 && (
+                      <div>
+                        <Label>Curriculum</Label>
+                        <Select value={cohortForm.scope_id} onValueChange={v => setCohortForm({ ...cohortForm, scope_id: v })}>
+                          <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select curriculum" /></SelectTrigger>
+                          <SelectContent>{curricula.map(c => <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    {cohortForm.scope_type === 'track' && allTracks.length > 0 && (
+                      <div>
+                        <Label>Track</Label>
+                        <Select value={cohortForm.scope_id} onValueChange={v => setCohortForm({ ...cohortForm, scope_id: v })}>
+                          <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select track" /></SelectTrigger>
+                          <SelectContent>{allTracks.map(t => <SelectItem key={t.id} value={t.id}>{t.title}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    {cohortForm.scope_type === 'module' && allModules.length > 0 && (
+                      <div>
+                        <Label>Module</Label>
+                        <Select value={cohortForm.scope_id} onValueChange={v => setCohortForm({ ...cohortForm, scope_id: v })}>
+                          <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select module" /></SelectTrigger>
+                          <SelectContent>{allModules.map(m => <SelectItem key={m.id} value={m.id}>{m.title}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                    )}
                     <Button onClick={handleCreateCohort} disabled={savingCohort} className="w-full">{savingCohort ? 'Creating...' : 'Create Cohort'}</Button>
                   </div>
                 </DialogContent>
@@ -511,6 +560,11 @@ export default function ClassroomWorkspacePage() {
                           <p className="text-xs text-muted-foreground">
                             {c.start_date ? new Date(c.start_date).toLocaleDateString() : '—'} – {c.end_date ? new Date(c.end_date).toLocaleDateString() : '—'}
                           </p>
+                          {c.scope_type && (
+                            <p className="text-xs text-primary/70 mt-0.5 capitalize">
+                              Scope: {c.scope_type}
+                            </p>
+                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           <Button size="sm" variant="outline" onClick={() => openCohortStudents(c)}>
@@ -519,7 +573,7 @@ export default function ClassroomWorkspacePage() {
                           <Dialog
                             open={cohortEditModal.open && cohortEditModal.cohort?.id === c.id}
                             onOpenChange={o => {
-                              if (o) { setCohortForm({ cohort_label: c.cohort_label, start_date: c.start_date || '', end_date: c.end_date || '', status: c.status }); }
+                              if (o) { setCohortForm({ cohort_label: c.cohort_label, start_date: c.start_date || '', end_date: c.end_date || '', status: c.status, scope_type: c.scope_type || '', scope_id: c.scope_id || '' }); }
                               setCohortEditModal(o ? { open: true, cohort: c } : { open: false });
                             }}
                           >
@@ -543,6 +597,44 @@ export default function ClassroomWorkspacePage() {
                                     </SelectContent>
                                   </Select>
                                 </div>
+                                <div>
+                                  <Label>Scope Type</Label>
+                                  <Select value={cohortForm.scope_type} onValueChange={v => setCohortForm({ ...cohortForm, scope_type: v as any, scope_id: '' })}>
+                                    <SelectTrigger className="mt-1.5"><SelectValue placeholder="Entire classroom (no scope)" /></SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="curriculum">Curriculum</SelectItem>
+                                      <SelectItem value="track">Track</SelectItem>
+                                      <SelectItem value="module">Module</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                {cohortForm.scope_type === 'curriculum' && curricula.length > 0 && (
+                                  <div>
+                                    <Label>Curriculum</Label>
+                                    <Select value={cohortForm.scope_id} onValueChange={v => setCohortForm({ ...cohortForm, scope_id: v })}>
+                                      <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select curriculum" /></SelectTrigger>
+                                      <SelectContent>{curricula.map(c => <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>)}</SelectContent>
+                                    </Select>
+                                  </div>
+                                )}
+                                {cohortForm.scope_type === 'track' && allTracks.length > 0 && (
+                                  <div>
+                                    <Label>Track</Label>
+                                    <Select value={cohortForm.scope_id} onValueChange={v => setCohortForm({ ...cohortForm, scope_id: v })}>
+                                      <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select track" /></SelectTrigger>
+                                      <SelectContent>{allTracks.map(t => <SelectItem key={t.id} value={t.id}>{t.title}</SelectItem>)}</SelectContent>
+                                    </Select>
+                                  </div>
+                                )}
+                                {cohortForm.scope_type === 'module' && allModules.length > 0 && (
+                                  <div>
+                                    <Label>Module</Label>
+                                    <Select value={cohortForm.scope_id} onValueChange={v => setCohortForm({ ...cohortForm, scope_id: v })}>
+                                      <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select module" /></SelectTrigger>
+                                      <SelectContent>{allModules.map(m => <SelectItem key={m.id} value={m.id}>{m.title}</SelectItem>)}</SelectContent>
+                                    </Select>
+                                  </div>
+                                )}
                                 <Button onClick={handleUpdateCohort} disabled={savingCohort} className="w-full">{savingCohort ? 'Saving...' : 'Update Cohort'}</Button>
                               </div>
                             </DialogContent>
@@ -574,6 +666,16 @@ export default function ClassroomWorkspacePage() {
               <DialogContent className="max-w-lg">
                 <DialogHeader><DialogTitle>Schedule a Session</DialogTitle></DialogHeader>
                 <div className="space-y-3 mt-2">
+                  <div><Label>Session Title</Label><Input value={scheduleForm.title} onChange={e => setScheduleForm({ ...scheduleForm, title: e.target.value })} className="mt-1.5" placeholder="e.g. Intro to Variables" /></div>
+                  {allModules.length > 0 && (
+                    <div>
+                      <Label>Module (optional)</Label>
+                      <Select value={scheduleForm.module_id} onValueChange={v => setScheduleForm({ ...scheduleForm, module_id: v })}>
+                        <SelectTrigger className="mt-1.5"><SelectValue placeholder="Link to a module" /></SelectTrigger>
+                        <SelectContent>{allModules.map(m => <SelectItem key={m.id} value={m.id}>{m.title}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>Cohort</Label>

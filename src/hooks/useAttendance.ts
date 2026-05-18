@@ -25,13 +25,15 @@ export function useAttendance(classroomId: string) {
   const generateSession = async (
     lessonId: string | null,
     cohortId: string | null,
-    durationMins: number
+    durationMins: number,
+    scheduleId?: string | null
   ) => {
     const { data, error } = await supabase.rpc('generate_attendance_session', {
       p_classroom_id: classroomId,
       p_lesson_id: lessonId,
       p_cohort_id: cohortId,
       p_duration_mins: durationMins,
+      p_schedule_id: scheduleId ?? null,
     });
     if (error) throw error;
     await fetchSessions();

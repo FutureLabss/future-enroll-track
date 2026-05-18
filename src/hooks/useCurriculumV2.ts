@@ -51,59 +51,69 @@ export interface CurriculumV2 {
 export function useCurriculumV2(classroomId: string) {
   const [curricula, setCurricula] = useState<CurriculumV2[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const fetchAll = useCallback(async () => {
     if (!classroomId) { setLoading(false); return; }
     setLoading(true);
-    const { data } = await supabase
-      .from('curricula')
-      .select(`
-        *,
-        tracks(
+    try {
+      const { data, error } = await supabase
+        .from('curricula')
+        .select(`
           *,
-          modules(
+          tracks(
             *,
-            units(
+            modules(
               *,
-              lessons(*)
+              units(*)
             )
           )
-        )
-      `)
-      .eq('classroom_id', classroomId)
-      .order('created_at', { ascending: true });
+        `)
+        .eq('classroom_id', classroomId)
+        .order('created_at', { ascending: true });
 
-    const sorted = (data || []).map((c: any) => ({
-      ...c,
-      tracks: (c.tracks || [])
-        .sort((a: any, b: any) => a.order_index - b.order_index)
-        .map((t: any) => ({
-          ...t,
-          modules: (t.modules || [])
-            .sort((a: any, b: any) => a.order_index - b.order_index)
-            .map((m: any) => ({
-              ...m,
-              units: (m.units || [])
-                .sort((a: any, b: any) => a.order_index - b.order_index)
-                .map((u: any) => ({
-                  ...u,
-                  lessons: (u.lessons || []).sort((a: any, b: any) => a.order_index - b.order_index),
-                })),
-            })),
-        })),
-    }));
+      if (error) {
+        console.error('useCurriculumV2 fetchAll error:', error);
+        setFetchError(error.message);
+        return;
+      }
+      setFetchError(null);
 
-    setCurricula(sorted);
-    setLoading(false);
+      const sorted = (data || []).map((c: any) => ({
+        ...c,
+        tracks: (c.tracks || [])
+          .sort((a: any, b: any) => a.order_index - b.order_index)
+          .map((t: any) => ({
+            ...t,
+            modules: (t.modules || [])
+              .sort((a: any, b: any) => a.order_index - b.order_index)
+              .map((m: any) => ({
+                ...m,
+                units: (m.units || [])
+                  .sort((a: any, b: any) => a.order_index - b.order_index)
+                  .map((u: any) => ({ ...u, lessons: [] })),
+              })),
+          })),
+      }));
+
+      setCurricula(sorted);
+    } finally {
+      setLoading(false);
+    }
   }, [classroomId]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   // ── Curriculum CRUD ──────────────────────────────────────────────────────────
-  const createCurriculum = async (title: string, description?: string) => {
-    const { error } = await supabase.from('curricula').insert({ classroom_id: classroomId, title, description: description || null });
+  const createCurriculum = async (title: string, description?: string): Promise<string> => {
+    const { data, error } = await supabase
+      .from('curricula')
+      .insert({ classroom_id: classroomId, title, description: description || null })
+      .select('id')
+      .single();
     if (error) throw error;
     await fetchAll();
+    return data.id;
   };
 
   const updateCurriculum = async (id: string, patch: { title?: string; description?: string }) => {
@@ -209,6 +219,7 @@ export function useCurriculumV2(classroomId: string) {
   return {
     curricula,
     loading,
+    fetchError,
     refetch: fetchAll,
     createCurriculum,
     updateCurriculum,

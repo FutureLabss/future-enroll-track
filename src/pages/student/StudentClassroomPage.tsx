@@ -231,6 +231,7 @@ export default function StudentClassroomPage() {
   const { user } = useAuth();
   const [classroom, setClassroom] = useState<any>(null);
   const [cohortId, setCohortId] = useState('');
+  const [cohortInfo, setCohortInfo] = useState<{ cohort_label: string; scope_type?: string } | null>(null);
   const [lessons, setLessons] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showPast, setShowPast] = useState(false);
@@ -243,7 +244,7 @@ export default function StudentClassroomPage() {
     if (!id || !user) return;
     Promise.all([
       supabase.from('classrooms').select('*, programs(program_name)').eq('id', id).single(),
-      supabase.from('cohort_students').select('cohort_id').eq('student_id', user.id).limit(1).single(),
+      supabase.from('cohort_students').select('cohort_id, cohorts(cohort_label, scope_type)').eq('student_id', user.id).limit(1).single(),
       supabase.from('old_lessons')
         .select('*, cohorts(cohort_label)')
         .eq('classroom_id', id)
@@ -253,6 +254,7 @@ export default function StudentClassroomPage() {
     ]).then(([clsRes, cohortRes, lessonsRes]) => {
       setClassroom(clsRes.data);
       setCohortId(cohortRes.data?.cohort_id || '');
+      setCohortInfo((cohortRes.data as any)?.cohorts || null);
       setLessons(lessonsRes.data || []);
       setLoading(false);
     });
@@ -290,6 +292,16 @@ export default function StudentClassroomPage() {
     <div>
       <PageHeader title={classroom.name} description={classroom.programs?.program_name} />
 
+      {cohortInfo && (
+        <div className="mb-5 flex items-center gap-2 text-sm rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5">
+          <span className="text-muted-foreground">Your cohort:</span>
+          <span className="font-medium text-primary">{cohortInfo.cohort_label}</span>
+          {cohortInfo.scope_type && (
+            <Badge variant="outline" className="text-xs capitalize border-primary/30 text-primary/70">{cohortInfo.scope_type}</Badge>
+          )}
+        </div>
+      )}
+
       <Tabs defaultValue="schedule">
         <TabsList className="mb-6 flex-wrap h-auto gap-1">
           <TabsTrigger value="schedule"><Calendar className="h-4 w-4 mr-1.5" />Schedule</TabsTrigger>
@@ -311,7 +323,7 @@ export default function StudentClassroomPage() {
                   <div>
                     <div className="flex items-center gap-2">
                       {s.scheduled_date === today && <span className="text-xs font-semibold text-primary uppercase tracking-wide">Today</span>}
-                      <p className="font-semibold">{s.lessons?.title || 'Session'}</p>
+                      <p className="font-semibold">{s.title || s.lessons?.title || s.modules?.title || 'Session'}</p>
                     </div>
                     <p className="text-sm text-muted-foreground mt-0.5">
                       {new Date(s.scheduled_date + 'T00:00:00').toLocaleDateString('en-NG', { weekday: 'short', month: 'short', day: 'numeric' })}

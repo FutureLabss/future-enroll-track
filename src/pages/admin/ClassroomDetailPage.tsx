@@ -13,8 +13,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { DataTable } from '@/components/shared/DataTable';
-import { CurriculumBuilder } from '@/components/classroom/CurriculumBuilder';
-import { CurriculumMultiPicker } from '@/components/cohort/CurriculumMultiPicker';
+import { CurriculumTreeV2 } from '@/components/classroom/CurriculumTreeV2';
 import { toast } from 'sonner';
 import {
   Users, BookOpen, Calendar, ClipboardList, BarChart2, UserPlus, Loader2,
@@ -41,24 +40,7 @@ function CohortModal({ classroomId, programId, existing, onClose, onSaved }: any
     end_date: existing?.end_date || '',
     status: existing?.status || 'upcoming',
   });
-  const [selectedCurricula, setSelectedCurricula] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (!existing?.id) return;
-    supabase
-      .from('curriculums')
-      .select('id')
-      .eq('cohort_id', existing.id)
-      .then(({ data }) => setSelectedCurricula((data || []).map((c: any) => c.id)));
-  }, [existing?.id]);
-
-  const syncCurricula = async (cohortId: string, prevIds: string[]) => {
-    const toAdd = selectedCurricula.filter(id => !prevIds.includes(id));
-    const toRemove = prevIds.filter(id => !selectedCurricula.includes(id));
-    if (toAdd.length > 0) await supabase.from('curriculums').update({ cohort_id: cohortId }).in('id', toAdd);
-    if (toRemove.length > 0) await supabase.from('curriculums').update({ cohort_id: null }).in('id', toRemove);
-  };
 
   const handleSave = async () => {
     if (!form.cohort_label.trim()) { toast.error('Cohort label is required'); return; }
@@ -66,17 +48,11 @@ function CohortModal({ classroomId, programId, existing, onClose, onSaved }: any
     try {
       if (existing) {
         await updateCohort(existing.id, form);
-        const { data: prevData } = await supabase.from('curriculums').select('id').eq('cohort_id', existing.id);
-        await syncCurricula(existing.id, (prevData || []).map((c: any) => c.id));
       } else {
-        const { data: newCohort, error: createErr } = await supabase
+        const { error: createErr } = await supabase
           .from('cohorts')
-          .insert({ ...form, program_id: programId, classroom_id: classroomId })
-          .select('id').single();
+          .insert({ ...form, program_id: programId, classroom_id: classroomId });
         if (createErr) throw createErr;
-        if (newCohort && selectedCurricula.length > 0) {
-          await supabase.from('curriculums').update({ cohort_id: newCohort.id }).in('id', selectedCurricula);
-        }
       }
       toast.success(existing ? 'Cohort updated' : 'Cohort created');
       onSaved();
@@ -103,11 +79,6 @@ function CohortModal({ classroomId, programId, existing, onClose, onSaved }: any
             {COHORT_STATUSES.map(s => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}
           </SelectContent>
         </Select>
-      </div>
-      <div>
-        <Label>Curricula</Label>
-        <p className="text-xs text-muted-foreground mb-1.5 mt-0.5">Select one or more curricula to assign to this cohort.</p>
-        <CurriculumMultiPicker cohortId={existing?.id} selectedIds={selectedCurricula} onChange={setSelectedCurricula} />
       </div>
       <Button onClick={handleSave} disabled={saving} className="w-full">
         {saving ? 'Saving...' : existing ? 'Update Cohort' : 'Create Cohort'}
@@ -193,7 +164,6 @@ export default function ClassroomDetailPage() {
   const [students, setStudents] = useState<any[]>([]);
   const [lessons, setLessons] = useState<any[]>([]);
   const [staffRoster, setStaffRoster] = useState<any[]>([]);
-  const [curriculumCohortId, setCurriculumCohortId] = useState('');
 
   // Modals
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -646,27 +616,7 @@ export default function ClassroomDetailPage() {
 
         {/* CURRICULUM */}
         <TabsContent value="curriculum">
-          <div className="mb-5">
-            <Label className="text-sm font-medium">Select Cohort</Label>
-            <select
-              value={curriculumCohortId}
-              onChange={e => setCurriculumCohortId(e.target.value)}
-              className="mt-1.5 w-full max-w-xs rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value="">— choose a cohort —</option>
-              {cohorts.map((c: any) => (
-                <option key={c.id} value={c.id}>{c.cohort_label}</option>
-              ))}
-            </select>
-          </div>
-          {curriculumCohortId ? (
-            <CurriculumBuilder cohortId={curriculumCohortId} canEdit={true} cohorts={cohorts} />
-          ) : (
-            <div className="text-center py-16 border-2 border-dashed border-border rounded-2xl text-muted-foreground">
-              <LayoutList className="h-10 w-10 mx-auto mb-3 opacity-40" />
-              <p className="font-medium">Select a cohort above to view or build its curriculum</p>
-            </div>
-          )}
+          <CurriculumTreeV2 classroomId={id!} />
         </TabsContent>
 
         {/* STAFF */}

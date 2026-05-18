@@ -227,19 +227,28 @@ export default function ClassroomWorkspacePage() {
   }, [sessions]);
 
   const loadData = async () => {
-    const [csRes, studentsRes, lessonsRes, staffRes] = await Promise.all([
+    const [csRes, lessonsRes, staffRes] = await Promise.all([
       supabase.from('classroom_staff')
         .select('*, classrooms(*, programs(program_name)), classroom_permissions(*)')
         .eq('classroom_id', id).eq('user_id', user!.id).single(),
-      supabase.from('classroom_students').select('*, profiles:student_id(full_name, email)').eq('classroom_id', id),
       supabase.from('lessons').select('*, staff:tutor_id(full_name), cohorts(cohort_label)').eq('classroom_id', id).order('lesson_date', { ascending: false }),
       supabase.from('staff').select('id, full_name').eq('active', true),
     ]);
     setClassroomData(csRes.data);
     setPermissions(csRes.data?.classroom_permissions);
-    setStudents(studentsRes.data || []);
     setLessons(lessonsRes.data || []);
     setStaffList(staffRes.data || []);
+
+    const programId = csRes.data?.classrooms?.program_id;
+    if (programId) {
+      const { data: enrollments } = await supabase
+        .from('enrollments')
+        .select('id, full_name, email, user_id, enrollment_status, profiles:user_id(full_name, email)')
+        .eq('program_id', programId)
+        .in('enrollment_status', ['active', 'pending']);
+      setStudents(enrollments || []);
+    }
+
     setDataLoading(false);
   };
 
@@ -396,11 +405,11 @@ export default function ClassroomWorkspacePage() {
     const cohort = cohortStudentsModal.cohort;
     const { error } = await supabase.from('cohort_students').insert({
       cohort_id: cohort.id,
-      student_id: student.student_id,
-      enrollment_id: student.enrollment_id || null,
+      student_id: student.user_id,
+      enrollment_id: student.id || null,
     });
     if (error) { toast.error(error.message); return; }
-    toast.success(`${student.profiles?.full_name || 'Student'} added to cohort`);
+    toast.success(`${(student.profiles as any)?.full_name || student.full_name || 'Student'} added to cohort`);
     openCohortStudents(cohort);
   };
 
@@ -731,9 +740,15 @@ export default function ClassroomWorkspacePage() {
           <TabsContent value="students">
             <DataTable
               columns={[
-                { key: 'name', header: 'Student', render: (r: any) => r.profiles?.full_name || '—' },
-                { key: 'email', header: 'Email', render: (r: any) => r.profiles?.email || '—' },
-                { key: 'joined', header: 'Joined', render: (r: any) => new Date(r.joined_at).toLocaleDateString() },
+                { key: 'name', header: 'Student', render: (r: any) => (r.profiles as any)?.full_name || r.full_name || '—' },
+                { key: 'email', header: 'Email', render: (r: any) => (r.profiles as any)?.email || r.email || '—' },
+                { key: 'status', header: 'Status', render: (r: any) => (
+                  <Badge variant="outline" className={`capitalize ${STATUS_COLOURS[r.enrollment_status] || ''}`}>{r.enrollment_status}</Badge>
+                )},
+                { key: 'account', header: 'Account', render: (r: any) => r.user_id
+                  ? <Badge variant="outline" className="bg-success/10 text-success border-success/30">Active</Badge>
+                  : <Badge variant="outline" className="bg-muted text-muted-foreground">No account</Badge>
+                },
               ]}
               data={students}
               searchable
@@ -896,31 +911,34 @@ export default function ClassroomWorkspacePage() {
                 )}
               </div>
 
-              {/* Available classroom students not in cohort */}
+              {/* Available students with accounts not yet in cohort */}
               <div>
                 <p className="text-sm font-semibold mb-2 flex items-center gap-1.5">
                   <UserPlus className="h-4 w-4 text-primary" />
-                  Available from classroom pool
+                  Available to add
                 </p>
                 {(() => {
                   const memberIds = new Set(cohortMembers.map(m => m.student_id));
-                  const available = students.filter(s => !memberIds.has(s.student_id));
-                  const filtered = available.filter(s => {
+                  // Only students with accounts can join cohorts
+                  const available = students.filter((s: any) => s.user_id && !memberIds.has(s.user_id));
+                  const filtered = available.filter((s: any) => {
                     const q = cohortStudentSearch.toLowerCase();
-                    return !q || s.profiles?.full_name?.toLowerCase().includes(q) || s.profiles?.email?.toLowerCase().includes(q);
+                    const name = (s.profiles as any)?.full_name || s.full_name || '';
+                    const email = (s.profiles as any)?.email || s.email || '';
+                    return !q || name.toLowerCase().includes(q) || email.toLowerCase().includes(q);
                   });
                   if (filtered.length === 0) return (
                     <p className="text-sm text-muted-foreground py-3 text-center">
-                      {available.length === 0 ? 'All classroom students are already in this cohort' : 'No students match your search'}
+                      {available.length === 0 ? 'All students with accounts are already in this cohort' : 'No students match your search'}
                     </p>
                   );
                   return (
                     <div className="space-y-1.5">
-                      {filtered.map(s => (
-                        <div key={s.student_id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+                      {filtered.map((s: any) => (
+                        <div key={s.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
                           <div>
-                            <p className="text-sm font-medium">{s.profiles?.full_name || '—'}</p>
-                            <p className="text-xs text-muted-foreground">{s.profiles?.email}</p>
+                            <p className="text-sm font-medium">{(s.profiles as any)?.full_name || s.full_name || '—'}</p>
+                            <p className="text-xs text-muted-foreground">{(s.profiles as any)?.email || s.email}</p>
                           </div>
                           <Button
                             size="sm"

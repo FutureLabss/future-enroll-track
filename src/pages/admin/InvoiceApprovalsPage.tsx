@@ -72,13 +72,46 @@ export default function InvoiceApprovalsPage() {
               <Badge variant={r.status === 'pending' ? 'default' : r.status === 'approved' ? 'secondary' : 'destructive'}>{r.status}</Badge>
             </div>
           </CardHeader>
-          <CardContent className="text-sm space-y-2">
+          <CardContent className="text-sm space-y-3">
             {r.action === 'edit' && r.payload && (
-              <div className="bg-muted/40 rounded p-3 text-xs font-mono whitespace-pre-wrap break-all">
-                Total: ₦{Number(r.payload.total_amount || 0).toLocaleString()} · {r.payload.installments?.length || 0} installments
+              <div className="rounded-lg border border-border overflow-hidden">
+                <div className="bg-muted/50 px-3 py-2 flex justify-between text-xs font-medium">
+                  <span>Proposed Total</span>
+                  <span>₦{Number(r.payload.total_amount || 0).toLocaleString()}</span>
+                </div>
+                {r.payload.installments?.length > 0 && (
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-t border-border bg-muted/20">
+                        <th className="text-left px-3 py-1.5 font-medium text-muted-foreground">#</th>
+                        <th className="text-left px-3 py-1.5 font-medium text-muted-foreground">Due Date</th>
+                        <th className="text-right px-3 py-1.5 font-medium text-muted-foreground">Amount</th>
+                        <th className="text-left px-3 py-1.5 font-medium text-muted-foreground">Status</th>
+                        <th className="text-left px-3 py-1.5 font-medium text-muted-foreground">Paid At</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {r.payload.installments.map((inst: any, i: number) => (
+                        <tr key={i} className="border-t border-border">
+                          <td className="px-3 py-1.5 text-muted-foreground">{i + 1}</td>
+                          <td className="px-3 py-1.5">{inst.due_date ? new Date(inst.due_date).toLocaleDateString() : '—'}</td>
+                          <td className="px-3 py-1.5 text-right font-mono">₦{Number(inst.amount || 0).toLocaleString()}</td>
+                          <td className="px-3 py-1.5">
+                            <span className={`capitalize font-medium ${inst.status === 'paid' ? 'text-success' : 'text-muted-foreground'}`}>
+                              {inst.status}
+                            </span>
+                          </td>
+                          <td className="px-3 py-1.5 text-muted-foreground">
+                            {inst.paid_at ? new Date(inst.paid_at).toLocaleDateString() : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             )}
-            {r.reason && <p className="text-xs text-destructive">Reason: {r.reason}</p>}
+            {r.reason && <p className="text-xs text-destructive">Rejection reason: {r.reason}</p>}
             <p className="text-xs text-muted-foreground">Requested {new Date(r.created_at).toLocaleString()}</p>
             {r.status === 'pending' && (
               <div className="flex gap-2 pt-2">

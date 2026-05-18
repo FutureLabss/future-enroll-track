@@ -297,7 +297,7 @@ function TrackSection({ track, curriculumId, hook }: { track: TrackV2; curriculu
       <AddDialog
         open={addModule} title={`Add module to "${track.title}"`} onClose={() => setAddModule(false)}
         showDescription
-        onAdd={(title, description) => hook.addModule(track.id, title, description)}
+        onAdd={(title, description) => hook.addModule(track.id, curriculumId, title, description)}
       />
     </div>
   );
@@ -338,7 +338,7 @@ function CurriculumPanel({ curriculum, hook, onDeleted }: { curriculum: Curricul
         </div>
       ) : (
         <div className="space-y-4">
-          {curriculum.tracks.map(t => <TrackSection key={t.id} track={t} hook={hook} />)}
+          {curriculum.tracks.map(t => <TrackSection key={t.id} track={t} curriculumId={curriculum.id} hook={hook} />)}
         </div>
       )}
 

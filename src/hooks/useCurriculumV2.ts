@@ -81,7 +81,7 @@ export function useCurriculumV2(classroomId: string) {
       .select('*, modules(*, units(*))')
       .eq('curriculum_id', curriculumId)
       .order('order_index');
-    if (error) { console.error('fetchTree error:', error); return []; }
+    if (error) { console.error('fetchTree error:', error); setFetchError(error.message); return []; }
     return (data || []).sort((a: any, b: any) => a.order_index - b.order_index).map((t: any) => ({
       ...t,
       modules: (t.modules || []).sort((a: any, b: any) => a.order_index - b.order_index).map((m: any) => ({

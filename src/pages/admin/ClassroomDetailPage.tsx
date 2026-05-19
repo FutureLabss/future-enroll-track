@@ -135,7 +135,7 @@ function CohortModal({ classroomId, programId, existing, onClose, onSaved }: any
   );
 }
 
-function CohortStudentsModal({ cohort, programId, onClose }: { cohort: any; programId: string; onClose: () => void }) {
+function CohortStudentsModal({ cohort, classroomId, onClose }: { cohort: any; classroomId: string; onClose: () => void }) {
   const [enrolled, setEnrolled] = useState<any[]>([]);
   // Maps student_id → cohort_students.id (row id needed for remove RPC)
   const [memberRows, setMemberRows] = useState<Map<string, string>>(new Map());
@@ -146,11 +146,7 @@ function CohortStudentsModal({ cohort, programId, onClose }: { cohort: any; prog
     const load = async () => {
       setLoading(true);
       const [{ data: enr }, { data: mem }] = await Promise.all([
-        supabase.from('enrollments')
-          .select('id, full_name, email, enrollment_status, user_id')
-          .eq('program_id', programId)
-          .in('enrollment_status', ['active', 'pending'])
-          .order('full_name'),
+        supabase.rpc('get_classroom_students', { p_classroom_id: classroomId }),
         supabase.rpc('get_cohort_members', { p_cohort_id: cohort.id }),
       ]);
       setEnrolled(enr || []);
@@ -158,7 +154,7 @@ function CohortStudentsModal({ cohort, programId, onClose }: { cohort: any; prog
       setLoading(false);
     };
     load();
-  }, [cohort.id, programId]);
+  }, [cohort.id, classroomId]);
 
   const toggle = async (enrollment: any) => {
     if (!enrollment.user_id) return;
@@ -324,21 +320,9 @@ export default function ClassroomDetailPage() {
 
   useEffect(() => { if (id) loadAll(); }, [id]);
 
-  // Students come from enrollments so we see everyone, not just those with accounts.
-  // Triggers separately once classroom.program_id is known.
   useEffect(() => {
-    if (classroom?.program_id) loadStudents(classroom.program_id);
-  }, [classroom?.program_id]);
-
-  const loadStudents = async (programId: string) => {
-    const { data } = await supabase
-      .from('enrollments')
-      .select('id, full_name, email, enrollment_status, user_id, cohort_id, cohorts(cohort_label)')
-      .eq('program_id', programId)
-      .in('enrollment_status', ['active', 'pending'])
-      .order('full_name', { ascending: true });
-    setStudents(data || []);
-  };
+    if (id) supabase.rpc('get_classroom_students', { p_classroom_id: id }).then(({ data }) => setStudents(data || []));
+  }, [id]);
 
   const handleSendReminders = async () => {
     if (!classroom?.program_id) return;
@@ -539,7 +523,7 @@ export default function ClassroomDetailPage() {
   const studentColumns = [
     { key: 'name', header: 'Student', render: (r: any) => r.full_name || <span className="text-muted-foreground text-sm">—</span> },
     { key: 'email', header: 'Email', render: (r: any) => r.email || '—' },
-    { key: 'cohort', header: 'Cohort', render: (r: any) => (r.cohorts as any)?.cohort_label || <span className="text-muted-foreground text-sm">—</span> },
+    { key: 'cohort', header: 'Cohort', render: (r: any) => r.cohort_label || <span className="text-muted-foreground text-sm">—</span> },
     { key: 'status', header: 'Status', render: (r: any) => (
       <Badge variant="outline" className={`capitalize ${STATUS_COLOURS[r.enrollment_status] || ''}`}>{r.enrollment_status}</Badge>
     )},
@@ -768,7 +752,7 @@ export default function ClassroomDetailPage() {
               {cohortStudentsModal.cohort && classroom?.program_id && (
                 <CohortStudentsModal
                   cohort={cohortStudentsModal.cohort}
-                  programId={classroom.program_id}
+                  classroomId={id!}
                   onClose={() => setCohortStudentsModal({ open: false })}
                 />
               )}

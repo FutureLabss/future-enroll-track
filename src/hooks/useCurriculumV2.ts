@@ -125,86 +125,74 @@ export function useCurriculumV2(classroomId: string) {
 
   // ── Track CRUD ───────────────────────────────────────────────────────────────
   const addTrack = async (curriculumId: string, title: string, description?: string) => {
-    const { data: existing } = await supabase.from('tracks').select('order_index').eq('curriculum_id', curriculumId).order('order_index', { ascending: false }).limit(1);
-    const order_index = ((existing?.[0]?.order_index ?? -1) + 1);
-    const { error } = await supabase.from('tracks').insert({ curriculum_id: curriculumId, title, description: description || null, order_index });
+    const { error } = await supabase.rpc('curriculum_add_track', { p_curriculum_id: curriculumId, p_title: title, p_description: description ?? null });
     if (error) throw error;
     await refreshCurriculum(curriculumId);
   };
 
   const updateTrack = async (id: string, curriculumId: string, patch: { title?: string; description?: string; order_index?: number }) => {
-    const { error } = await supabase.from('tracks').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id);
+    const { error } = await supabase.rpc('curriculum_update_track', { p_id: id, p_title: patch.title ?? null, p_description: patch.description ?? null, p_order_index: patch.order_index ?? null });
     if (error) throw error;
     await refreshCurriculum(curriculumId);
   };
 
   const deleteTrack = async (id: string, curriculumId: string) => {
-    const { error } = await supabase.from('tracks').delete().eq('id', id);
+    const { error } = await supabase.rpc('curriculum_delete_track', { p_id: id });
     if (error) throw error;
     await refreshCurriculum(curriculumId);
   };
 
   // ── Module CRUD ──────────────────────────────────────────────────────────────
   const addModule = async (trackId: string, curriculumId: string, title: string, description?: string) => {
-    const { data: existing } = await supabase.from('modules').select('order_index').eq('track_id', trackId).order('order_index', { ascending: false }).limit(1);
-    const order_index = ((existing?.[0]?.order_index ?? -1) + 1);
-    const { error } = await supabase.from('modules').insert({ track_id: trackId, title, description: description || null, order_index });
+    const { error } = await supabase.rpc('curriculum_add_module', { p_track_id: trackId, p_title: title, p_description: description ?? null });
     if (error) throw error;
     await refreshCurriculum(curriculumId);
   };
 
   const updateModule = async (id: string, curriculumId: string, patch: { title?: string; description?: string; order_index?: number }) => {
-    const { error } = await supabase.from('modules').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id);
+    const { error } = await supabase.rpc('curriculum_update_module', { p_id: id, p_title: patch.title ?? null, p_description: patch.description ?? null, p_order_index: patch.order_index ?? null });
     if (error) throw error;
     await refreshCurriculum(curriculumId);
   };
 
   const deleteModule = async (id: string, curriculumId: string) => {
-    const { error } = await supabase.from('modules').delete().eq('id', id);
+    const { error } = await supabase.rpc('curriculum_delete_module', { p_id: id });
     if (error) throw error;
     await refreshCurriculum(curriculumId);
   };
 
   // ── Unit CRUD ────────────────────────────────────────────────────────────────
   const addUnit = async (moduleId: string, curriculumId: string, title: string, description?: string) => {
-    const { data: existing } = await supabase.from('units').select('order_index').eq('module_id', moduleId).order('order_index', { ascending: false }).limit(1);
-    const order_index = ((existing?.[0]?.order_index ?? -1) + 1);
-    const { error } = await supabase.from('units').insert({ module_id: moduleId, title, description: description || null, order_index });
+    const { error } = await supabase.rpc('curriculum_add_unit', { p_module_id: moduleId, p_title: title, p_description: description ?? null });
     if (error) throw error;
     await refreshCurriculum(curriculumId);
   };
 
   const updateUnit = async (id: string, curriculumId: string, patch: { title?: string; description?: string; order_index?: number }) => {
-    const { error } = await supabase.from('units').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id);
+    const { error } = await supabase.rpc('curriculum_update_unit', { p_id: id, p_title: patch.title ?? null, p_description: patch.description ?? null, p_order_index: patch.order_index ?? null });
     if (error) throw error;
     await refreshCurriculum(curriculumId);
   };
 
   const deleteUnit = async (id: string, curriculumId: string) => {
-    const { error } = await supabase.from('units').delete().eq('id', id);
+    const { error } = await supabase.rpc('curriculum_delete_unit', { p_id: id });
     if (error) throw error;
     await refreshCurriculum(curriculumId);
   };
 
   // ── Lesson CRUD ──────────────────────────────────────────────────────────────
   const addLesson = async (unitId: string, title: string, opts?: { content?: string; objectives?: string }) => {
-    const { data: existing } = await supabase.from('lessons').select('order_index').eq('unit_id', unitId).order('order_index', { ascending: false }).limit(1);
-    const order_index = ((existing?.[0]?.order_index ?? -1) + 1);
-    const { error } = await supabase.from('lessons').insert({
-      unit_id: unitId, title, order_index,
-      content: opts?.content || null,
-      objectives: opts?.objectives || null,
-    });
+    const { error } = await supabase.rpc('curriculum_add_lesson', { p_unit_id: unitId, p_title: title, p_content: opts?.content ?? null, p_objectives: opts?.objectives ?? null });
     if (error) throw error;
   };
 
   const updateLesson = async (id: string, patch: { title?: string; content?: string; objectives?: string; resources?: any; order_index?: number }) => {
-    const { error } = await supabase.from('lessons').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id);
+    const { error } = await supabase.rpc('curriculum_update_lesson', { p_id: id, p_title: patch.title ?? null, p_content: patch.content ?? null, p_objectives: patch.objectives ?? null, p_order_index: patch.order_index ?? null });
     if (error) throw error;
   };
 
   const deleteLesson = async (id: string) => {
-    const { error } = await supabase.from('lessons').delete().eq('id', id);
+    const { error } = await supabase.rpc('curriculum_delete_lesson', { p_id: id });
     if (error) throw error;
   };
 

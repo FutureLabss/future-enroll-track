@@ -118,11 +118,7 @@ function UnitSection({ unit, curriculumId, hook }: { unit: UnitV2; curriculumId:
 
   useEffect(() => {
     if (!open || lessonsLoaded) return;
-    supabase
-      .from('lessons')
-      .select('*')
-      .eq('unit_id', unit.id)
-      .order('order_index')
+    supabase.rpc('get_unit_lessons', { p_unit_id: unit.id })
       .then(({ data }) => {
         setLessons((data as LessonV2[]) || []);
         setLessonsLoaded(true);
@@ -130,11 +126,7 @@ function UnitSection({ unit, curriculumId, hook }: { unit: UnitV2; curriculumId:
   }, [open, lessonsLoaded, unit.id]);
 
   const refreshLessons = () => {
-    supabase
-      .from('lessons')
-      .select('*')
-      .eq('unit_id', unit.id)
-      .order('order_index')
+    supabase.rpc('get_unit_lessons', { p_unit_id: unit.id })
       .then(({ data }) => setLessons((data as LessonV2[]) || []));
   };
 

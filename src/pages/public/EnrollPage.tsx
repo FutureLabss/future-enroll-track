@@ -76,6 +76,16 @@ export default function EnrollPage() {
       const totalAmount = parseFloat(form.total_amount);
       if (isNaN(totalAmount) || totalAmount <= 0) throw new Error('Invalid amount');
 
+      // Check for existing active enrollment with same email + program
+      const { data: existing } = await supabase
+        .from('enrollments')
+        .select('id, enrollment_status')
+        .eq('program_id', form.program_id)
+        .ilike('email', form.email.trim())
+        .not('enrollment_status', 'in', '("cancelled","withdrawn")')
+        .maybeSingle();
+      if (existing) throw new Error('An enrollment for this email already exists for the selected program.');
+
       const { data: enrollment, error } = await supabase.from('enrollments').insert({
         full_name: form.full_name,
         email: form.email,

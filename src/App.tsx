@@ -49,6 +49,8 @@ import DemoPage from "@/pages/public/DemoPage";
 import HubsPage from "@/pages/admin/HubsPage";
 import ClassroomsPage from "@/pages/admin/ClassroomsPage";
 import ClassroomDetailPage from "@/pages/admin/ClassroomDetailPage";
+import CohortsPage from "@/pages/admin/CohortsPage";
+import CohortDetailPage from "@/pages/admin/CohortDetailPage";
 import StaffInvitationsAdminPage from "@/pages/admin/StaffInvitationsAdminPage";
 import StaffClassroomsPage from "@/pages/staff/StaffClassroomsPage";
 import ClassroomWorkspacePage from "@/pages/staff/ClassroomWorkspacePage";
@@ -133,6 +135,8 @@ const App = () => (
               {/* Classroom admin routes */}
               <Route path="/admin/classrooms" element={<ClassroomsPage />} />
               <Route path="/admin/classrooms/:id" element={<ClassroomDetailPage />} />
+              <Route path="/admin/cohorts" element={<CohortsPage />} />
+              <Route path="/admin/cohorts/:id" element={<CohortDetailPage />} />
               <Route path="/admin/staff-invitations" element={<StaffInvitationsAdminPage />} />
               {/* Staff classroom routes */}
               <Route path="/staff/invoices" element={<StaffInvoicesPage />} />

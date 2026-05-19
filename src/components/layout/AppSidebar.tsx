@@ -64,6 +64,7 @@ const adminNav = [
   { to: '/admin/expenses', icon: Receipt, label: 'Expenses' },
   { to: '/admin/programs', icon: GraduationCap, label: 'Programs' },
   { to: '/admin/classrooms', icon: School, label: 'Classrooms' },
+  { to: '/admin/cohorts', icon: BookOpen, label: 'Cohorts' },
   { to: '/admin/staff-invitations', icon: Mail, label: 'Staff Invitations' },
   { to: '/admin/organizations', icon: Building2, label: 'Organizations' },
   { to: '/admin/custom-fields', icon: FormInput, label: 'Custom Fields' },

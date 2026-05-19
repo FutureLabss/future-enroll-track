@@ -75,7 +75,7 @@ export default function ClassroomsPage() {
   const grouped = programs.map(p => ({
     ...p,
     classrooms: active.filter(c => (c as any).program_id === p.id),
-  })).filter(p => p.classrooms.length > 0 || true); // show all programs
+  })).filter(p => p.classrooms.length > 0);
 
   const unassigned = active.filter(c => !(c as any).program_id);
 

@@ -507,7 +507,7 @@ export default function ClassroomDetailPage() {
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
   if (!classroom) return <div className="text-center py-20 text-muted-foreground">Classroom not found.</div>;
 
-  const programId = (classroom as any).programs ? (classroom as any).program_id : null;
+  const programId = (classroom as any).program_id || null;
 
   const staffColumns = [
     { key: 'name', header: 'Name', render: (r: any) => r.staff?.full_name || '—' },

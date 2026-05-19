@@ -6,7 +6,6 @@ import { useAttendance, useAttendanceSession } from '@/hooks/useAttendance';
 import { useAssignments, useSubmissions } from '@/hooks/useAssignments';
 import { useClassroomCohorts } from '@/hooks/useClassroom';
 import { useSchedules } from '@/hooks/useSchedules';
-import { useCurriculumV2 } from '@/hooks/useCurriculumV2';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -166,14 +165,12 @@ export default function ClassroomWorkspacePage() {
   const [students, setStudents] = useState<any[]>([]);
   const [staffList, setStaffList] = useState<any[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
+  const [scopeOptions, setScopeOptions] = useState<{ curricula: any[]; tracks: any[]; modules: any[] }>({ curricula: [], tracks: [], modules: [] });
 
   const { sessions, generateSession, closeSession, regenerateCode } = useAttendance(id!);
   const { assignments, createAssignment, publishAssignment } = useAssignments(id!);
   const { cohorts, refetch: refetchCohorts, createCohort, updateCohort } = useClassroomCohorts(id!);
   const { schedules, createSchedule, updateSchedule, deleteSchedule } = useSchedules(id!);
-  const { curricula } = useCurriculumV2(id!);
-  const allTracks = curricula.flatMap(c => c.tracks);
-  const allModules = allTracks.flatMap(t => t.modules);
 
   // Attendance state
   const [sessionForm, setSessionForm] = useState({ schedule_id: '', cohort_id: '', duration: '30' });
@@ -211,6 +208,12 @@ export default function ClassroomWorkspacePage() {
   useEffect(() => { if (id && user) loadData(); }, [id, user]);
 
   useEffect(() => {
+    if (!id) return;
+    supabase.rpc('get_classroom_scope_options', { p_classroom_id: id })
+      .then(({ data }) => { if (data) setScopeOptions(data as any); });
+  }, [id]);
+
+  useEffect(() => {
     const open = sessions.find((s: any) => s.status === 'open');
     setActiveSession(open || null);
     if (open) {
@@ -227,26 +230,17 @@ export default function ClassroomWorkspacePage() {
   }, [sessions]);
 
   const loadData = async () => {
-    const [csRes, staffRes] = await Promise.all([
+    const [csRes, staffRes, studentsRes] = await Promise.all([
       supabase.from('classroom_staff')
         .select('*, classrooms(*, programs(program_name)), classroom_permissions(*)')
         .eq('classroom_id', id).eq('user_id', user!.id).single(),
       supabase.from('staff').select('id, full_name').eq('active', true),
+      supabase.rpc('get_classroom_students', { p_classroom_id: id }),
     ]);
     setClassroomData(csRes.data);
     setPermissions(csRes.data?.classroom_permissions);
     setStaffList(staffRes.data || []);
-
-    const programId = csRes.data?.classrooms?.program_id;
-    if (programId) {
-      const { data: enrollments } = await supabase
-        .from('enrollments')
-        .select('id, full_name, email, user_id, enrollment_status, profiles:user_id(full_name, email)')
-        .eq('program_id', programId)
-        .in('enrollment_status', ['active', 'pending']);
-      setStudents(enrollments || []);
-    }
-
+    setStudents(studentsRes.data || []);
     setDataLoading(false);
   };
 
@@ -510,30 +504,30 @@ export default function ClassroomWorkspacePage() {
                         </SelectContent>
                       </Select>
                     </div>
-                    {cohortForm.scope_type === 'curriculum' && curricula.length > 0 && (
+                    {cohortForm.scope_type === 'curriculum' && scopeOptions.curricula.length > 0 && (
                       <div>
                         <Label>Curriculum</Label>
                         <Select value={cohortForm.scope_id} onValueChange={v => setCohortForm({ ...cohortForm, scope_id: v })}>
                           <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select curriculum" /></SelectTrigger>
-                          <SelectContent>{curricula.map(c => <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>)}</SelectContent>
+                          <SelectContent>{scopeOptions.curricula.map(c => <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>)}</SelectContent>
                         </Select>
                       </div>
                     )}
-                    {cohortForm.scope_type === 'track' && allTracks.length > 0 && (
+                    {cohortForm.scope_type === 'track' && scopeOptions.tracks.length > 0 && (
                       <div>
                         <Label>Track</Label>
                         <Select value={cohortForm.scope_id} onValueChange={v => setCohortForm({ ...cohortForm, scope_id: v })}>
                           <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select track" /></SelectTrigger>
-                          <SelectContent>{allTracks.map(t => <SelectItem key={t.id} value={t.id}>{t.title}</SelectItem>)}</SelectContent>
+                          <SelectContent>{scopeOptions.tracks.map(t => <SelectItem key={t.id} value={t.id}>{t.title}</SelectItem>)}</SelectContent>
                         </Select>
                       </div>
                     )}
-                    {cohortForm.scope_type === 'module' && allModules.length > 0 && (
+                    {cohortForm.scope_type === 'module' && scopeOptions.modules.length > 0 && (
                       <div>
                         <Label>Module</Label>
                         <Select value={cohortForm.scope_id} onValueChange={v => setCohortForm({ ...cohortForm, scope_id: v })}>
                           <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select module" /></SelectTrigger>
-                          <SelectContent>{allModules.map(m => <SelectItem key={m.id} value={m.id}>{m.title}</SelectItem>)}</SelectContent>
+                          <SelectContent>{scopeOptions.modules.map(m => <SelectItem key={m.id} value={m.id}>{m.title}</SelectItem>)}</SelectContent>
                         </Select>
                       </div>
                     )}
@@ -605,30 +599,30 @@ export default function ClassroomWorkspacePage() {
                                     </SelectContent>
                                   </Select>
                                 </div>
-                                {cohortForm.scope_type === 'curriculum' && curricula.length > 0 && (
+                                {cohortForm.scope_type === 'curriculum' && scopeOptions.curricula.length > 0 && (
                                   <div>
                                     <Label>Curriculum</Label>
                                     <Select value={cohortForm.scope_id} onValueChange={v => setCohortForm({ ...cohortForm, scope_id: v })}>
                                       <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select curriculum" /></SelectTrigger>
-                                      <SelectContent>{curricula.map(c => <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>)}</SelectContent>
+                                      <SelectContent>{scopeOptions.curricula.map(c => <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>)}</SelectContent>
                                     </Select>
                                   </div>
                                 )}
-                                {cohortForm.scope_type === 'track' && allTracks.length > 0 && (
+                                {cohortForm.scope_type === 'track' && scopeOptions.tracks.length > 0 && (
                                   <div>
                                     <Label>Track</Label>
                                     <Select value={cohortForm.scope_id} onValueChange={v => setCohortForm({ ...cohortForm, scope_id: v })}>
                                       <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select track" /></SelectTrigger>
-                                      <SelectContent>{allTracks.map(t => <SelectItem key={t.id} value={t.id}>{t.title}</SelectItem>)}</SelectContent>
+                                      <SelectContent>{scopeOptions.tracks.map(t => <SelectItem key={t.id} value={t.id}>{t.title}</SelectItem>)}</SelectContent>
                                     </Select>
                                   </div>
                                 )}
-                                {cohortForm.scope_type === 'module' && allModules.length > 0 && (
+                                {cohortForm.scope_type === 'module' && scopeOptions.modules.length > 0 && (
                                   <div>
                                     <Label>Module</Label>
                                     <Select value={cohortForm.scope_id} onValueChange={v => setCohortForm({ ...cohortForm, scope_id: v })}>
                                       <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select module" /></SelectTrigger>
-                                      <SelectContent>{allModules.map(m => <SelectItem key={m.id} value={m.id}>{m.title}</SelectItem>)}</SelectContent>
+                                      <SelectContent>{scopeOptions.modules.map(m => <SelectItem key={m.id} value={m.id}>{m.title}</SelectItem>)}</SelectContent>
                                     </Select>
                                   </div>
                                 )}
@@ -664,12 +658,12 @@ export default function ClassroomWorkspacePage() {
                 <DialogHeader><DialogTitle>Schedule a Session</DialogTitle></DialogHeader>
                 <div className="space-y-3 mt-2">
                   <div><Label>Session Title</Label><Input value={scheduleForm.title} onChange={e => setScheduleForm({ ...scheduleForm, title: e.target.value })} className="mt-1.5" placeholder="e.g. Intro to Variables" /></div>
-                  {allModules.length > 0 && (
+                  {scopeOptions.modules.length > 0 && (
                     <div>
                       <Label>Module (optional)</Label>
                       <Select value={scheduleForm.module_id} onValueChange={v => setScheduleForm({ ...scheduleForm, module_id: v })}>
                         <SelectTrigger className="mt-1.5"><SelectValue placeholder="Link to a module" /></SelectTrigger>
-                        <SelectContent>{allModules.map(m => <SelectItem key={m.id} value={m.id}>{m.title}</SelectItem>)}</SelectContent>
+                        <SelectContent>{scopeOptions.modules.map(m => <SelectItem key={m.id} value={m.id}>{m.title}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                   )}

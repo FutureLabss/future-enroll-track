@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useCurriculumV2, CurriculumV2, TrackV2, ModuleV2, UnitV2, LessonV2 } from '@/hooks/useCurriculumV2';
 import { supabase } from '@/lib/supabase';
+import { AICurriculumGenerator } from './AICurriculumGenerator';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -407,6 +408,14 @@ export function CurriculumTreeV2({ classroomId }: { classroomId: string }) {
         <Button variant="outline" size="sm" className="w-full mt-2 text-xs" onClick={() => setAddCurriculum(true)}>
           <Plus className="h-3 w-3 mr-1" /> New curriculum
         </Button>
+
+        <AICurriculumGenerator
+          classroomId={classroomId}
+          onCreated={async (newId) => {
+            await hook.refetch();
+            setSelectedId(newId);
+          }}
+        />
 
         <AddDialog
           open={addCurriculum} title="Create curriculum" onClose={() => setAddCurriculum(false)}

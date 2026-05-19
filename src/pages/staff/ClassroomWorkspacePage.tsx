@@ -372,20 +372,17 @@ export default function ClassroomWorkspacePage() {
     setCohortStudentsModal({ open: true, cohort });
     setCohortStudentSearch('');
     setCohortStudentsLoading(true);
-    const { data } = await supabase
-      .from('cohort_students')
-      .select('id, student_id, status, profiles:student_id(full_name, email)')
-      .eq('cohort_id', cohort.id);
+    const { data } = await supabase.rpc('get_cohort_members', { p_cohort_id: cohort.id });
     setCohortMembers(data || []);
     setCohortStudentsLoading(false);
   };
 
   const handleAddToCohort = async (student: any) => {
     const cohort = cohortStudentsModal.cohort;
-    const { error } = await supabase.from('cohort_students').insert({
-      cohort_id: cohort.id,
-      student_id: student.user_id,
-      enrollment_id: student.id || null,
+    const { error } = await supabase.rpc('add_student_to_cohort', {
+      p_cohort_id: cohort.id,
+      p_student_id: student.user_id,
+      p_enrollment_id: student.id || null,
     });
     if (error) { toast.error(error.message); return; }
     toast.success(`${(student.profiles as any)?.full_name || student.full_name || 'Student'} added to cohort`);
@@ -394,7 +391,7 @@ export default function ClassroomWorkspacePage() {
 
   const handleRemoveFromCohort = async (memberId: string, name: string) => {
     const cohort = cohortStudentsModal.cohort;
-    const { error } = await supabase.from('cohort_students').delete().eq('id', memberId);
+    const { error } = await supabase.rpc('remove_student_from_cohort', { p_id: memberId });
     if (error) { toast.error(error.message); return; }
     toast.success(`${name} removed from cohort`);
     openCohortStudents(cohort);
@@ -900,16 +897,16 @@ export default function ClassroomWorkspacePage() {
                     {cohortMembers
                       .filter(m => {
                         const q = cohortStudentSearch.toLowerCase();
-                        return !q || m.profiles?.full_name?.toLowerCase().includes(q) || m.profiles?.email?.toLowerCase().includes(q);
+                        return !q || m.full_name?.toLowerCase().includes(q) || m.email?.toLowerCase().includes(q);
                       })
                       .map(m => (
                         <div key={m.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
                           <div>
-                            <p className="text-sm font-medium">{m.profiles?.full_name || '—'}</p>
-                            <p className="text-xs text-muted-foreground">{m.profiles?.email}</p>
+                            <p className="text-sm font-medium">{m.full_name || '—'}</p>
+                            <p className="text-xs text-muted-foreground">{m.email}</p>
                           </div>
                           <Button size="sm" variant="ghost" className="text-destructive h-7 px-2"
-                            onClick={() => handleRemoveFromCohort(m.id, m.profiles?.full_name || 'Student')}>
+                            onClick={() => handleRemoveFromCohort(m.id, m.full_name || 'Student')}>
                             <UserMinus className="h-3.5 w-3.5 mr-1" />Remove
                           </Button>
                         </div>

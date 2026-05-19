@@ -137,7 +137,8 @@ function CohortModal({ classroomId, programId, existing, onClose, onSaved }: any
 
 function CohortStudentsModal({ cohort, programId, onClose }: { cohort: any; programId: string; onClose: () => void }) {
   const [enrolled, setEnrolled] = useState<any[]>([]);
-  const [members, setMembers] = useState<Set<string>>(new Set());
+  // Maps student_id → cohort_students.id (row id needed for remove RPC)
+  const [memberRows, setMemberRows] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -150,12 +151,10 @@ function CohortStudentsModal({ cohort, programId, onClose }: { cohort: any; prog
           .eq('program_id', programId)
           .in('enrollment_status', ['active', 'pending'])
           .order('full_name'),
-        supabase.from('cohort_students')
-          .select('student_id')
-          .eq('cohort_id', cohort.id),
+        supabase.rpc('get_cohort_members', { p_cohort_id: cohort.id }),
       ]);
       setEnrolled(enr || []);
-      setMembers(new Set((mem || []).map((r: any) => r.student_id)));
+      setMemberRows(new Map((mem || []).map((r: any) => [r.student_id, r.id])));
       setLoading(false);
     };
     load();
@@ -165,18 +164,21 @@ function CohortStudentsModal({ cohort, programId, onClose }: { cohort: any; prog
     if (!enrollment.user_id) return;
     setBusy(enrollment.user_id);
     try {
-      if (members.has(enrollment.user_id)) {
-        await supabase.from('cohort_students').delete()
-          .eq('cohort_id', cohort.id).eq('student_id', enrollment.user_id);
-        setMembers(prev => { const s = new Set(prev); s.delete(enrollment.user_id); return s; });
+      const rowId = memberRows.get(enrollment.user_id);
+      if (rowId) {
+        const { error } = await supabase.rpc('remove_student_from_cohort', { p_id: rowId });
+        if (error) throw error;
+        setMemberRows(prev => { const m = new Map(prev); m.delete(enrollment.user_id); return m; });
       } else {
-        await supabase.from('cohort_students').insert({
-          cohort_id: cohort.id, student_id: enrollment.user_id,
-          enrollment_id: enrollment.id, joined_at: new Date().toISOString(), status: 'active',
+        const { error } = await supabase.rpc('add_student_to_cohort', {
+          p_cohort_id: cohort.id,
+          p_student_id: enrollment.user_id,
+          p_enrollment_id: enrollment.id,
         });
-        await supabase.from('enrollments').update({ cohort_id: cohort.id })
-          .eq('id', enrollment.id);
-        setMembers(prev => new Set([...prev, enrollment.user_id]));
+        if (error) throw error;
+        // Re-fetch to get the new row id
+        const { data: mem } = await supabase.rpc('get_cohort_members', { p_cohort_id: cohort.id });
+        setMemberRows(new Map((mem || []).map((r: any) => [r.student_id, r.id])));
       }
     } catch (e: any) {
       toast.error(e.message);
@@ -193,7 +195,7 @@ function CohortStudentsModal({ cohort, programId, onClose }: { cohort: any; prog
         <p className="text-sm text-muted-foreground text-center py-6">No active or pending enrollments found.</p>
       ) : (
         enrolled.map(e => {
-          const inCohort = members.has(e.user_id);
+          const inCohort = memberRows.has(e.user_id);
           return (
             <div key={e.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
               <div>

@@ -18,11 +18,18 @@ export default function InvoiceApprovalsPage() {
 
   const fetchRows = async () => {
     setLoading(true);
-    const { data } = await supabase
+    const { data: requests } = await supabase
       .from('invoice_change_requests' as any)
       .select('*, invoices:invoice_id(invoice_number, enrollments(full_name, email))')
       .order('created_at', { ascending: false });
-    setRows(data || []);
+
+    const userIds = [...new Set((requests || []).map((r: any) => r.requested_by).filter(Boolean))];
+    const { data: profiles } = userIds.length
+      ? await supabase.from('profiles').select('user_id, full_name, email').in('user_id', userIds)
+      : { data: [] };
+
+    const profileMap = new Map((profiles || []).map((p: any) => [p.user_id, p]));
+    setRows((requests || []).map((r: any) => ({ ...r, requester: profileMap.get(r.requested_by) || null })));
     setLoading(false);
   };
 
@@ -112,7 +119,10 @@ export default function InvoiceApprovalsPage() {
               </div>
             )}
             {r.reason && <p className="text-xs text-destructive">Rejection reason: {r.reason}</p>}
-            <p className="text-xs text-muted-foreground">Requested {new Date(r.created_at).toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground">
+              Requested by <span className="font-medium text-foreground">{r.requester?.full_name || r.requester?.email || 'Unknown admin'}</span>
+              {' · '}{new Date(r.created_at).toLocaleString()}
+            </p>
             {r.status === 'pending' && (
               <div className="flex gap-2 pt-2">
                 <Button size="sm" disabled={busy === r.id} onClick={() => approve(r.id)}>

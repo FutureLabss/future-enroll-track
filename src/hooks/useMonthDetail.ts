@@ -27,12 +27,14 @@ export function useMonthDetail(month: string | null): MonthDetail {
     const end = nextMonth.toISOString().slice(0, 10);
 
     Promise.all([
+      // Use installments.paid_at — same source the get_finance_summary RPC uses for revenue
       supabase
-        .from('payments')
-        .select('id, amount, payment_reference, payment_method, created_at, invoices(invoice_number, enrollments(full_name, email, programs(program_name)))')
-        .gte('created_at', month)
-        .lt('created_at', end)
-        .order('created_at', { ascending: false }),
+        .from('installments')
+        .select('id, amount, paid_at, due_date, invoices(invoice_number, enrollments(full_name, email, programs(program_name)))')
+        .eq('status', 'paid')
+        .gte('paid_at', month)
+        .lt('paid_at', end)
+        .order('paid_at', { ascending: false }),
       supabase
         .from('other_income')
         .select('id, category, payer_name, amount, payment_date, payment_method, payment_reference, notes')

@@ -82,7 +82,7 @@ export function MonthDetailSheet({ month, onClose }: Props) {
                   key={p.id}
                   left={p.invoices?.enrollments?.full_name || 'Unknown student'}
                   right={fmt(Number(p.amount))}
-                  sub={`${fmtDate(p.created_at)} · ${p.payment_method || '—'} · ${p.payment_reference || '—'}`}
+                  sub={`${p.paid_at ? fmtDate(p.paid_at) : '—'} · ${p.invoices?.invoice_number || '—'} · ${p.invoices?.enrollments?.programs?.program_name || '—'}`}
                 />
               ))}
             </TabsContent>

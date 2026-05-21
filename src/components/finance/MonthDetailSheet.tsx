@@ -77,12 +77,12 @@ export function MonthDetailSheet({ month, onClose }: Props) {
               {payments.length > 0 && <SectionTotal label="Total tuition received" amount={totalPayments} />}
               {payments.length === 0 ? (
                 <EmptyState label="tuition payments" />
-              ) : payments.map(p => (
+              ) : payments.map((p: any) => (
                 <DetailRow
-                  key={p.id}
+                  key={`${p._source}-${p.id}`}
                   left={p.invoices?.enrollments?.full_name || 'Unknown student'}
                   right={fmt(Number(p.amount))}
-                  sub={`${p.paid_at ? fmtDate(p.paid_at) : '—'} · ${p.invoices?.invoice_number || '—'} · ${p.invoices?.enrollments?.programs?.program_name || '—'}`}
+                  sub={`${p._date ? fmtDate(p._date) : '—'} · ${p.invoices?.invoice_number || '—'} · ${p.invoices?.enrollments?.programs?.program_name || '—'}`}
                 />
               ))}
             </TabsContent>

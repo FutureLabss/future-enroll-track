@@ -27,14 +27,30 @@ export function useMonthDetail(month: string | null): MonthDetail {
     const end = nextMonth.toISOString().slice(0, 10);
 
     Promise.all([
-      // Use installments.paid_at — same source the get_finance_summary RPC uses for revenue
-      supabase
-        .from('installments')
-        .select('id, amount, paid_at, due_date, invoices(invoice_number, enrollments(full_name, email, programs(program_name)))')
-        .eq('status', 'paid')
-        .gte('paid_at', month)
-        .lt('paid_at', end)
-        .order('paid_at', { ascending: false }),
+      // Mirror get_finance_summary rev UNION ALL:
+      // leg 1 — installments bucketed by due_date (FutureLabs path)
+      // leg 2 — payments bucketed by created_at (RhemaHub path)
+      // Both are fetched and merged client-side.
+      Promise.all([
+        supabase
+          .from('installments')
+          .select('id, amount, due_date, paid_at, invoices(invoice_number, enrollments(full_name, email, programs(program_name)))')
+          .eq('status', 'paid')
+          .gte('due_date', month)
+          .lt('due_date', end)
+          .order('due_date', { ascending: false }),
+        supabase
+          .from('payments')
+          .select('id, amount, created_at, payment_method, payment_reference, invoices(invoice_number, enrollments(full_name, email, programs(program_name)))')
+          .gte('created_at', month)
+          .lt('created_at', end)
+          .order('created_at', { ascending: false }),
+      ]).then(([instRes, payRes]) => ({
+        data: [
+          ...(instRes.data || []).map((r: any) => ({ ...r, _source: 'installment', _date: r.due_date })),
+          ...(payRes.data || []).map((r: any) => ({ ...r, _source: 'payment', _date: r.created_at })),
+        ].sort((a, b) => new Date(b._date).getTime() - new Date(a._date).getTime()),
+      })),
       supabase
         .from('other_income')
         .select('id, category, payer_name, amount, payment_date, payment_method, payment_reference, notes')
@@ -53,7 +69,7 @@ export function useMonthDetail(month: string | null): MonthDetail {
         .eq('pay_month', month)
         .order('created_at', { ascending: false }),
     ]).then(([p, o, e, r]) => {
-      setPayments(p.data || []);
+      setPayments((p as any).data || []);
       setOtherIncome(o.data || []);
       setExpenses(e.data || []);
       setPayroll(r.data || []);

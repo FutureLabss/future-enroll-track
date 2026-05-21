@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { ArrowLeft, CheckCircle, XCircle, ExternalLink, Trash2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, ExternalLink, Trash2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface FieldValue {
@@ -19,12 +21,50 @@ interface FieldValue {
 export default function EnrollmentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { isSuperadmin } = useAuth();
   const [enrollment, setEnrollment] = useState<any>(null);
   const [fieldValues, setFieldValues] = useState<FieldValue[]>([]);
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState(false);
   const [showEvidence, setShowEvidence] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState({ full_name: '', email: '', phone: '' });
+  const [saving, setSaving] = useState(false);
+
+  const openEdit = () => {
+    setEditForm({ full_name: enrollment.full_name || '', email: enrollment.email || '', phone: enrollment.phone || '' });
+    setEditOpen(true);
+  };
+
+  const handleEditSave = async () => {
+    if (!editForm.full_name.trim() || !editForm.email.trim()) { toast.error('Name and email are required'); return; }
+    setSaving(true);
+    try {
+      const { error: enrErr } = await supabase.from('enrollments').update({
+        full_name: editForm.full_name.trim(),
+        email: editForm.email.trim(),
+        phone: editForm.phone.trim() || null,
+      }).eq('id', enrollment.id);
+      if (enrErr) throw enrErr;
+
+      if (enrollment.user_id) {
+        await supabase.from('profiles').update({
+          full_name: editForm.full_name.trim(),
+          email: editForm.email.trim(),
+          phone: editForm.phone.trim() || null,
+        }).eq('user_id', enrollment.user_id);
+      }
+
+      setEnrollment({ ...enrollment, full_name: editForm.full_name.trim(), email: editForm.email.trim(), phone: editForm.phone.trim() || null });
+      toast.success('Student details updated');
+      setEditOpen(false);
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleDelete = async () => {
     if (!enrollment) return;
@@ -137,6 +177,11 @@ export default function EnrollmentDetailPage() {
             <Button variant="ghost" onClick={() => navigate('/admin/enrollments')}>
               <ArrowLeft className="h-4 w-4 mr-2" /> Back
             </Button>
+            {isSuperadmin && (
+              <Button variant="outline" onClick={openEdit}>
+                <Pencil className="h-4 w-4 mr-2" /> Edit Student
+              </Button>
+            )}
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" disabled={deleting}>
@@ -265,6 +310,33 @@ export default function EnrollmentDetailPage() {
               </a>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Student Dialog (superadmin only) */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Edit Student Details</DialogTitle></DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div>
+              <Label>Full Name *</Label>
+              <Input value={editForm.full_name} onChange={e => setEditForm({ ...editForm, full_name: e.target.value })} className="mt-1.5" />
+            </div>
+            <div>
+              <Label>Email *</Label>
+              <Input type="email" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} className="mt-1.5" />
+              {enrollment.user_id && (
+                <p className="text-xs text-muted-foreground mt-1">Updates display email in profile. Login email (auth) is unchanged.</p>
+              )}
+            </div>
+            <div>
+              <Label>Phone</Label>
+              <Input value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: e.target.value })} placeholder="+234..." className="mt-1.5" />
+            </div>
+            <Button onClick={handleEditSave} disabled={saving} className="w-full">
+              {saving ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

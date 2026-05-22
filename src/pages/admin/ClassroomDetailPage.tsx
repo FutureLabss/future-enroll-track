@@ -15,10 +15,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { DataTable } from '@/components/shared/DataTable';
 import { CurriculumTreeV2 } from '@/components/classroom/CurriculumTreeV2';
 import { toast } from 'sonner';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Users, BookOpen, Calendar, ClipboardList, BarChart2, UserPlus, Loader2,
   GraduationCap, LayoutList, Layers, Plus, Pencil, Ban, CheckCircle, PlayCircle,
-  XCircle, ChevronDown, Eye, Mail,
+  XCircle, ChevronDown, ChevronRight, Eye, Mail, ArrowLeftRight,
 } from 'lucide-react';
 
 const COHORT_STATUSES = ['upcoming', 'active', 'completed', 'archived'] as const;
@@ -32,7 +33,7 @@ const STATUS_COLOURS: Record<string, string> = {
   cancelled: 'bg-destructive/15 text-destructive border-destructive/30',
 };
 
-function CohortModal({ classroomId, programId, existing, onClose, onSaved }: any) {
+function CohortModal({ classroomId, programId, existing, onClose, onSaved, staffList }: any) {
   const { createCohort, updateCohort } = useClassroomCohorts(classroomId);
   const [scopeOptions, setScopeOptions] = useState<{ curricula: any[]; tracks: any[]; modules: any[] }>({ curricula: [], tracks: [], modules: [] });
 
@@ -49,22 +50,33 @@ function CohortModal({ classroomId, programId, existing, onClose, onSaved }: any
     scope_type: (existing?.scope_type || '') as '' | 'curriculum' | 'track' | 'module',
     scope_id: existing?.scope_id || '',
   });
+  const [scheduleOpts, setScheduleOpts] = useState({ enabled: false, days: [] as string[], start_time: '09:00', end_time: '11:00', instructor_id: '' });
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
     if (!form.cohort_label.trim()) { toast.error('Cohort label is required'); return; }
+    if (!existing && scheduleOpts.enabled && scheduleOpts.days.length === 0) { toast.error('Select at least one day for scheduling'); return; }
     setSaving(true);
     try {
       const payload = { ...form, scope_type: form.scope_type || null, scope_id: form.scope_id || null };
       if (existing) {
         await updateCohort(existing.id, payload);
+        toast.success('Cohort updated');
       } else {
-        const { error: createErr } = await supabase
-          .from('cohorts')
-          .insert({ ...payload, program_id: programId, classroom_id: classroomId });
-        if (createErr) throw createErr;
+        const newId = await createCohort({ ...payload, program_id: programId });
+        if (scheduleOpts.enabled && scheduleOpts.days.length > 0) {
+          const { data: count } = await supabase.rpc('generate_cohort_schedule', {
+            p_cohort_id: newId,
+            p_days: scheduleOpts.days,
+            p_start_time: scheduleOpts.start_time,
+            p_end_time: scheduleOpts.end_time,
+            p_instructor_id: scheduleOpts.instructor_id || null,
+          });
+          toast.success(`Cohort created · ${count} session${count !== 1 ? 's' : ''} scheduled`);
+        } else {
+          toast.success('Cohort created');
+        }
       }
-      toast.success(existing ? 'Cohort updated' : 'Cohort created');
       onSaved();
       onClose();
     } catch (e: any) {
@@ -126,6 +138,47 @@ function CohortModal({ classroomId, programId, existing, onClose, onSaved }: any
             <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select module" /></SelectTrigger>
             <SelectContent>{scopeOptions.modules.map((m: any) => <SelectItem key={m.id} value={m.id}>{m.title}</SelectItem>)}</SelectContent>
           </Select>
+        </div>
+      )}
+      {/* Auto-schedule (create only) */}
+      {!existing && (
+        <div className="border border-border rounded-xl p-3 space-y-3">
+          <div className="flex items-center justify-between">
+            <Label className="text-sm font-medium">Auto-generate schedule</Label>
+            <Switch checked={scheduleOpts.enabled} onCheckedChange={v => setScheduleOpts(o => ({ ...o, enabled: v }))} />
+          </div>
+          {scheduleOpts.enabled && (
+            <>
+              <div>
+                <p className="text-xs text-muted-foreground mb-2">Class days</p>
+                <div className="flex gap-1.5 flex-wrap">
+                  {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => {
+                    const val = { Mon:'monday',Tue:'tuesday',Wed:'wednesday',Thu:'thursday',Fri:'friday',Sat:'saturday',Sun:'sunday' }[d]!;
+                    const active = scheduleOpts.days.includes(val);
+                    return (
+                      <button key={d} type="button"
+                        className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${active ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:border-primary/50'}`}
+                        onClick={() => setScheduleOpts(o => ({ ...o, days: active ? o.days.filter(x => x !== val) : [...o.days, val] }))}
+                      >{d}</button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label className="text-xs">Start time</Label><Input type="time" value={scheduleOpts.start_time} onChange={e => setScheduleOpts(o => ({ ...o, start_time: e.target.value }))} className="mt-1" /></div>
+                <div><Label className="text-xs">End time</Label><Input type="time" value={scheduleOpts.end_time} onChange={e => setScheduleOpts(o => ({ ...o, end_time: e.target.value }))} className="mt-1" /></div>
+              </div>
+              {staffList?.length > 0 && (
+                <div>
+                  <Label className="text-xs">Instructor (optional)</Label>
+                  <Select value={scheduleOpts.instructor_id} onValueChange={v => setScheduleOpts(o => ({ ...o, instructor_id: v }))}>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="Assign instructor" /></SelectTrigger>
+                    <SelectContent>{staffList.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.full_name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
       <Button onClick={handleSave} disabled={saving} className="w-full">
@@ -221,6 +274,105 @@ function CohortStudentsModal({ cohort, classroomId, onClose }: { cohort: any; cl
   );
 }
 
+function SwitchClassroomDialog({ student, fromClassroomId, programId, onClose, onSwitched }: {
+  student: any; fromClassroomId: string; programId: string | null; onClose: () => void; onSwitched: () => void;
+}) {
+  const [classrooms, setClassrooms] = useState<any[]>([]);
+  const [cohorts, setCohorts] = useState<any[]>([]);
+  const [toClassroomId, setToClassroomId] = useState('');
+  const [toCohortId, setToCohortId] = useState('');
+  const [reason, setReason] = useState('');
+  const [switching, setSwitching] = useState(false);
+
+  useEffect(() => {
+    if (!programId) return;
+    supabase.from('classrooms')
+      .select('id, name')
+      .eq('program_id', programId)
+      .eq('status', 'active')
+      .neq('id', fromClassroomId)
+      .then(({ data }) => setClassrooms(data || []));
+  }, [programId, fromClassroomId]);
+
+  useEffect(() => {
+    setCohorts([]);
+    setToCohortId('');
+    if (!toClassroomId) return;
+    supabase.from('cohorts')
+      .select('id, cohort_label')
+      .eq('classroom_id', toClassroomId)
+      .in('status', ['active', 'upcoming'])
+      .order('start_date', { ascending: false })
+      .then(({ data }) => setCohorts(data || []));
+  }, [toClassroomId]);
+
+  const handleSwitch = async () => {
+    if (!toClassroomId) { toast.error('Select a destination classroom'); return; }
+    setSwitching(true);
+    try {
+      const { error } = await supabase.rpc('switch_student_classroom' as any, {
+        p_student_id: student.user_id,
+        p_from_classroom_id: fromClassroomId,
+        p_to_classroom_id: toClassroomId,
+        p_to_cohort_id: toCohortId || null,
+        p_reason: reason,
+      });
+      if (error) throw error;
+      toast.success(`${student.full_name} switched to new classroom`);
+      onSwitched();
+      onClose();
+    } catch (e: any) { toast.error(e.message); } finally { setSwitching(false); }
+  };
+
+  return (
+    <div className="space-y-4 mt-2">
+      <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm">
+        <span className="text-muted-foreground">Student: </span>
+        <span className="font-medium">{student.full_name}</span>
+        <span className="text-muted-foreground ml-2">({student.email})</span>
+      </div>
+      <div>
+        <Label>Destination Classroom *</Label>
+        {classrooms.length === 0 ? (
+          <p className="text-sm text-muted-foreground mt-2">No other active classrooms for this program.</p>
+        ) : (
+          <Select value={toClassroomId} onValueChange={setToClassroomId}>
+            <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select classroom..." /></SelectTrigger>
+            <SelectContent>
+              {classrooms.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+      {toClassroomId && (
+        <div>
+          <Label>Assign to Cohort <span className="text-muted-foreground font-normal">(optional)</span></Label>
+          <Select value={toCohortId} onValueChange={setToCohortId}>
+            <SelectTrigger className="mt-1.5"><SelectValue placeholder={cohorts.length ? 'Select cohort...' : 'No active cohorts'} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">No cohort</SelectItem>
+              {cohorts.map(c => <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+      <div>
+        <Label>Reason <span className="text-muted-foreground font-normal">(optional)</span></Label>
+        <Textarea
+          value={reason}
+          onChange={e => setReason(e.target.value)}
+          placeholder="e.g. Scheduling conflict, cohort reassignment..."
+          className="mt-1.5"
+          rows={2}
+        />
+      </div>
+      <Button onClick={handleSwitch} disabled={switching || !toClassroomId || classrooms.length === 0} className="w-full">
+        {switching ? <><Loader2 className="animate-spin h-4 w-4 mr-2" />Switching...</> : <><ArrowLeftRight className="h-4 w-4 mr-2" />Switch Classroom</>}
+      </Button>
+    </div>
+  );
+}
+
 function AttendanceDrillDown({ session }: { session: any }) {
   const { records, absentStudents, loading } = useAttendanceSession(session.id);
 
@@ -304,8 +456,6 @@ export default function ClassroomDetailPage() {
   const [inviteForm, setInviteForm] = useState({ staff_id: '', staff_type: 'teaching' });
   const [inviting, setInviting] = useState(false);
 
-  const [cohortModal, setCohortModal] = useState<{ open: boolean; existing?: any }>({ open: false });
-  const [cohortStudentsModal, setCohortStudentsModal] = useState<{ open: boolean; cohort?: any }>({ open: false });
 
   const [permissionsModal, setPermissionsModal] = useState<{ open: boolean; cs?: any }>({ open: false });
   const [perms, setPerms] = useState<any>({});
@@ -316,6 +466,7 @@ export default function ClassroomDetailPage() {
   const [savingLesson, setSavingLesson] = useState(false);
 
   const [sessionModal, setSessionModal] = useState<{ open: boolean; session?: any }>({ open: false });
+  const [switchModal, setSwitchModal] = useState<{ open: boolean; student?: any }>({ open: false });
   const [sendingReminders, setSendingReminders] = useState(false);
 
   useEffect(() => { if (id) loadAll(); }, [id]);
@@ -531,6 +682,11 @@ export default function ClassroomDetailPage() {
       ? <Badge variant="outline" className="bg-success/10 text-success border-success/30">Active</Badge>
       : <Badge variant="outline" className="text-muted-foreground">No account</Badge>
     },
+    { key: 'actions', header: '', render: (r: any) => r.user_id ? (
+      <Button size="sm" variant="ghost" className="h-7 px-2 text-muted-foreground hover:text-foreground" onClick={() => setSwitchModal({ open: true, student: r })} title="Switch classroom">
+        <ArrowLeftRight className="h-3.5 w-3.5" />
+      </Button>
+    ) : null },
   ];
 
   const lessonColumns = [
@@ -626,7 +782,13 @@ export default function ClassroomDetailPage() {
       <Tabs defaultValue="overview">
         <TabsList className="mb-6 flex-wrap h-auto gap-1">
           <TabsTrigger value="overview"><BarChart2 className="h-4 w-4 mr-1.5" />Overview</TabsTrigger>
-          <TabsTrigger value="cohorts"><Layers className="h-4 w-4 mr-1.5" />Cohorts ({cohorts.length})</TabsTrigger>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 text-muted-foreground hover:text-foreground"
+            onClick={() => navigate('/admin/cohorts')}
+          >
+            <Layers className="h-4 w-4" />Cohorts ({cohorts.length})
+          </button>
           <TabsTrigger value="curriculum"><LayoutList className="h-4 w-4 mr-1.5" />Curriculum</TabsTrigger>
           <TabsTrigger value="staff"><Users className="h-4 w-4 mr-1.5" />Staff ({staff.length})</TabsTrigger>
           <TabsTrigger value="students"><GraduationCap className="h-4 w-4 mr-1.5" />Students ({students.length})</TabsTrigger>
@@ -668,98 +830,6 @@ export default function ClassroomDetailPage() {
           </div>
         </TabsContent>
 
-        {/* COHORTS */}
-        <TabsContent value="cohorts">
-          <div className="flex justify-between items-center mb-5">
-            <h3 className="font-semibold">Cohorts</h3>
-            <Dialog open={cohortModal.open && !cohortModal.existing} onOpenChange={o => setCohortModal({ open: o })}>
-              <DialogTrigger asChild>
-                <Button size="sm"><Plus className="h-4 w-4 mr-1" />New Cohort</Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader><DialogTitle>Create Cohort</DialogTitle></DialogHeader>
-                <CohortModal classroomId={id!} programId={programId} onClose={() => setCohortModal({ open: false })} onSaved={refetchCohorts} />
-              </DialogContent>
-            </Dialog>
-          </div>
-
-          {COHORT_STATUSES.map(status => {
-            const group = cohorts.filter(c => c.status === status);
-            if (group.length === 0) return null;
-            return (
-              <div key={status} className="mb-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <Badge variant="outline" className={`capitalize ${STATUS_COLOURS[status]}`}>{status}</Badge>
-                  <span className="text-sm text-muted-foreground">{group.length} cohort{group.length !== 1 ? 's' : ''}</span>
-                </div>
-                <div className="space-y-2">
-                  {group.map(c => (
-                    <div key={c.id} className="flex items-center justify-between rounded-xl border border-border px-4 py-3">
-                      <div>
-                        <p className="font-medium">{c.cohort_label}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {c.start_date ? new Date(c.start_date).toLocaleDateString() : '—'}
-                          {' – '}
-                          {c.end_date ? new Date(c.end_date).toLocaleDateString() : '—'}
-                        </p>
-                        {c.scope_type && (
-                          <p className="text-xs text-primary/70 mt-0.5 capitalize">Scope: {c.scope_type}</p>
-                        )}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => setCohortStudentsModal({ open: true, cohort: c })}>
-                          <Users className="h-3.5 w-3.5 mr-1" />Students
-                        </Button>
-                        <Dialog
-                          open={cohortModal.open && cohortModal.existing?.id === c.id}
-                          onOpenChange={o => setCohortModal(o ? { open: true, existing: c } : { open: false })}
-                        >
-                          <DialogTrigger asChild>
-                            <Button size="sm" variant="outline"><Pencil className="h-3.5 w-3.5 mr-1" />Edit</Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader><DialogTitle>Edit Cohort</DialogTitle></DialogHeader>
-                            <CohortModal
-                              classroomId={id!}
-                              programId={programId}
-                              existing={c}
-                              onClose={() => setCohortModal({ open: false })}
-                              onSaved={refetchCohorts}
-                            />
-                          </DialogContent>
-                        </Dialog>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-
-          {cohorts.length === 0 && (
-            <div className="text-center py-16 border-2 border-dashed border-border rounded-2xl text-muted-foreground">
-              <Layers className="h-10 w-10 mx-auto mb-3 opacity-40" />
-              <p className="font-medium">No cohorts yet</p>
-              <p className="text-sm">Create the first cohort for this classroom</p>
-            </div>
-          )}
-
-          <Dialog open={cohortStudentsModal.open} onOpenChange={o => !o && setCohortStudentsModal({ open: false })}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Students — {cohortStudentsModal.cohort?.cohort_label}</DialogTitle>
-              </DialogHeader>
-              {cohortStudentsModal.cohort && classroom?.program_id && (
-                <CohortStudentsModal
-                  cohort={cohortStudentsModal.cohort}
-                  classroomId={id!}
-                  onClose={() => setCohortStudentsModal({ open: false })}
-                />
-              )}
-            </DialogContent>
-          </Dialog>
-        </TabsContent>
-
         {/* CURRICULUM */}
         <TabsContent value="curriculum">
           <CurriculumTreeV2 classroomId={id!} />
@@ -788,6 +858,20 @@ export default function ClassroomDetailPage() {
             </Button>
           </div>
           <DataTable columns={studentColumns} data={students} searchable searchPlaceholder="Search students..." emptyMessage="No students enrolled" />
+          <Dialog open={switchModal.open} onOpenChange={o => !o && setSwitchModal({ open: false })}>
+            <DialogContent className="max-w-md">
+              <DialogHeader><DialogTitle>Switch Classroom</DialogTitle></DialogHeader>
+              {switchModal.student && (
+                <SwitchClassroomDialog
+                  student={switchModal.student}
+                  fromClassroomId={id!}
+                  programId={programId}
+                  onClose={() => setSwitchModal({ open: false })}
+                  onSwitched={() => supabase.rpc('get_classroom_students', { p_classroom_id: id }).then(({ data }) => setStudents(data || []))}
+                />
+              )}
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         {/* SCHEDULE */}

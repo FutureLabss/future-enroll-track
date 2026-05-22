@@ -197,6 +197,7 @@ export default function ClassroomWorkspacePage() {
   const [cohortOpen, setCohortOpen] = useState(false);
   const [cohortEditModal, setCohortEditModal] = useState<{ open: boolean; cohort?: any }>({ open: false });
   const [cohortForm, setCohortForm] = useState({ cohort_label: '', start_date: '', end_date: '', status: 'upcoming', scope_type: '' as '' | 'curriculum' | 'track' | 'module', scope_id: '' });
+  const [scheduleOpts, setScheduleOpts] = useState({ enabled: false, days: [] as string[], start_time: '09:00', end_time: '11:00', instructor_id: '' });
   const [savingCohort, setSavingCohort] = useState(false);
 
   // Cohort student management
@@ -329,18 +330,31 @@ export default function ClassroomWorkspacePage() {
 
   const handleCreateCohort = async () => {
     if (!cohortForm.cohort_label.trim()) { toast.error('Cohort label required'); return; }
+    if (scheduleOpts.enabled && scheduleOpts.days.length === 0) { toast.error('Select at least one day for scheduling'); return; }
     setSavingCohort(true);
     try {
       const cls = classroomData?.classrooms;
-      await createCohort({
+      const newId = await createCohort({
         ...cohortForm,
         program_id: cls?.program_id,
         scope_type: cohortForm.scope_type || null,
         scope_id: cohortForm.scope_id || null,
       });
-      toast.success('Cohort created');
+      if (scheduleOpts.enabled && scheduleOpts.days.length > 0) {
+        const { data: count } = await supabase.rpc('generate_cohort_schedule', {
+          p_cohort_id: newId,
+          p_days: scheduleOpts.days,
+          p_start_time: scheduleOpts.start_time,
+          p_end_time: scheduleOpts.end_time,
+          p_instructor_id: scheduleOpts.instructor_id || null,
+        });
+        toast.success(`Cohort created · ${count} session${count !== 1 ? 's' : ''} scheduled`);
+      } else {
+        toast.success('Cohort created');
+      }
       setCohortOpen(false);
       setCohortForm({ cohort_label: '', start_date: '', end_date: '', status: 'upcoming', scope_type: '', scope_id: '' });
+      setScheduleOpts({ enabled: false, days: [], start_time: '09:00', end_time: '11:00', instructor_id: '' });
     } catch (e: any) {
       toast.error(e.message);
     } finally {
@@ -531,6 +545,43 @@ export default function ClassroomWorkspacePage() {
                         </Select>
                       </div>
                     )}
+                    {/* Auto-schedule */}
+                    <div className="border border-border rounded-xl p-3 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium">Auto-generate schedule</Label>
+                        <Switch checked={scheduleOpts.enabled} onCheckedChange={v => setScheduleOpts(o => ({ ...o, enabled: v }))} />
+                      </div>
+                      {scheduleOpts.enabled && (
+                        <>
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-2">Class days</p>
+                            <div className="flex gap-1.5 flex-wrap">
+                              {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => {
+                                const val = { Mon:'monday',Tue:'tuesday',Wed:'wednesday',Thu:'thursday',Fri:'friday',Sat:'saturday',Sun:'sunday' }[d]!;
+                                const active = scheduleOpts.days.includes(val);
+                                return (
+                                  <button key={d} type="button"
+                                    className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${active ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:border-primary/50'}`}
+                                    onClick={() => setScheduleOpts(o => ({ ...o, days: active ? o.days.filter(x => x !== val) : [...o.days, val] }))}
+                                  >{d}</button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div><Label className="text-xs">Start time</Label><Input type="time" value={scheduleOpts.start_time} onChange={e => setScheduleOpts(o => ({ ...o, start_time: e.target.value }))} className="mt-1" /></div>
+                            <div><Label className="text-xs">End time</Label><Input type="time" value={scheduleOpts.end_time} onChange={e => setScheduleOpts(o => ({ ...o, end_time: e.target.value }))} className="mt-1" /></div>
+                          </div>
+                          <div>
+                            <Label className="text-xs">Instructor (optional)</Label>
+                            <Select value={scheduleOpts.instructor_id} onValueChange={v => setScheduleOpts(o => ({ ...o, instructor_id: v }))}>
+                              <SelectTrigger className="mt-1"><SelectValue placeholder="Assign instructor" /></SelectTrigger>
+                              <SelectContent>{staffList.map(s => <SelectItem key={s.id} value={s.id}>{s.full_name}</SelectItem>)}</SelectContent>
+                            </Select>
+                          </div>
+                        </>
+                      )}
+                    </div>
                     <Button onClick={handleCreateCohort} disabled={savingCohort} className="w-full">{savingCohort ? 'Creating...' : 'Create Cohort'}</Button>
                   </div>
                 </DialogContent>

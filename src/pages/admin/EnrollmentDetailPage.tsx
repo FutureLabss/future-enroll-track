@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { ArrowLeft, CheckCircle, XCircle, ExternalLink, Trash2, Pencil } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, ExternalLink, Trash2, Pencil, ArrowLeftRight } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface FieldValue {
@@ -31,6 +31,7 @@ export default function EnrollmentDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState({ full_name: '', email: '', phone: '' });
   const [saving, setSaving] = useState(false);
+  const [switchHistory, setSwitchHistory] = useState<any[]>([]);
 
   const openEdit = () => {
     setEditForm({ full_name: enrollment.full_name || '', email: enrollment.email || '', phone: enrollment.phone || '' });
@@ -90,10 +91,25 @@ export default function EnrollmentDetailPage() {
         .select('id, value, custom_fields(label, key, sort_order, field_type)')
         .eq('enrollment_id', id)
         .order('field_id'),
-    ]).then(([eRes, fRes]) => {
+    ]).then(async ([eRes, fRes]) => {
       setEnrollment(eRes.data);
       setFieldValues((fRes.data as any[]) || []);
       setLoading(false);
+
+      if (eRes.data?.user_id) {
+        const { data: history } = await supabase
+          .from('audit_logs')
+          .select('id, details, created_at, user_id')
+          .eq('action', 'switch_classroom')
+          .filter('details->>student_id', 'eq', eRes.data.user_id)
+          .order('created_at', { ascending: false });
+        if (history && history.length > 0) {
+          const adminIds = [...new Set(history.map((h: any) => h.user_id).filter(Boolean))];
+          const { data: admins } = await supabase.from('profiles').select('user_id, full_name, email').in('user_id', adminIds);
+          const adminMap = new Map((admins || []).map((a: any) => [a.user_id, a]));
+          setSwitchHistory(history.map((h: any) => ({ ...h, admin: adminMap.get(h.user_id) })));
+        }
+      }
     });
   }, [id]);
 
@@ -297,6 +313,39 @@ export default function EnrollmentDetailPage() {
           </div>
         </div>
       ))}
+
+      {/* Classroom Switch History */}
+      {switchHistory.length > 0 && (
+        <div className="glass-card rounded-xl p-6 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
+            <h3 className="font-heading font-semibold text-lg">Classroom Switch History</h3>
+          </div>
+          <div className="space-y-3">
+            {switchHistory.map((h: any) => (
+              <div key={h.id} className="flex items-start gap-3 rounded-lg border border-border px-4 py-3 text-sm">
+                <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center">
+                  <ArrowLeftRight className="h-3.5 w-3.5 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium">
+                    <span className="text-muted-foreground">{h.details.from_classroom_name || 'Unknown'}</span>
+                    {' → '}
+                    <span>{h.details.to_classroom_name || 'Unknown'}</span>
+                  </p>
+                  {h.details.reason && (
+                    <p className="text-muted-foreground mt-0.5 italic">"{h.details.reason}"</p>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-1">
+                    By <span className="font-medium text-foreground">{h.admin?.full_name || h.admin?.email || 'Admin'}</span>
+                    {' · '}{new Date(h.created_at).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Evidence Dialog */}
       <Dialog open={showEvidence} onOpenChange={setShowEvidence}>

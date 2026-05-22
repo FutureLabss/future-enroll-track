@@ -116,10 +116,11 @@ export function useClassroomCohorts(classroomId: string) {
 
   useEffect(() => { if (classroomId) fetch(); }, [classroomId]);
 
-  const createCohort = async (payload: { cohort_label: string; program_id?: string; start_date?: string; end_date?: string; status?: string }) => {
-    const { error } = await supabase.from('cohorts').insert({ ...payload, classroom_id: classroomId });
+  const createCohort = async (payload: { cohort_label: string; program_id?: string; start_date?: string; end_date?: string; status?: string; scope_type?: string | null; scope_id?: string | null }): Promise<string> => {
+    const { data, error } = await supabase.from('cohorts').insert({ ...payload, classroom_id: classroomId }).select('id').single();
     if (error) throw error;
     await fetch();
+    return data.id;
   };
 
   const updateCohort = async (id: string, payload: Partial<{ cohort_label: string; start_date: string; end_date: string; status: string }>) => {

@@ -16,9 +16,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { StudentCurriculumView } from '@/components/classroom/StudentCurriculumView';
 import {
   Calendar, ClipboardList, BookOpen, BarChart2, Loader2,
-  CheckCircle2, Clock, AlertCircle, MapPin, ChevronDown, ChevronUp,
+  CheckCircle2, Clock, AlertCircle, MapPin, ChevronDown, ChevronUp, LayoutList,
 } from 'lucide-react';
 
 const ATTENDANCE_STATUS_COLOURS: Record<string, string> = {
@@ -305,6 +306,7 @@ export default function StudentClassroomPage() {
       <Tabs defaultValue="schedule">
         <TabsList className="mb-6 flex-wrap h-auto gap-1">
           <TabsTrigger value="schedule"><Calendar className="h-4 w-4 mr-1.5" />Schedule</TabsTrigger>
+          <TabsTrigger value="curriculum"><LayoutList className="h-4 w-4 mr-1.5" />Curriculum</TabsTrigger>
           <TabsTrigger value="attendance"><ClipboardList className="h-4 w-4 mr-1.5" />Attendance</TabsTrigger>
           <TabsTrigger value="assignments"><BookOpen className="h-4 w-4 mr-1.5" />Assignments</TabsTrigger>
           <TabsTrigger value="progress"><BarChart2 className="h-4 w-4 mr-1.5" />Progress</TabsTrigger>
@@ -377,6 +379,11 @@ export default function StudentClassroomPage() {
               );
             })()}
           </div>
+        </TabsContent>
+
+        {/* CURRICULUM */}
+        <TabsContent value="curriculum">
+          <StudentCurriculumView classroomId={id!} />
         </TabsContent>
 
         {/* ATTENDANCE */}

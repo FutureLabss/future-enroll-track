@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, ChevronRight } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
 
 const STATUS_COLOURS: Record<string, string> = {
@@ -96,14 +96,6 @@ export default function CohortsPage() {
     },
     { key: 'start_date', header: 'Start', render: (r: any) => r.start_date ? new Date(r.start_date).toLocaleDateString() : '—' },
     { key: 'end_date', header: 'End', render: (r: any) => r.end_date ? new Date(r.end_date).toLocaleDateString() : '—' },
-    {
-      key: 'actions', header: '',
-      render: (r: any) => (
-        <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => navigate(`/admin/cohorts/${r.id}`)}>
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-      ),
-    },
   ];
 
   return (
@@ -148,7 +140,7 @@ export default function CohortsPage() {
       />
       {loading
         ? <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>
-        : <DataTable columns={columns} data={cohorts} searchable searchPlaceholder="Search cohorts..." />
+        : <DataTable columns={columns} data={cohorts} searchable searchPlaceholder="Search cohorts..." onRowClick={(r) => navigate(`/admin/cohorts/${r.id}`)} />
       }
     </div>
   );

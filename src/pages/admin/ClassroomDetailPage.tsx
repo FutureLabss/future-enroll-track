@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useClassroom, useClassroomCohorts } from '@/hooks/useClassroom';
 import { useAttendance, useAttendanceSession } from '@/hooks/useAttendance';
+import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -442,6 +443,7 @@ function AttendanceDrillDown({ session }: { session: any }) {
 export default function ClassroomDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { isSuperadmin } = useAuth();
   const { classroom, loading } = useClassroom(id!);
   const { cohorts, refetch: refetchCohorts } = useClassroomCohorts(id!);
   const { sessions } = useAttendance(id!);
@@ -663,12 +665,12 @@ export default function ClassroomDetailPage() {
       ].filter(Boolean);
       return <span className="text-sm">{flags.length ? flags.join(', ') : 'View only'}</span>;
     }},
-    { key: 'actions', header: '', render: (r: any) => (
+    { key: 'actions', header: '', render: (r: any) => isSuperadmin ? (
       <div className="flex gap-2">
         <Button size="sm" variant="outline" onClick={() => openPermissions(r)}><Pencil className="h-3.5 w-3.5 mr-1" />Permissions</Button>
         <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => handleRevokeStaff(r.id)}><Ban className="h-3.5 w-3.5 mr-1" />Revoke</Button>
       </div>
-    )},
+    ) : null },
   ];
 
   const studentColumns = [

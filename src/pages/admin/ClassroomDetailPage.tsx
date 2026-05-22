@@ -19,7 +19,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   Users, BookOpen, Calendar, ClipboardList, BarChart2, UserPlus, Loader2,
   GraduationCap, LayoutList, Layers, Plus, Pencil, Ban, CheckCircle, PlayCircle,
-  XCircle, ChevronDown, ChevronRight, Eye, Mail, ArrowLeftRight,
+  XCircle, ChevronDown, ChevronRight, Eye, Mail, ArrowLeftRight, ArrowLeft,
 } from 'lucide-react';
 
 const COHORT_STATUSES = ['upcoming', 'active', 'completed', 'archived'] as const;
@@ -725,6 +725,12 @@ export default function ClassroomDetailPage() {
 
   return (
     <div>
+      <button
+        onClick={() => navigate('/admin/classrooms')}
+        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4 transition-colors"
+      >
+        <ArrowLeft className="h-4 w-4" /> Classrooms
+      </button>
       <PageHeader
         title={classroom.name}
         description={`${(classroom as any).programs?.program_name || 'No program'} · ${classroom.location || 'No location'}`}

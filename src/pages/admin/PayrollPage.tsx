@@ -139,10 +139,12 @@ export default function PayrollPage() {
   };
 
   const removeStaff = async (id: string) => {
-    if (!confirm('Remove this staff member? Their payroll history will be deleted too.')) return;
-    const { error } = await supabase.from('staff').delete().eq('id', id);
-    if (error) return toast.error(error.message);
-    toast.success('Removed');
+    if (!confirm('Remove this staff member? Their payroll history and login account will be deleted too.')) return;
+    const { data, error } = await supabase.functions.invoke('delete-user-account', {
+      body: { account_type: 'staff', id },
+    });
+    if (error) return toast.error((data as any)?.error || error.message);
+    toast.success('Staff member and login account removed');
     fetchAll();
   };
 

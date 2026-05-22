@@ -71,9 +71,11 @@ export default function EnrollmentDetailPage() {
     if (!enrollment) return;
     setDeleting(true);
     try {
-      const { error } = await supabase.rpc('admin_delete_enrollment', { p_enrollment_id: enrollment.id });
-      if (error) throw error;
-      toast.success('Enrollment deleted');
+      const { data, error } = await supabase.functions.invoke('delete-user-account', {
+        body: { account_type: 'enrollment', id: enrollment.id },
+      });
+      if (error) throw new Error((data as any)?.error || error.message);
+      toast.success('Enrollment and login account deleted');
       navigate('/admin/enrollments');
     } catch (err: any) {
       toast.error(err.message);

@@ -63,7 +63,8 @@ export default function ClassroomsPage() {
       setOpen(false);
       setForm({ name: '', program_id: '', description: '', location: '', gps_lat: '', gps_lng: '', attendance_radius_metres: '100', geofencing_enabled: false });
     } catch (e: any) {
-      toast.error(e.message);
+      const msg = e.message || '';
+      toast.error(msg.includes('classrooms_one_per_program') ? 'This program already has a classroom.' : msg);
     } finally {
       setSaving(false);
     }
@@ -71,6 +72,8 @@ export default function ClassroomsPage() {
 
   const active = classrooms.filter(c => c.status === 'active');
   const archived = classrooms.filter(c => c.status === 'archived');
+
+  const takenProgramIds = new Set(active.map(c => (c as any).program_id).filter(Boolean));
 
   const grouped = programs.map(p => ({
     ...p,
@@ -114,13 +117,15 @@ export default function ClassroomsPage() {
                     <h2 className="font-semibold text-base">{program.program_name}</h2>
                     <Badge variant="secondary" className="text-xs">{program.classrooms.length} classroom{program.classrooms.length !== 1 ? 's' : ''}</Badge>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={e => { e.stopPropagation(); openForProgram(program.id); }}
-                  >
-                    <Plus className="h-3.5 w-3.5 mr-1" /> Add Classroom
-                  </Button>
+                  {!takenProgramIds.has(program.id) && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={e => { e.stopPropagation(); openForProgram(program.id); }}
+                    >
+                      <Plus className="h-3.5 w-3.5 mr-1" /> Add Classroom
+                    </Button>
+                  )}
                 </div>
 
                 {!isCollapsed && (
@@ -197,7 +202,11 @@ export default function ClassroomsPage() {
               <Select value={form.program_id} onValueChange={v => setForm({ ...form, program_id: v })}>
                 <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select program" /></SelectTrigger>
                 <SelectContent>
-                  {programs.map(p => <SelectItem key={p.id} value={p.id}>{p.program_name}</SelectItem>)}
+                  {programs.map(p => (
+                    <SelectItem key={p.id} value={p.id} disabled={takenProgramIds.has(p.id)}>
+                      {p.program_name}{takenProgramIds.has(p.id) ? ' — classroom exists' : ''}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

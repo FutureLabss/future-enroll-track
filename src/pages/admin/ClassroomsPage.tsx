@@ -115,17 +115,7 @@ export default function ClassroomsPage() {
                     </button>
                     <Layers className="h-4 w-4 text-primary/60" />
                     <h2 className="font-semibold text-base">{program.program_name}</h2>
-                    <Badge variant="secondary" className="text-xs">{program.classrooms.length} classroom{program.classrooms.length !== 1 ? 's' : ''}</Badge>
                   </div>
-                  {!takenProgramIds.has(program.id) && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={e => { e.stopPropagation(); openForProgram(program.id); }}
-                    >
-                      <Plus className="h-3.5 w-3.5 mr-1" /> Add Classroom
-                    </Button>
-                  )}
                 </div>
 
                 {!isCollapsed && (

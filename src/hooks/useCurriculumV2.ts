@@ -8,6 +8,8 @@ export interface LessonV2 {
   content: string | null;
   objectives: string | null;
   resources: any;
+  video_url: string | null;
+  external_link: string | null;
   order_index: number;
   created_at: string;
 }
@@ -181,13 +183,27 @@ export function useCurriculumV2(classroomId: string) {
   };
 
   // ── Lesson CRUD ──────────────────────────────────────────────────────────────
-  const addLesson = async (unitId: string, title: string, opts?: { content?: string; objectives?: string }) => {
-    const { error } = await supabase.rpc('curriculum_add_lesson', { p_unit_id: unitId, p_title: title, p_content: opts?.content ?? null, p_objectives: opts?.objectives ?? null });
+  const addLesson = async (unitId: string, title: string, opts?: { content?: string; objectives?: string; video_url?: string; external_link?: string }) => {
+    const { error } = await supabase.rpc('curriculum_add_lesson', {
+      p_unit_id: unitId, p_title: title,
+      p_content: opts?.content ?? null,
+      p_objectives: opts?.objectives ?? null,
+      p_video_url: opts?.video_url ?? null,
+      p_external_link: opts?.external_link ?? null,
+    });
     if (error) throw error;
   };
 
-  const updateLesson = async (id: string, patch: { title?: string; content?: string; objectives?: string; resources?: any; order_index?: number }) => {
-    const { error } = await supabase.rpc('curriculum_update_lesson', { p_id: id, p_title: patch.title ?? null, p_content: patch.content ?? null, p_objectives: patch.objectives ?? null, p_order_index: patch.order_index ?? null });
+  const updateLesson = async (id: string, patch: { title?: string; content?: string; objectives?: string; resources?: any; order_index?: number; video_url?: string; external_link?: string }) => {
+    const { error } = await supabase.rpc('curriculum_update_lesson', {
+      p_id: id,
+      p_title: patch.title ?? null,
+      p_content: patch.content ?? null,
+      p_objectives: patch.objectives ?? null,
+      p_order_index: patch.order_index ?? null,
+      p_video_url: patch.video_url ?? null,
+      p_external_link: patch.external_link ?? null,
+    });
     if (error) throw error;
   };
 

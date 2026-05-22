@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ChevronRight, ChevronDown, Plus, Pencil, Trash2, BookOpen, Layers, FolderOpen, FileText, BookMarked, Loader2 } from 'lucide-react';
+import { ChevronRight, ChevronDown, Plus, Pencil, Trash2, BookOpen, Layers, FolderOpen, FileText, BookMarked, Loader2, Link, Video } from 'lucide-react';
 import { toast } from 'sonner';
 
 // ── Inline name editor ───────────────────────────────────────────────────────
@@ -70,6 +70,72 @@ function AddDialog({
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
             <Button type="submit" disabled={saving || !name.trim()}>
               {saving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />} Add
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Add-lesson dialog (dedicated, with all lesson fields) ────────────────────
+function AddLessonDialog({ open, unitTitle, onClose, onAdd }: {
+  open: boolean; unitTitle: string; onClose: () => void;
+  onAdd: (fields: { title: string; description: string; content: string; video_url: string; external_link: string }) => Promise<void>;
+}) {
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [content, setContent] = useState('');
+  const [videoUrl, setVideoUrl] = useState('');
+  const [externalLink, setExternalLink] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const reset = () => { setTitle(''); setDescription(''); setContent(''); setVideoUrl(''); setExternalLink(''); };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim() || !description.trim()) return;
+    setSaving(true);
+    try {
+      await onAdd({ title: title.trim(), description: description.trim(), content: content.trim(), video_url: videoUrl.trim(), external_link: externalLink.trim() });
+      reset();
+      onClose();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to add lesson');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!v) { reset(); onClose(); } }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader><DialogTitle>Add lesson to "{unitTitle}"</DialogTitle></DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-3 mt-1">
+          <div>
+            <label className="text-sm font-medium">Title *</label>
+            <Input autoFocus className="mt-1" placeholder="Lesson title" value={title} onChange={e => setTitle(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Description *</label>
+            <Textarea className="mt-1" placeholder="What this lesson covers" value={description} onChange={e => setDescription(e.target.value)} rows={2} />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Lesson Notes / Content</label>
+            <Textarea className="mt-1" placeholder="Full lesson content or notes (optional)" value={content} onChange={e => setContent(e.target.value)} rows={3} />
+          </div>
+          <div>
+            <label className="text-sm font-medium flex items-center gap-1.5"><Video className="h-3.5 w-3.5" /> Video URL</label>
+            <Input className="mt-1" placeholder="https://youtube.com/..." value={videoUrl} onChange={e => setVideoUrl(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-sm font-medium flex items-center gap-1.5"><Link className="h-3.5 w-3.5" /> External Link</label>
+            <Input className="mt-1" placeholder="https://docs.example.com/..." value={externalLink} onChange={e => setExternalLink(e.target.value)} />
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="outline" onClick={() => { reset(); onClose(); }}>Cancel</Button>
+            <Button type="submit" disabled={saving || !title.trim() || !description.trim()}>
+              {saving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />} Add Lesson
             </Button>
           </div>
         </form>
@@ -174,10 +240,17 @@ function UnitSection({ unit, curriculumId, hook }: { unit: UnitV2; curriculumId:
           </Button>
         </div>
       )}
-      <AddDialog
-        open={addLesson} title={`Add lesson to "${unit.title}"`} onClose={() => setAddLesson(false)}
-        showContent
-        onAdd={async (title, _desc, content) => { await hook.addLesson(unit.id, title, { content }); refreshLessons(); }}
+      <AddLessonDialog
+        open={addLesson} unitTitle={unit.title} onClose={() => setAddLesson(false)}
+        onAdd={async ({ title, description, content, video_url, external_link }) => {
+          await hook.addLesson(unit.id, title, {
+            objectives: description,
+            content: content || undefined,
+            video_url: video_url || undefined,
+            external_link: external_link || undefined,
+          });
+          refreshLessons();
+        }}
       />
     </div>
   );

@@ -440,6 +440,53 @@ function AttendanceDrillDown({ session }: { session: any }) {
   );
 }
 
+function AttendanceTab({ sessions, cohorts, onView }: { sessions: any[]; cohorts: any[]; onView: (s: any) => void }) {
+  const [filterCohort, setFilterCohort] = useState('all');
+  const visible = filterCohort === 'all' ? sessions : sessions.filter(s => s.cohort_id === filterCohort);
+  return (
+    <div className="space-y-3">
+      {cohorts.length > 0 && (
+        <div className="flex items-center gap-2">
+          <Select value={filterCohort} onValueChange={setFilterCohort}>
+            <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All cohorts</SelectItem>
+              {cohorts.map(c => <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+      <div className="space-y-2">
+        {visible.map((s: any) => (
+          <div key={s.id} className="rounded-xl border border-border px-4 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="font-mono font-bold text-lg tracking-widest">{s.code}</span>
+                <Badge variant={s.status === 'open' ? 'default' : 'secondary'}>{s.status}</Badge>
+                {s.cohorts?.cohort_label && (
+                  <Badge variant="outline" className="text-xs bg-primary/5 text-primary border-primary/20">{s.cohorts.cohort_label}</Badge>
+                )}
+                <span className="text-sm text-muted-foreground">{s.lessons?.title || 'No lesson'}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">{new Date(s.created_at).toLocaleString()}</span>
+                <Button size="sm" variant="outline" onClick={() => onView(s)}>
+                  <Eye className="h-3.5 w-3.5 mr-1" />View
+                </Button>
+              </div>
+            </div>
+          </div>
+        ))}
+        {visible.length === 0 && (
+          <p className="text-center text-muted-foreground py-10">
+            {filterCohort === 'all' ? 'No attendance sessions yet' : 'No sessions for this cohort'}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function ClassroomDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -889,28 +936,7 @@ export default function ClassroomDetailPage() {
 
         {/* ATTENDANCE */}
         <TabsContent value="attendance">
-          <div className="space-y-2">
-            {sessions.map((s: any) => (
-              <div key={s.id} className="rounded-xl border border-border px-4 py-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono font-bold text-lg tracking-widest">{s.code}</span>
-                    <Badge variant={s.status === 'open' ? 'default' : 'secondary'}>{s.status}</Badge>
-                    <span className="text-sm text-muted-foreground">{s.lessons?.title || 'No lesson'}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">{new Date(s.created_at).toLocaleString()}</span>
-                    <Button size="sm" variant="outline" onClick={() => setSessionModal({ open: true, session: s })}>
-                      <Eye className="h-3.5 w-3.5 mr-1" />View
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ))}
-            {sessions.length === 0 && (
-              <p className="text-center text-muted-foreground py-10">No attendance sessions yet</p>
-            )}
-          </div>
+          <AttendanceTab sessions={sessions} cohorts={cohorts} onView={s => setSessionModal({ open: true, session: s })} />
         </TabsContent>
       </Tabs>
 

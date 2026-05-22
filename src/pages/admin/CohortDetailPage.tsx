@@ -42,21 +42,25 @@ export default function CohortDetailPage() {
 
   useEffect(() => {
     if (!id) return;
-    Promise.all([
-      supabase
-        .from('cohorts')
-        .select('*, programs(program_name), classrooms(id, name, location)')
-        .eq('id', id)
-        .single(),
-      supabase
-        .from('cohort_students')
-        .select('id, student_id, enrollment_id, profiles:student_id(full_name, email), enrollments(enrollment_status, total_amount, amount_paid, outstanding_balance)')
-        .eq('cohort_id', id),
-    ]).then(([cRes, mRes]) => {
+    const load = async () => {
+      const [cRes, mRes] = await Promise.all([
+        supabase.from('cohorts').select('*, programs(program_name), classrooms(id, name, location)').eq('id', id).single(),
+        supabase.from('cohort_students').select('id, student_id, enrollment_id, enrollments(enrollment_status, total_amount, amount_paid, outstanding_balance)').eq('cohort_id', id),
+      ]);
       setCohort(cRes.data);
-      setMembers(mRes.data || []);
+      const rows = mRes.data || [];
+
+      // Two-step profile lookup: student_id → auth.users, not profiles directly
+      const studentIds = [...new Set(rows.map((r: any) => r.student_id).filter(Boolean))];
+      const { data: profiles } = studentIds.length
+        ? await supabase.from('profiles').select('user_id, full_name, email').in('user_id', studentIds)
+        : { data: [] };
+      const profileMap = new Map((profiles || []).map((p: any) => [p.user_id, p]));
+
+      setMembers(rows.map((r: any) => ({ ...r, profile: profileMap.get(r.student_id) || null })));
       setLoading(false);
-    });
+    };
+    load();
   }, [id]);
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
@@ -67,8 +71,8 @@ export default function CohortDetailPage() {
   const totalOutstanding = members.reduce((sum, m) => sum + Number(m.enrollments?.outstanding_balance || 0), 0);
 
   const studentColumns = [
-    { key: 'name', header: 'Student', render: (r: any) => r.profiles?.full_name || <span className="text-muted-foreground text-sm">—</span> },
-    { key: 'email', header: 'Email', render: (r: any) => r.profiles?.email || '—' },
+    { key: 'name', header: 'Student', render: (r: any) => r.profile?.full_name || <span className="text-muted-foreground text-sm">—</span> },
+    { key: 'email', header: 'Email', render: (r: any) => r.profile?.email || '—' },
     {
       key: 'enrollment_status', header: 'Status',
       render: (r: any) => r.enrollments?.enrollment_status

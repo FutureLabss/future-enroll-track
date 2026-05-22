@@ -6,7 +6,8 @@ import { DataTable } from '@/components/shared/DataTable';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, GraduationCap, School, Loader2 } from 'lucide-react';
+import { ArrowLeft, GraduationCap, School, Loader2, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 const STATUS_COLOURS: Record<string, string> = {
   upcoming: 'bg-blue-500/15 text-blue-600 border-blue-500/30',
@@ -89,9 +90,20 @@ export default function CohortDetailPage() {
         title={cohort.cohort_label}
         description={cohort.programs?.program_name || 'No program'}
         actions={
-          <Button variant="ghost" onClick={() => navigate('/admin/cohorts')}>
-            <ArrowLeft className="h-4 w-4 mr-2" /> Back
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" onClick={() => navigate('/admin/cohorts')}>
+              <ArrowLeft className="h-4 w-4 mr-2" /> Back
+            </Button>
+            <Button variant="destructive" size="sm" onClick={async () => {
+              if (!confirm(`Delete cohort "${cohort.cohort_label}"? This cannot be undone.`)) return;
+              const { error } = await supabase.from('cohorts').delete().eq('id', id!);
+              if (error) { toast.error(error.message); return; }
+              toast.success('Cohort deleted');
+              navigate('/admin/cohorts');
+            }}>
+              <Trash2 className="h-4 w-4 mr-1.5" /> Delete Cohort
+            </Button>
+          </div>
         }
       />
 

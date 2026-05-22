@@ -86,12 +86,31 @@ export default function EnrollCompletePage() {
 
     // Validate required fields (skip conditional fields that aren't applicable)
     for (const field of customFields) {
-      // current_academic_level only applies to SIWES/IT students
-      if (field.key === 'current_academic_level' && formValues['highest_education'] !== 'SIWES/IT (Internship)') {
-        continue;
-      }
+      if (field.key === 'current_academic_level' && formValues['highest_education'] !== 'SIWES/IT (Internship)') continue;
       if (field.required && !formValues[field.key]) {
         toast.error(`Please fill in the required field: ${field.label}`);
+        return;
+      }
+    }
+
+    // Validate DOB: must be at least 8 years old
+    if (formValues['date_of_birth']) {
+      const dobMax = new Date(); dobMax.setFullYear(dobMax.getFullYear() - 8);
+      if (new Date(formValues['date_of_birth']) > dobMax) {
+        toast.error('Date of birth: must be at least 8 years old');
+        return;
+      }
+    }
+
+    // Validate social media URL
+    const socialUrl = formValues['social_media_profile'];
+    if (socialUrl?.trim()) {
+      try {
+        const u = new URL(socialUrl.startsWith('http') ? socialUrl : `https://${socialUrl}`);
+        const SOCIAL = ['linkedin.com','twitter.com','x.com','instagram.com','facebook.com','tiktok.com','github.com','youtube.com','threads.net'];
+        if (!SOCIAL.some(d => u.hostname.endsWith(d))) throw new Error();
+      } catch {
+        toast.error('Please enter a valid social media profile URL (LinkedIn, Twitter, Instagram, etc.)');
         return;
       }
     }
@@ -136,8 +155,9 @@ export default function EnrollCompletePage() {
 
       if (error) throw error;
       
-      toast.success("Profile completed successfully!");
+      toast.success("Profile completed successfully! Redirecting to your dashboard...");
       setSubmitted(true);
+      setTimeout(() => navigate('/student'), 2000);
     } catch (err: any) {
       toast.error("Failed to submit: " + err.message);
     } finally {

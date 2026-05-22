@@ -8,6 +8,25 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { Upload, Loader2, ImageIcon } from 'lucide-react';
 
+// Max date allowed for DOB: must be at least 8 years old
+const dobMaxDate = (() => {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - 8);
+  return d.toISOString().split('T')[0];
+})();
+
+const SOCIAL_MEDIA_DOMAINS = ['linkedin.com', 'twitter.com', 'x.com', 'instagram.com', 'facebook.com', 'tiktok.com', 'github.com', 'youtube.com', 'threads.net'];
+
+function isValidSocialMediaUrl(url: string): boolean {
+  if (!url.trim()) return true; // empty is handled by required separately
+  try {
+    const u = new URL(url.startsWith('http') ? url : `https://${url}`);
+    return SOCIAL_MEDIA_DOMAINS.some(d => u.hostname.endsWith(d));
+  } catch {
+    return false;
+  }
+}
+
 interface CustomField {
   id: string;
   label: string;
@@ -144,16 +163,28 @@ export function CustomFieldsForm({ fields, values, onChange }: CustomFieldsFormP
             rows={3}
           />
         );
-      case 'date':
+      case 'date': {
+        const isDob = field.key === 'date_of_birth';
         return (
-          <Input
-            required={field.required}
-            type="date"
-            value={value}
-            onChange={e => onChange(field.key, e.target.value)}
-            className="mt-1.5"
-          />
+          <>
+            <Input
+              required={field.required}
+              type="date"
+              value={value}
+              max={isDob ? dobMaxDate : undefined}
+              onChange={e => {
+                if (isDob && e.target.value > dobMaxDate) {
+                  toast.error('Age must be at least 8 years old');
+                  return;
+                }
+                onChange(field.key, e.target.value);
+              }}
+              className="mt-1.5"
+            />
+            {isDob && <p className="text-xs text-muted-foreground mt-1">Must be at least 8 years old</p>}
+          </>
         );
+      }
       case 'number':
         return (
           <Input
@@ -174,16 +205,24 @@ export function CustomFieldsForm({ fields, values, onChange }: CustomFieldsFormP
             <span className="text-sm text-foreground">{field.label}</span>
           </div>
         );
-      default:
+      default: {
+        const isSocial = field.key === 'social_media_profile';
+        const socialInvalid = isSocial && value.trim() && !isValidSocialMediaUrl(value);
         return (
-          <Input
-            required={field.required}
-            value={value}
-            onChange={e => onChange(field.key, e.target.value)}
-            className="mt-1.5"
-            placeholder={`Enter ${field.label.toLowerCase()}`}
-          />
+          <>
+            <Input
+              required={field.required}
+              value={value}
+              onChange={e => onChange(field.key, e.target.value)}
+              className={`mt-1.5${socialInvalid ? ' border-destructive' : ''}`}
+              placeholder={isSocial ? 'https://linkedin.com/in/yourname' : `Enter ${field.label.toLowerCase()}`}
+            />
+            {isSocial && socialInvalid && (
+              <p className="text-xs text-destructive mt-1">Enter a valid social media profile URL (LinkedIn, Twitter, Instagram, etc.)</p>
+            )}
+          </>
         );
+      }
     }
   };
 

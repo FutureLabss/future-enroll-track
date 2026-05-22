@@ -77,6 +77,17 @@ export function CompleteProfileBanner() {
       toast.error(`Please fill in: ${missingFields.map(f => f.label).join(', ')}`);
       return;
     }
+    const socialUrl = customValues['social_media_profile'];
+    if (socialUrl?.trim()) {
+      try {
+        const u = new URL(socialUrl.startsWith('http') ? socialUrl : `https://${socialUrl}`);
+        const SOCIAL = ['linkedin.com','twitter.com','x.com','instagram.com','facebook.com','tiktok.com','github.com','youtube.com','threads.net'];
+        if (!SOCIAL.some(d => u.hostname.endsWith(d))) throw new Error();
+      } catch {
+        toast.error('Please enter a valid social media profile URL');
+        return;
+      }
+    }
 
     setSaving(true);
     try {

@@ -112,12 +112,22 @@ async function deleteEnrollmentAccount(admin: ReturnType<typeof createClient>, c
   });
   if (auditErr) console.warn("Failed to write audit log:", auditErr.message);
 
+  // Only remove the auth account if this was their last enrollment
+  let authUserDeleted = false;
   if (enrollment.user_id) {
-    const { error: deleteUserErr } = await admin.auth.admin.deleteUser(enrollment.user_id);
-    if (deleteUserErr) return json({ error: `Enrollment deleted, but auth user deletion failed: ${deleteUserErr.message}` }, 500);
+    const { count } = await admin
+      .from("enrollments")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", enrollment.user_id);
+
+    if ((count ?? 0) === 0) {
+      const { error: deleteUserErr } = await admin.auth.admin.deleteUser(enrollment.user_id);
+      if (deleteUserErr) return json({ error: `Enrollment deleted, but auth user deletion failed: ${deleteUserErr.message}` }, 500);
+      authUserDeleted = true;
+    }
   }
 
-  return json({ success: true, auth_user_deleted: !!enrollment.user_id });
+  return json({ success: true, auth_user_deleted: authUserDeleted });
 }
 
 async function deleteStaffAccount(admin: ReturnType<typeof createClient>, callerId: string, staffId: string) {

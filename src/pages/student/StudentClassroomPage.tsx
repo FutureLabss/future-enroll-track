@@ -245,7 +245,7 @@ export default function StudentClassroomPage() {
     if (!id || !user) return;
     Promise.all([
       supabase.from('classrooms').select('*, programs(program_name)').eq('id', id).single(),
-      supabase.from('cohort_students').select('cohort_id, cohorts(cohort_label, scope_type)').eq('student_id', user.id).limit(1).single(),
+      supabase.from('cohort_students').select('cohort_id, cohorts!inner(cohort_label, scope_type)').eq('student_id', user.id).eq('cohorts.classroom_id', id).maybeSingle(),
       supabase.from('old_lessons')
         .select('*, cohorts(cohort_label)')
         .eq('classroom_id', id)

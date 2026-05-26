@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { ArrowLeft, CheckCircle, XCircle, ExternalLink, Trash2, Pencil, ArrowLeftRight } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, ExternalLink, Trash2, Pencil, ArrowLeftRight, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface FieldValue {
@@ -28,6 +28,7 @@ export default function EnrollmentDetailPage() {
   const [verifying, setVerifying] = useState(false);
   const [showEvidence, setShowEvidence] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState({ full_name: '', email: '', phone: '' });
   const [saving, setSaving] = useState(false);
@@ -80,6 +81,22 @@ export default function EnrollmentDetailPage() {
     } catch (err: any) {
       toast.error(err.message);
       setDeleting(false);
+    }
+  };
+
+  const handlePreview = async () => {
+    if (!enrollment?.user_id) return;
+    setPreviewing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('impersonate-user', {
+        body: { user_id: enrollment.user_id },
+      });
+      if (error || data?.error) throw new Error(data?.error || error?.message);
+      window.open(data.action_link, '_blank', 'noopener,noreferrer');
+    } catch (err: any) {
+      toast.error('Could not generate preview link: ' + err.message);
+    } finally {
+      setPreviewing(false);
     }
   };
 
@@ -198,6 +215,12 @@ export default function EnrollmentDetailPage() {
             {isSuperadmin && (
               <Button variant="outline" onClick={openEdit}>
                 <Pencil className="h-4 w-4 mr-2" /> Edit Student
+              </Button>
+            )}
+            {isSuperadmin && enrollment?.user_id && (
+              <Button variant="outline" onClick={handlePreview} disabled={previewing}>
+                <Eye className="h-4 w-4 mr-2" />
+                {previewing ? 'Generating...' : 'Preview as Student'}
               </Button>
             )}
             <AlertDialog>

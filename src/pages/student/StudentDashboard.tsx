@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -15,7 +16,7 @@ export default function StudentDashboard() {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from('enrollments').select('*, programs(program_name), cohorts(cohort_label)')
+    supabase.from('enrollments').select('*, programs(program_name), cohorts(cohort_label, classroom_id)')
       .eq('user_id', user.id).order('created_at', { ascending: false })
       .then(({ data }) => { setEnrollments(data || []); setLoading(false); });
   }, [user]);
@@ -32,7 +33,15 @@ export default function StudentDashboard() {
 
   const columns = [
     { key: 'program', header: 'Program', render: (r: any) => r.programs?.program_name || '—' },
-    { key: 'cohort', header: 'Cohort', render: (r: any) => r.cohorts?.cohort_label || '—' },
+    {
+      key: 'cohort', header: 'Cohort', render: (r: any) => {
+        const label = r.cohorts?.cohort_label;
+        const classroomId = r.cohorts?.classroom_id;
+        if (!label) return <span className="text-muted-foreground">—</span>;
+        if (classroomId) return <Link to={`/student/classrooms/${classroomId}`} className="text-primary hover:underline">{label}</Link>;
+        return <span>{label}</span>;
+      }
+    },
     { key: 'total_amount', header: 'Total', render: (r: any) => formatCurrency(Number(r.total_amount)) },
     { key: 'amount_paid', header: 'Paid', render: (r: any) => formatCurrency(Number(r.amount_paid)) },
     { key: 'outstanding_balance', header: 'Balance', render: (r: any) => formatCurrency(Number(r.outstanding_balance)) },

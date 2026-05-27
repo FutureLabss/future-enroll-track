@@ -167,9 +167,9 @@ export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps)
   const adminExtras = isAdmin
     ? [
         { to: '/admin/invoice-approvals', icon: ClipboardCheck, label: 'Invoice Approvals' },
+        { to: '/admin/staff-invoices', icon: Inbox, label: isSuperadmin ? 'Staff Invoices' : 'My Invoices' },
         ...(isSuperadmin
           ? [
-              { to: '/admin/staff-invoices', icon: Inbox, label: 'Staff Invoices' },
               { to: '/admin/payroll', icon: Banknote, label: 'Payroll' },
               { to: '/admin/manage-admins', icon: ShieldCheck, label: 'Manage Admins' },
               { to: '/admin/hubs', icon: Building2, label: 'Hub Management' },

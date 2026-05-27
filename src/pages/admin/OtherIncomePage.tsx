@@ -97,6 +97,26 @@ export default function OtherIncomePage() {
     setDialogOpen(true);
   };
 
+  const openSetAsRecurring = (r: any) => {
+    setEditingKey(null);
+    setForm({
+      category: r.category || 'workspace',
+      payer_name: r.payer_name || '',
+      payer_email: '',
+      payer_phone: '',
+      amount: r.amount != null ? String(r.amount) : '',
+      payment_date: r.payment_date || todayStr(),
+      payment_method: r.payment_method || '',
+      payment_reference: '',
+      notes: r.notes || '',
+      is_recurring: true,
+      frequency: 'monthly',
+      next_due_date: todayStr(),
+      end_date: '',
+    });
+    setDialogOpen(true);
+  };
+
   const openEditRecurring = (r: any) => {
     setEditingKey(`recurring:${r.id}`);
     setForm({
@@ -250,6 +270,8 @@ export default function OtherIncomePage() {
     ? 'Edit Recurring Payment'
     : isEditingIncome
     ? 'Edit Income'
+    : form.is_recurring
+    ? 'Set Up Recurring Payment'
     : 'Record Income';
 
   const incomeColumns = [
@@ -262,6 +284,9 @@ export default function OtherIncomePage() {
     {
       key: 'actions', header: '', render: (r: any) => (
         <div className="flex gap-1 justify-end">
+          <Button variant="ghost" size="sm" title="Set as recurring" onClick={e => { e.stopPropagation(); openSetAsRecurring(r); }}>
+            <Repeat className="h-4 w-4" />
+          </Button>
           <Button variant="ghost" size="sm" onClick={e => { e.stopPropagation(); openEditIncome(r); }}>
             <Pencil className="h-4 w-4" />
           </Button>

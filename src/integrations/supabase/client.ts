@@ -2,8 +2,21 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const requireEnv = (name: string, value: string | undefined) => {
+  if (!value?.trim()) {
+    throw new Error(
+      `Missing ${name}. Add it to .env, then restart the Vite dev server.`,
+    );
+  }
+
+  return value;
+};
+
+const SUPABASE_URL = requireEnv('VITE_SUPABASE_URL', import.meta.env.VITE_SUPABASE_URL);
+const SUPABASE_PUBLISHABLE_KEY = requireEnv(
+  'VITE_SUPABASE_PUBLISHABLE_KEY',
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+);
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";

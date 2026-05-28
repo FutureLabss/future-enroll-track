@@ -9,8 +9,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { ArrowLeft, CreditCard, Building2, Upload, Copy, Check } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { ArrowLeft, CreditCard, Building2, Upload, Copy, Check, AlertTriangle, CheckCircle2, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function StudentInvoiceDetailPage() {
@@ -22,6 +24,7 @@ export default function StudentInvoiceDetailPage() {
   const [invoice, setInvoice] = useState<any>(null);
   const [installments, setInstallments] = useState<any[]>([]);
   const [pending, setPending] = useState<any[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState(false);
   const [bankOpen, setBankOpen] = useState(false);
@@ -33,10 +36,11 @@ export default function StudentInvoiceDetailPage() {
 
   const fetchData = async () => {
     if (!id || !user) return;
-    const [invRes, instRes, pendRes] = await Promise.all([
+    const [invRes, instRes, pendRes, payRes] = await Promise.all([
       supabase.from('invoices').select('*, enrollments!inner(user_id, full_name, programs(program_name))').eq('id', id).single(),
       supabase.from('installments').select('*').eq('invoice_id', id).order('due_date'),
       supabase.from('pending_payments').select('*').eq('invoice_id', id).order('created_at', { ascending: false }),
+      supabase.from('payments').select('*').eq('invoice_id', id).order('created_at', { ascending: false }),
     ]);
     if (invRes.data && (invRes.data.enrollments as any)?.user_id !== user.id) {
       toast.error('Invoice not found');
@@ -46,6 +50,7 @@ export default function StudentInvoiceDetailPage() {
     setInvoice(invRes.data);
     setInstallments(instRes.data || []);
     setPending(pendRes.data || []);
+    setPayments(payRes.data || []);
     setLoading(false);
   };
 
@@ -68,10 +73,17 @@ export default function StudentInvoiceDetailPage() {
 
   const formatCurrency = (val: number) => `₦${Number(val).toLocaleString('en-NG')}`;
 
-  const totalPaid = installments.filter(i => i.status === 'paid').reduce((s, i) => s + Number(i.amount), 0);
+  const installmentPaid = installments.filter(i => i.status === 'paid').reduce((s, i) => s + Number(i.amount), 0);
+  const paymentPaid = payments.reduce((s, payment) => s + Number(payment.amount || 0), 0);
+  const totalPaid = Math.max(installmentPaid, paymentPaid);
   const outstanding = invoice ? Number(invoice.total_amount) - totalPaid : 0;
   const nextInstallment = installments.find(i => i.status !== 'paid');
   const defaultPayAmount = nextInstallment ? Number(nextInstallment.amount) : outstanding;
+  const paidPercent = invoice?.total_amount ? Math.min(Math.round((totalPaid / Number(invoice.total_amount)) * 100), 100) : 0;
+  const pendingAmount = pending
+    .filter(p => p.status === 'pending')
+    .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  const overdueInstallments = installments.filter(i => i.status === 'overdue' || new Date(`${i.due_date}T00:00:00`) < new Date() && i.status !== 'paid');
 
   const handlePaystack = async (amount: number, installment_id?: string) => {
     if (!amount || amount <= 0) { toast.error('Nothing to pay'); return; }
@@ -170,6 +182,49 @@ export default function StudentInvoiceDetailPage() {
         </div>
       </div>
 
+      <div className="mb-6 rounded-xl border border-border bg-card p-5">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="font-heading font-semibold">Payment Progress</h3>
+            <p className="text-sm text-muted-foreground">
+              {pendingAmount > 0
+                ? `${formatCurrency(pendingAmount)} is awaiting verification.`
+                : outstanding > 0
+                  ? `${formatCurrency(outstanding)} remaining on this invoice.`
+                  : 'This invoice is fully paid.'}
+            </p>
+          </div>
+          <Badge variant="outline">{paidPercent}% paid</Badge>
+        </div>
+        <Progress value={paidPercent} className="h-2" />
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-lg border border-border px-3 py-2">
+            <p className="text-xs text-muted-foreground">Next Due</p>
+            <p className="text-sm font-medium">
+              {nextInstallment ? `${formatCurrency(Number(nextInstallment.amount))} · ${new Date(`${nextInstallment.due_date}T00:00:00`).toLocaleDateString()}` : 'No due installment'}
+            </p>
+          </div>
+          <div className="rounded-lg border border-border px-3 py-2">
+            <p className="text-xs text-muted-foreground">Pending Review</p>
+            <p className="text-sm font-medium">{formatCurrency(pendingAmount)}</p>
+          </div>
+          <div className="rounded-lg border border-border px-3 py-2">
+            <p className="text-xs text-muted-foreground">Confirmed Receipts</p>
+            <p className="text-sm font-medium">{payments.length}</p>
+          </div>
+        </div>
+      </div>
+
+      {overdueInstallments.length > 0 && (
+        <div className="mb-6 flex items-start gap-3 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm">
+          <AlertTriangle className="mt-0.5 h-4 w-4 text-destructive" />
+          <div>
+            <p className="font-medium text-destructive">{overdueInstallments.length} overdue installment{overdueInstallments.length === 1 ? '' : 's'}</p>
+            <p className="text-muted-foreground">Pay the next outstanding installment or upload a transfer receipt if you already paid.</p>
+          </div>
+        </div>
+      )}
+
       {outstanding > 0 && (
         <div className="bg-card border border-border rounded-xl p-6 mb-6">
           <h3 className="font-heading font-semibold mb-1">Pay this invoice</h3>
@@ -223,12 +278,43 @@ export default function StudentInvoiceDetailPage() {
           </div>
           <div className="divide-y divide-border">
             {pending.map(p => (
-              <div key={p.id} className="px-6 py-3 flex items-center justify-between">
+              <div key={p.id} className="px-6 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="font-medium">{formatCurrency(Number(p.amount))} {p.payment_reference && <span className="text-muted-foreground font-normal">· {p.payment_reference}</span>}</p>
                   <p className="text-xs text-muted-foreground">{new Date(p.created_at).toLocaleString()}</p>
                 </div>
-                <StatusBadge status={p.status} />
+                <div className="flex items-center gap-2">
+                  {p.evidence_url && (
+                    <Button asChild size="sm" variant="ghost">
+                      <a href={p.evidence_url} target="_blank" rel="noreferrer">
+                        <ExternalLink className="mr-1.5 h-4 w-4" /> Proof
+                      </a>
+                    </Button>
+                  )}
+                  <StatusBadge status={p.status} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {payments.length > 0 && (
+        <div className="bg-card border border-border rounded-xl overflow-hidden mb-6">
+          <div className="px-6 py-4 border-b border-border">
+            <h3 className="font-heading font-semibold">Confirmed payments</h3>
+          </div>
+          <div className="divide-y divide-border">
+            {payments.map(payment => (
+              <div key={payment.id} className="px-6 py-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-medium">{formatCurrency(Number(payment.amount))}</p>
+                  <p className="text-xs text-muted-foreground">{payment.payment_reference} · {new Date(payment.created_at).toLocaleString()}</p>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-success">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Confirmed
+                </div>
               </div>
             ))}
           </div>
@@ -253,6 +339,9 @@ export default function StudentInvoiceDetailPage() {
               </div>
               <div className="flex items-center gap-3">
                 <StatusBadge status={inst.status} />
+                {inst.status !== 'paid' && new Date(`${inst.due_date}T00:00:00`) < new Date() && (
+                  <Badge variant="outline" className="border-destructive/30 text-destructive">Overdue</Badge>
+                )}
                 {inst.status !== 'paid' && (
                   <Button size="sm" disabled={paying} onClick={() => handlePaystack(Number(inst.amount), inst.id)}>
                     Pay {formatCurrency(Number(inst.amount))}

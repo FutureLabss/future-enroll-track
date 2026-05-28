@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useClassroom, useClassroomCohorts } from '@/hooks/useClassroom';
 import { useAttendance, useAttendanceSession } from '@/hooks/useAttendance';
+import { useAssignments } from '@/hooks/useAssignments';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -21,6 +22,7 @@ import {
   Users, BookOpen, Calendar, ClipboardList, BarChart2, UserPlus, Loader2,
   GraduationCap, LayoutList, Layers, Plus, Pencil, Ban, CheckCircle, PlayCircle,
   XCircle, ChevronDown, ChevronRight, Eye, Mail, ArrowLeftRight, ArrowLeft,
+  Archive, RotateCcw, ClipboardCheck,
 } from 'lucide-react';
 
 const COHORT_STATUSES = ['upcoming', 'active', 'completed', 'archived'] as const;
@@ -487,13 +489,68 @@ function AttendanceTab({ sessions, cohorts, onView }: { sessions: any[]; cohorts
   );
 }
 
+function ClassroomEditModal({ classroom, onSave }: { classroom: any; onSave: (payload: any) => Promise<void> }) {
+  const [form, setForm] = useState({
+    name: classroom.name || '',
+    description: classroom.description || '',
+    location: classroom.location || '',
+    gps_lat: classroom.gps_lat?.toString() || '',
+    gps_lng: classroom.gps_lng?.toString() || '',
+    attendance_radius_metres: classroom.attendance_radius_metres?.toString() || '100',
+    geofencing_enabled: !!classroom.geofencing_enabled,
+  });
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!form.name.trim()) { toast.error('Classroom name is required'); return; }
+    setSaving(true);
+    try {
+      await onSave({
+        name: form.name.trim(),
+        description: form.description.trim() || null,
+        location: form.location.trim() || null,
+        gps_lat: form.gps_lat ? Number(form.gps_lat) : null,
+        gps_lng: form.gps_lng ? Number(form.gps_lng) : null,
+        attendance_radius_metres: Number(form.attendance_radius_metres) || 100,
+        geofencing_enabled: form.geofencing_enabled,
+      });
+      toast.success('Classroom updated');
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4 mt-2">
+      <div><Label>Name *</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="mt-1.5" /></div>
+      <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="mt-1.5" rows={2} /></div>
+      <div><Label>Location</Label><Input value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} className="mt-1.5" /></div>
+      <div className="grid grid-cols-2 gap-3">
+        <div><Label>Latitude</Label><Input type="number" step="any" value={form.gps_lat} onChange={e => setForm({ ...form, gps_lat: e.target.value })} className="mt-1.5" /></div>
+        <div><Label>Longitude</Label><Input type="number" step="any" value={form.gps_lng} onChange={e => setForm({ ...form, gps_lng: e.target.value })} className="mt-1.5" /></div>
+      </div>
+      <div className="grid grid-cols-2 gap-3 items-end">
+        <div><Label>Attendance Radius (m)</Label><Input type="number" value={form.attendance_radius_metres} onChange={e => setForm({ ...form, attendance_radius_metres: e.target.value })} className="mt-1.5" /></div>
+        <div className="flex items-center gap-3 pb-2">
+          <Switch checked={form.geofencing_enabled} onCheckedChange={v => setForm({ ...form, geofencing_enabled: v })} />
+          <Label>Geofencing</Label>
+        </div>
+      </div>
+      <Button onClick={handleSave} disabled={saving} className="w-full">{saving ? 'Saving...' : 'Save Classroom'}</Button>
+    </div>
+  );
+}
+
 export default function ClassroomDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isSuperadmin } = useAuth();
-  const { classroom, loading } = useClassroom(id!);
+  const { classroom, loading, updateClassroom } = useClassroom(id!);
   const { cohorts, refetch: refetchCohorts } = useClassroomCohorts(id!);
   const { sessions } = useAttendance(id!);
+  const { assignments, publishAssignment } = useAssignments(id!);
 
   const [staff, setStaff] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
@@ -502,8 +559,12 @@ export default function ClassroomDetailPage() {
 
   // Modals
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [cohortModal, setCohortModal] = useState<{ open: boolean; cohort?: any }>({ open: false });
+  const [cohortStudentsModal, setCohortStudentsModal] = useState<{ open: boolean; cohort?: any }>({ open: false });
   const [inviteForm, setInviteForm] = useState({ staff_id: '', staff_type: 'teaching' });
   const [inviting, setInviting] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
 
   const [permissionsModal, setPermissionsModal] = useState<{ open: boolean; cs?: any }>({ open: false });
@@ -615,6 +676,19 @@ export default function ClassroomDetailPage() {
     if (error) { toast.error(error.message); return; }
     toast.success('Access revoked');
     loadAll();
+  };
+
+  const handleClassroomStatus = async (status: 'active' | 'archived') => {
+    if (status === 'archived' && !confirm(`Archive "${classroom?.name}"? Staff and students can still be reviewed, but it will be treated as inactive.`)) return;
+    setUpdatingStatus(true);
+    try {
+      await updateClassroom({ status });
+      toast.success(status === 'active' ? 'Classroom reactivated' : 'Classroom archived');
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setUpdatingStatus(false);
+    }
   };
 
   const openPermissions = (cs: any) => {
@@ -763,6 +837,42 @@ export default function ClassroomDetailPage() {
     )},
   ];
 
+  const cohortColumns = [
+    { key: 'cohort_label', header: 'Cohort', render: (r: any) => <span className="font-medium">{r.cohort_label}</span> },
+    { key: 'status', header: 'Status', render: (r: any) => (
+      <Badge variant="outline" className={`capitalize ${STATUS_COLOURS[r.status] || ''}`}>{r.status || '—'}</Badge>
+    )},
+    { key: 'students', header: 'Students', render: (r: any) => r.cohort_students?.[0]?.count ?? 0 },
+    { key: 'scope', header: 'Scope', render: (r: any) => r.scope_type ? <span className="capitalize">{r.scope_type}</span> : 'Entire classroom' },
+    { key: 'start_date', header: 'Start', render: (r: any) => r.start_date ? new Date(r.start_date).toLocaleDateString() : '—' },
+    { key: 'end_date', header: 'End', render: (r: any) => r.end_date ? new Date(r.end_date).toLocaleDateString() : '—' },
+    { key: 'actions', header: '', render: (r: any) => (
+      <div className="flex gap-1">
+        <Button size="sm" variant="ghost" className="h-7 px-2" onClick={(event) => { event.stopPropagation(); setCohortStudentsModal({ open: true, cohort: r }); }}>
+          <Users className="h-3.5 w-3.5 mr-1" />Students
+        </Button>
+        <Button size="sm" variant="ghost" className="h-7 px-2" onClick={(event) => { event.stopPropagation(); setCohortModal({ open: true, cohort: r }); }}>
+          <Pencil className="h-3.5 w-3.5 mr-1" />Edit
+        </Button>
+      </div>
+    )},
+  ];
+
+  const assignmentColumns = [
+    { key: 'title', header: 'Assignment', render: (r: any) => <span className="font-medium">{r.title}</span> },
+    { key: 'cohort', header: 'Cohort', render: (r: any) => r.cohorts?.cohort_label || 'All' },
+    { key: 'lesson', header: 'Lesson', render: (r: any) => r.old_lessons?.title || '—' },
+    { key: 'due_date', header: 'Due', render: (r: any) => r.due_date ? new Date(r.due_date).toLocaleDateString() : '—' },
+    { key: 'status', header: 'Status', render: (r: any) => <Badge variant="outline" className="capitalize">{r.status}</Badge> },
+    { key: 'actions', header: '', render: (r: any) => r.status !== 'published' ? (
+      <Button size="sm" variant="outline" onClick={async () => {
+        try { await publishAssignment(r.id); toast.success('Assignment published'); } catch (e: any) { toast.error(e.message); }
+      }}>
+        <ClipboardCheck className="h-3.5 w-3.5 mr-1" />Publish
+      </Button>
+    ) : null },
+  ];
+
   const permKeys = [
     { key: 'can_create_lessons', label: 'Create & edit lessons' },
     { key: 'can_edit_cohorts', label: 'Manage cohorts' },
@@ -784,70 +894,82 @@ export default function ClassroomDetailPage() {
         title={classroom.name}
         description={`${(classroom as any).programs?.program_name || 'No program'} · ${classroom.location || 'No location'}`}
         actions={
-          <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-            <DialogTrigger asChild>
-              <Button><UserPlus className="h-4 w-4 mr-2" />Invite Staff</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Assign Staff to Classroom</DialogTitle></DialogHeader>
-              <div className="space-y-4 mt-3">
-                <div>
-                  <Label>Staff Member *</Label>
-                  {(() => {
-                    const cpId = (classroom as any).program_id;
-                    const matched = cpId ? staffRoster.filter(s => !s.program_id || s.program_id === cpId) : staffRoster;
-                    const other = cpId ? staffRoster.filter(s => s.program_id && s.program_id !== cpId) : [];
-                    return (
-                      <>
-                        <Select value={inviteForm.staff_id} onValueChange={v => setInviteForm({ ...inviteForm, staff_id: v })}>
-                          <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select staff..." /></SelectTrigger>
-                          <SelectContent>
-                            {matched.map(s => <SelectItem key={s.id} value={s.id}>{s.full_name} — {s.role_title || s.email}</SelectItem>)}
-                            {other.length > 0 && <div className="px-2 py-1 text-xs text-muted-foreground border-t mt-1">Other programs</div>}
-                            {other.map(s => <SelectItem key={s.id} value={s.id} className="text-muted-foreground">{s.full_name} — {s.role_title || s.email}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                        {cpId && matched.length === 0 && (
-                          <p className="text-xs text-muted-foreground mt-1">No staff assigned to this program. Set a program on staff members in Payroll → Staff.</p>
-                        )}
-                      </>
-                    );
-                  })()}
+          <div className="flex items-center gap-2">
+            <Dialog open={editOpen} onOpenChange={setEditOpen}>
+              <DialogTrigger asChild><Button variant="outline"><Pencil className="h-4 w-4 mr-2" />Edit</Button></DialogTrigger>
+              <DialogContent className="max-w-lg">
+                <DialogHeader><DialogTitle>Edit Classroom</DialogTitle></DialogHeader>
+                <ClassroomEditModal classroom={classroom} onSave={async (payload) => { await updateClassroom(payload); setEditOpen(false); }} />
+              </DialogContent>
+            </Dialog>
+            <Button
+              variant="outline"
+              disabled={updatingStatus}
+              onClick={() => handleClassroomStatus(classroom.status === 'archived' ? 'active' : 'archived')}
+            >
+              {classroom.status === 'archived' ? <RotateCcw className="h-4 w-4 mr-2" /> : <Archive className="h-4 w-4 mr-2" />}
+              {classroom.status === 'archived' ? 'Reactivate' : 'Archive'}
+            </Button>
+            <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+              <DialogTrigger asChild>
+                <Button><UserPlus className="h-4 w-4 mr-2" />Invite Staff</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader><DialogTitle>Assign Staff to Classroom</DialogTitle></DialogHeader>
+                <div className="space-y-4 mt-3">
+                  <div>
+                    <Label>Staff Member *</Label>
+                    {(() => {
+                      const cpId = (classroom as any).program_id;
+                      const matched = cpId ? staffRoster.filter(s => !s.program_id || s.program_id === cpId) : staffRoster;
+                      const other = cpId ? staffRoster.filter(s => s.program_id && s.program_id !== cpId) : [];
+                      return (
+                        <>
+                          <Select value={inviteForm.staff_id} onValueChange={v => setInviteForm({ ...inviteForm, staff_id: v })}>
+                            <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select staff..." /></SelectTrigger>
+                            <SelectContent>
+                              {matched.map(s => <SelectItem key={s.id} value={s.id}>{s.full_name} — {s.role_title || s.email}</SelectItem>)}
+                              {other.length > 0 && <div className="px-2 py-1 text-xs text-muted-foreground border-t mt-1">Other programs</div>}
+                              {other.map(s => <SelectItem key={s.id} value={s.id} className="text-muted-foreground">{s.full_name} — {s.role_title || s.email}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          {cpId && matched.length === 0 && (
+                            <p className="text-xs text-muted-foreground mt-1">No staff assigned to this program. Set a program on staff members in Payroll → Staff.</p>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+                  <div>
+                    <Label>Role in Classroom *</Label>
+                    <Select value={inviteForm.staff_type} onValueChange={v => setInviteForm({ ...inviteForm, staff_type: v })}>
+                      <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="teaching">Teaching Staff</SelectItem>
+                        <SelectItem value="non_teaching">Non-Teaching Staff</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button onClick={handleInvite} disabled={inviting} className="w-full">
+                    {inviting ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <UserPlus className="h-4 w-4 mr-2" />}
+                    {inviting ? 'Assigning...' : 'Assign & Send Invitation'}
+                  </Button>
                 </div>
-                <div>
-                  <Label>Role in Classroom *</Label>
-                  <Select value={inviteForm.staff_type} onValueChange={v => setInviteForm({ ...inviteForm, staff_type: v })}>
-                    <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="teaching">Teaching Staff</SelectItem>
-                      <SelectItem value="non_teaching">Non-Teaching Staff</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button onClick={handleInvite} disabled={inviting} className="w-full">
-                  {inviting ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <UserPlus className="h-4 w-4 mr-2" />}
-                  {inviting ? 'Assigning...' : 'Assign & Send Invitation'}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
+          </div>
         }
       />
 
       <Tabs defaultValue="overview">
         <TabsList className="mb-6 flex-wrap h-auto gap-1">
           <TabsTrigger value="overview"><BarChart2 className="h-4 w-4 mr-1.5" />Overview</TabsTrigger>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 text-muted-foreground hover:text-foreground"
-            onClick={() => navigate('/admin/cohorts')}
-          >
-            <Layers className="h-4 w-4" />Cohorts ({cohorts.length})
-          </button>
+          <TabsTrigger value="cohorts"><Layers className="h-4 w-4 mr-1.5" />Cohorts ({cohorts.length})</TabsTrigger>
           <TabsTrigger value="curriculum"><LayoutList className="h-4 w-4 mr-1.5" />Curriculum</TabsTrigger>
           <TabsTrigger value="staff"><Users className="h-4 w-4 mr-1.5" />Staff ({staff.length})</TabsTrigger>
           <TabsTrigger value="students"><GraduationCap className="h-4 w-4 mr-1.5" />Students ({students.length})</TabsTrigger>
           <TabsTrigger value="schedule"><Calendar className="h-4 w-4 mr-1.5" />Schedule</TabsTrigger>
+          <TabsTrigger value="assignments"><ClipboardCheck className="h-4 w-4 mr-1.5" />Assignments</TabsTrigger>
           <TabsTrigger value="attendance"><ClipboardList className="h-4 w-4 mr-1.5" />Attendance</TabsTrigger>
         </TabsList>
 
@@ -859,6 +981,8 @@ export default function ClassroomDetailPage() {
               { label: 'Students', value: students.length, icon: GraduationCap },
               { label: 'Lessons', value: lessons.length, icon: BookOpen },
               { label: 'Cohorts', value: cohorts.length, icon: Layers },
+              { label: 'Assignments', value: assignments.length, icon: ClipboardCheck },
+              { label: 'Attendance Sessions', value: sessions.length, icon: ClipboardList },
             ].map(s => (
               <div key={s.label} className="glass-card rounded-xl p-4 text-center">
                 <s.icon className="h-5 w-5 mx-auto mb-1 text-primary" />
@@ -872,6 +996,7 @@ export default function ClassroomDetailPage() {
             <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
               {[
                 { label: 'Program', value: (classroom as any).programs?.program_name },
+                { label: 'Status', value: classroom.status },
                 { label: 'Location', value: classroom.location },
                 { label: 'GPS', value: classroom.gps_lat ? `${classroom.gps_lat}, ${classroom.gps_lng}` : 'Not set' },
                 { label: 'Geofencing', value: classroom.geofencing_enabled ? `Enabled (${classroom.attendance_radius_metres}m radius)` : 'Disabled' },
@@ -883,6 +1008,23 @@ export default function ClassroomDetailPage() {
               ))}
             </dl>
           </div>
+        </TabsContent>
+
+        {/* COHORTS */}
+        <TabsContent value="cohorts">
+          <div className="flex items-center justify-end mb-4">
+            <Button size="sm" onClick={() => setCohortModal({ open: true })}>
+              <Plus className="h-4 w-4 mr-1.5" /> New Cohort
+            </Button>
+          </div>
+          <DataTable
+            columns={cohortColumns}
+            data={cohorts}
+            searchable
+            searchPlaceholder="Search cohorts..."
+            emptyMessage="No cohorts in this classroom"
+            onRowClick={(row) => navigate(`/admin/cohorts/${row.id}`)}
+          />
         </TabsContent>
 
         {/* CURRICULUM */}
@@ -934,11 +1076,52 @@ export default function ClassroomDetailPage() {
           <DataTable columns={lessonColumns} data={lessons} emptyMessage="No lessons scheduled" />
         </TabsContent>
 
+        {/* ASSIGNMENTS */}
+        <TabsContent value="assignments">
+          <DataTable
+            columns={assignmentColumns}
+            data={assignments}
+            searchable
+            searchPlaceholder="Search assignments..."
+            emptyMessage="No assignments created"
+          />
+        </TabsContent>
+
         {/* ATTENDANCE */}
         <TabsContent value="attendance">
           <AttendanceTab sessions={sessions} cohorts={cohorts} onView={s => setSessionModal({ open: true, session: s })} />
         </TabsContent>
       </Tabs>
+
+      <Dialog open={cohortModal.open} onOpenChange={o => !o && setCohortModal({ open: false })}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>{cohortModal.cohort ? 'Edit Cohort' : 'Create Cohort'}</DialogTitle></DialogHeader>
+          <CohortModal
+            classroomId={id!}
+            programId={programId}
+            existing={cohortModal.cohort}
+            staffList={staffRoster}
+            onClose={() => setCohortModal({ open: false })}
+            onSaved={() => { refetchCohorts(); loadAll(); }}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={cohortStudentsModal.open} onOpenChange={o => !o && setCohortStudentsModal({ open: false })}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Manage Students — {cohortStudentsModal.cohort?.cohort_label}</DialogTitle></DialogHeader>
+          {cohortStudentsModal.cohort && (
+            <CohortStudentsModal
+              cohort={cohortStudentsModal.cohort}
+              classroomId={id!}
+              onClose={() => {
+                setCohortStudentsModal({ open: false });
+                refetchCohorts();
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Permissions modal */}
       <Dialog open={permissionsModal.open} onOpenChange={o => setPermissionsModal({ open: o })}>

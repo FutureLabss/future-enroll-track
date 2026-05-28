@@ -59,20 +59,27 @@ export function useClassroom(id: string) {
   const [classroom, setClassroom] = useState<Classroom | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const fetchClassroom = async () => {
     if (!id) return;
-    supabase
+    setLoading(true);
+    const { data } = await supabase
       .from('classrooms')
       .select('*, programs(program_name), cohorts(id, cohort_label, status, start_date, end_date)')
       .eq('id', id)
-      .single()
-      .then(({ data }) => {
-        setClassroom(data as any);
-        setLoading(false);
-      });
-  }, [id]);
+      .single();
+    setClassroom(data as any);
+    setLoading(false);
+  };
 
-  return { classroom, loading };
+  useEffect(() => { fetchClassroom(); }, [id]);
+
+  const updateClassroom = async (payload: Partial<Classroom>) => {
+    const { error } = await supabase.from('classrooms').update(payload as any).eq('id', id);
+    if (error) throw error;
+    await fetchClassroom();
+  };
+
+  return { classroom, loading, refetch: fetchClassroom, updateClassroom };
 }
 
 export function useStaffClassrooms() {

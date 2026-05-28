@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable } from '@/components/shared/DataTable';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
@@ -13,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Plus, Pencil, Trash2, Wallet, TrendingUp, Repeat, Check, Square, Mail, Phone, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Pencil, Trash2, Wallet, TrendingUp, Repeat, Check, Square, Mail, Phone } from 'lucide-react';
 import { toast } from 'sonner';
 import { StatCard } from '@/components/shared/StatCard';
 
@@ -51,7 +52,6 @@ export default function OtherIncomePage() {
   // null = creating new; string = editing existing one-off; 'recurring:id' = editing existing recurring
   const [editingKey, setEditingKey] = useState<string | null>(null);
 
-  const [recurringExpanded, setRecurringExpanded] = useState(true);
   const [markingPaid, setMarkingPaid] = useState<string | null>(null);
   const [sendingReminder, setSendingReminder] = useState(false);
 
@@ -242,6 +242,13 @@ export default function OtherIncomePage() {
       toast.success('Recurring payment stopped');
       fetchRecurring();
     } catch (err: any) { toast.error(err.message); }
+  };
+
+  const deleteRecurring = async (id: string) => {
+    const { error } = await (supabase as any).from('recurring_income').delete().eq('id', id);
+    if (error) return toast.error(error.message);
+    toast.success('Recurring payment deleted');
+    fetchRecurring();
   };
 
   const sendReminders = async () => {
@@ -452,44 +459,41 @@ export default function OtherIncomePage() {
         <StatCard title="This Month" value={fmt(thisMonth)} icon={TrendingUp} />
       </div>
 
-      {/* Recurring Payments section */}
-      <div className="mb-6">
-        <button
-          className="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-border bg-muted/40 hover:bg-muted/60 transition-colors mb-3"
-          onClick={() => setRecurringExpanded(v => !v)}
-        >
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <Repeat className="h-4 w-4 text-muted-foreground" />
-            Recurring Payments
-            {activeRecurring.length > 0 && (
-              <Badge variant="secondary" className="ml-1">{activeRecurring.length} active</Badge>
-            )}
+      <Tabs defaultValue="history">
+        <TabsList>
+          <TabsTrigger value="history">Income History</TabsTrigger>
+          <TabsTrigger value="recurring">
+            Recurring
             {dueCount > 0 && (
-              <Badge variant="destructive" className="ml-1">{dueCount} due</Badge>
+              <Badge variant="destructive" className="ml-2 h-4 px-1.5 text-[10px]">{dueCount}</Badge>
             )}
-          </div>
-          <div className="flex items-center gap-3">
-            {recurringExpanded && activeRecurring.some(r => r.payer_email || r.payer_phone) && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs"
-                disabled={sendingReminder}
-                onClick={e => { e.stopPropagation(); sendReminders(); }}
-              >
-                <Mail className="h-3.5 w-3.5 mr-1.5" />
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ── Income History ── */}
+        <TabsContent value="history" className="mt-4">
+          {loadingRows ? (
+            <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>
+          ) : (
+            <DataTable columns={incomeColumns} data={rows} searchable emptyMessage="No income recorded yet." />
+          )}
+        </TabsContent>
+
+        {/* ── Recurring Payments ── */}
+        <TabsContent value="recurring" className="mt-4">
+          {activeRecurring.some(r => r.payer_email || r.payer_phone) && (
+            <div className="flex justify-end mb-3">
+              <Button size="sm" variant="outline" disabled={sendingReminder} onClick={sendReminders}>
+                <Mail className="h-4 w-4 mr-2" />
                 {sendingReminder ? 'Sending…' : 'Send Reminders'}
               </Button>
-            )}
-            {recurringExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-          </div>
-        </button>
+            </div>
+          )}
 
-        {recurringExpanded && (
-          loadingRecurring ? (
-            <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" /></div>
+          {loadingRecurring ? (
+            <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>
           ) : recurring.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">
+            <p className="text-sm text-muted-foreground text-center py-12">
               No recurring payments yet. Use <strong>Record Income</strong> and toggle <em>Recurring payment</em> to create one.
             </p>
           ) : (
@@ -567,6 +571,27 @@ export default function OtherIncomePage() {
                               </AlertDialogContent>
                             </AlertDialog>
                           )}
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" title="Delete">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete recurring payment?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This permanently removes the recurring template for <strong>{r.payer_name}</strong>. Past income records are kept but this setup cannot be recovered.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => deleteRecurring(r.id)}>
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         </div>
                       </div>
                     </CardContent>
@@ -574,19 +599,9 @@ export default function OtherIncomePage() {
                 );
               })}
             </div>
-          )
-        )}
-      </div>
-
-      {/* Income history */}
-      <div>
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Income History</h2>
-        {loadingRows ? (
-          <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>
-        ) : (
-          <DataTable columns={incomeColumns} data={rows} searchable emptyMessage="No income recorded yet." />
-        )}
-      </div>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

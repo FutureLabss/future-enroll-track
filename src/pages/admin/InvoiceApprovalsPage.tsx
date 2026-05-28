@@ -10,8 +10,7 @@ import { Check, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function InvoiceApprovalsPage() {
-  const { user } = useAuth();
-  const isSuperadmin = user?.email?.toLowerCase() === 'manassehudim@gmail.com';
+  const { user, isAdmin } = useAuth();
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
@@ -56,7 +55,7 @@ export default function InvoiceApprovalsPage() {
     } catch (e: any) { toast.error(e.message); } finally { setBusy(null); }
   };
 
-  if (!isSuperadmin) return <div className="text-center py-12 text-muted-foreground">Superadmin access required</div>;
+  if (!isAdmin) return <div className="text-center py-12 text-muted-foreground">Admin access required</div>;
 
   const filterByStatus = (s: string) => rows.filter(r => r.status === s);
 

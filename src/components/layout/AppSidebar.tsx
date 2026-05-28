@@ -166,10 +166,10 @@ export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps)
   const baseNav = isDemo ? rawBaseNav.filter(item => !DEMO_HIDDEN_ROUTES.has(item.to)) : rawBaseNav;
   const adminExtras = isAdmin
     ? [
+        { to: '/admin/invoice-approvals', icon: ClipboardCheck, label: 'Invoice Approvals' },
+        { to: '/admin/staff-invoices', icon: Inbox, label: isSuperadmin ? 'Staff Invoices' : 'My Invoices' },
         ...(isSuperadmin
           ? [
-              { to: '/admin/invoice-approvals', icon: ClipboardCheck, label: 'Invoice Approvals' },
-              { to: '/admin/staff-invoices', icon: Inbox, label: 'Staff Invoices' },
               { to: '/admin/payroll', icon: Banknote, label: 'Payroll' },
               { to: '/admin/manage-admins', icon: ShieldCheck, label: 'Manage Admins' },
               { to: '/admin/hubs', icon: Building2, label: 'Hub Management' },

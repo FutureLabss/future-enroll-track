@@ -20,7 +20,7 @@ import { StudentCurriculumView } from '@/components/classroom/StudentCurriculumV
 import {
   Calendar, ClipboardList, BookOpen, BarChart2, Loader2,
   CheckCircle2, Clock, AlertCircle, MapPin, ChevronDown, ChevronUp, LayoutList,
-  Users, Video,
+  Users, Video, ExternalLink, FileText, Send,
 } from 'lucide-react';
 
 const ATTENDANCE_STATUS_COLOURS: Record<string, string> = {
@@ -158,20 +158,52 @@ function AttendanceTab({ classroomId }: { classroomId: string }) {
 }
 
 function AssignmentsTab({ classroomId }: { classroomId: string }) {
-  const { assignments, loading } = useStudentAssignments(classroomId);
+  const { assignments, loading, refetch } = useStudentAssignments(classroomId);
   const [selected, setSelected] = useState<any>(null);
   const [subText, setSubText] = useState('');
+  const [fileUrl, setFileUrl] = useState('');
+  const [filter, setFilter] = useState<'all' | 'pending' | 'submitted' | 'graded'>('all');
   const [submitting, setSubmitting] = useState(false);
   const { submitAssignment } = useSubmissions(selected?.id || '');
 
+  const getSubmission = (assignment: any) => assignment.assignment_submissions?.[0];
+
+  const getStatus = (assignment: any) => {
+    const sub = getSubmission(assignment);
+    if (sub?.status === 'graded') return 'graded';
+    if (sub?.status === 'late') return 'late';
+    if (sub) return 'submitted';
+    if (assignment.due_date && new Date(assignment.due_date) < new Date()) return 'overdue';
+    return 'pending';
+  };
+
+  const counts = assignments.reduce((acc: Record<string, number>, assignment: any) => {
+    const status = getStatus(assignment);
+    acc.all += 1;
+    if (status === 'pending' || status === 'overdue') acc.pending += 1;
+    if (status === 'submitted' || status === 'late') acc.submitted += 1;
+    if (status === 'graded') acc.graded += 1;
+    return acc;
+  }, { all: 0, pending: 0, submitted: 0, graded: 0 });
+
+  const visibleAssignments = assignments.filter((assignment: any) => {
+    const status = getStatus(assignment);
+    if (filter === 'pending') return status === 'pending' || status === 'overdue';
+    if (filter === 'submitted') return status === 'submitted' || status === 'late';
+    if (filter === 'graded') return status === 'graded';
+    return true;
+  });
+
   const handleSubmit = async () => {
-    if (!subText.trim()) { toast.error('Write your submission'); return; }
+    if (!subText.trim() && !fileUrl.trim()) { toast.error('Write a submission or add a file link'); return; }
     setSubmitting(true);
     try {
-      await submitAssignment(subText);
+      await submitAssignment(subText, fileUrl || undefined, selected?.due_date);
       toast.success('Submitted!');
       setSelected(null);
       setSubText('');
+      setFileUrl('');
+      await refetch();
     } catch (e: any) {
       toast.error(e.message);
     } finally {
@@ -183,14 +215,47 @@ function AssignmentsTab({ classroomId }: { classroomId: string }) {
 
   return (
     <div className="space-y-4">
-      {assignments.map((a: any) => {
-        const sub = a.assignment_submissions?.[0];
-        const isOverdue = a.due_date && new Date(a.due_date) < new Date() && !sub;
+      <div className="grid gap-3 sm:grid-cols-4">
+        {[
+          { key: 'all', label: 'All', value: counts.all },
+          { key: 'pending', label: 'To Submit', value: counts.pending },
+          { key: 'submitted', label: 'Submitted', value: counts.submitted },
+          { key: 'graded', label: 'Graded', value: counts.graded },
+        ].map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            onClick={() => setFilter(item.key as typeof filter)}
+            className={`rounded-xl border px-4 py-3 text-left transition-colors ${filter === item.key ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:bg-muted/40'}`}
+          >
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{item.label}</span>
+            <span className="mt-1 block text-2xl font-semibold">{item.value}</span>
+          </button>
+        ))}
+      </div>
+
+      {visibleAssignments.map((a: any) => {
+        const sub = getSubmission(a);
+        const status = getStatus(a);
+        const isOverdue = status === 'overdue';
+        const canSubmit = !sub || sub.status !== 'graded';
+        const statusClass = status === 'graded'
+          ? 'bg-success/15 text-success border-success/30'
+          : status === 'late' || status === 'overdue'
+            ? 'bg-destructive/15 text-destructive border-destructive/30'
+            : status === 'submitted'
+              ? 'bg-primary/15 text-primary border-primary/30'
+              : 'bg-muted text-muted-foreground border-muted';
         return (
           <div key={a.id} className="glass-card rounded-2xl p-5 border border-border">
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
-                <h3 className="font-semibold">{a.title}</h3>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="font-semibold">{a.title}</h3>
+                  <Badge variant="outline" className={`capitalize ${statusClass}`}>
+                    {status === 'pending' ? 'to submit' : status}
+                  </Badge>
+                </div>
                 {a.due_date && (
                   <p className={`text-sm flex items-center gap-1 mt-1 ${isOverdue ? 'text-destructive' : 'text-muted-foreground'}`}>
                     <Clock className="h-3.5 w-3.5" />
@@ -200,15 +265,50 @@ function AssignmentsTab({ classroomId }: { classroomId: string }) {
                 )}
                 {a.instructions && <p className="text-sm mt-2 text-muted-foreground line-clamp-2">{a.instructions}</p>}
                 {a.units?.title && <p className="text-xs mt-2 text-muted-foreground">Unit: {a.units.title}</p>}
+                {a.assignment_resources?.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {a.assignment_resources.filter((resource: any) => resource.file_url).map((resource: any) => (
+                      <Button key={resource.id} asChild size="sm" variant="outline" className="h-8">
+                        <a href={resource.file_url} target="_blank" rel="noreferrer">
+                          <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                          {resource.title || 'Resource'}
+                        </a>
+                      </Button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="shrink-0 flex flex-col items-end gap-2">
-                {sub ? (
-                  <Badge variant={sub.status === 'graded' ? 'default' : 'secondary'} className="capitalize">{sub.status}</Badge>
-                ) : (
-                  <Button size="sm" onClick={() => setSelected(a)}>Submit</Button>
+                {canSubmit && (
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setSelected(a);
+                      setSubText(sub?.submission_text || '');
+                      setFileUrl(sub?.file_url || '');
+                    }}
+                  >
+                    <Send className="mr-1.5 h-3.5 w-3.5" />
+                    {sub ? 'Update' : 'Submit'}
+                  </Button>
                 )}
               </div>
             </div>
+            {sub && (
+              <div className="mt-3 rounded-lg border border-border bg-muted/30 p-3 text-sm space-y-1">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-medium">Your submission</p>
+                  {sub.submitted_at && <span className="text-xs text-muted-foreground">{new Date(sub.submitted_at).toLocaleString()}</span>}
+                </div>
+                {sub.submission_text && <p className="text-muted-foreground line-clamp-3">{sub.submission_text}</p>}
+                {sub.file_url && (
+                  <a href={sub.file_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary">
+                    <FileText className="h-3.5 w-3.5" />
+                    Open submitted file
+                  </a>
+                )}
+              </div>
+            )}
             {sub?.grade && (
               <div className="mt-3 p-3 rounded-lg bg-muted/50 text-sm space-y-1">
                 <p><strong>Grade:</strong> {sub.grade}</p>
@@ -219,13 +319,20 @@ function AssignmentsTab({ classroomId }: { classroomId: string }) {
         );
       })}
       {assignments.length === 0 && <p className="text-center text-muted-foreground py-10">No assignments yet</p>}
+      {assignments.length > 0 && visibleAssignments.length === 0 && (
+        <p className="text-center text-muted-foreground py-10">No assignments in this view</p>
+      )}
 
-      <Dialog open={!!selected} onOpenChange={o => { if (!o) { setSelected(null); setSubText(''); } }}>
+      <Dialog open={!!selected} onOpenChange={o => { if (!o) { setSelected(null); setSubText(''); setFileUrl(''); } }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Submit: {selected?.title}</DialogTitle></DialogHeader>
           <div className="space-y-3 mt-2">
             {selected?.instructions && <p className="text-sm text-muted-foreground">{selected.instructions}</p>}
             <div><Label>Your Answer / Notes</Label><Textarea value={subText} onChange={e => setSubText(e.target.value)} rows={6} className="mt-1.5" /></div>
+            <div>
+              <Label>File Link</Label>
+              <Input value={fileUrl} onChange={e => setFileUrl(e.target.value)} placeholder="https://..." className="mt-1.5" />
+            </div>
             <Button onClick={handleSubmit} disabled={submitting} className="w-full">{submitting ? 'Submitting...' : 'Submit Assignment'}</Button>
           </div>
         </DialogContent>

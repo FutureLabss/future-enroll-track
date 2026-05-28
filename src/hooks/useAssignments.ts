@@ -51,26 +51,30 @@ export function useStudentAssignments(classroomId: string) {
   const [assignments, setAssignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const fetchAssignments = async () => {
     if (!classroomId || !user) return;
-    supabase
+    setLoading(true);
+    const { data } = await supabase
       .from('assignments')
       .select(`
         *,
         units(title),
         assignment_resources(*),
-        assignment_submissions!left(id, status, submitted_at, file_url, submission_text)
+        assignment_submissions!left(id, status, submitted_at, file_url, submission_text, grade, feedback, graded_at)
       `)
       .eq('classroom_id', classroomId)
       .eq('status', 'published')
-      .order('due_date', { ascending: true })
-      .then(({ data }) => {
-        setAssignments(data || []);
-        setLoading(false);
-      });
+      .eq('assignment_submissions.student_id', user.id)
+      .order('due_date', { ascending: true });
+    setAssignments(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchAssignments();
   }, [classroomId, user]);
 
-  return { assignments, loading };
+  return { assignments, loading, refetch: fetchAssignments };
 }
 
 export function useSubmissions(assignmentId: string) {
@@ -92,9 +96,9 @@ export function useSubmissions(assignmentId: string) {
     fetchSubmissions();
   }, [assignmentId]);
 
-  const submitAssignment = async (text: string, fileUrl?: string) => {
+  const submitAssignment = async (text: string, fileUrl?: string, dueDate?: string | null) => {
     const { data: { user } } = await supabase.auth.getUser();
-    const isLate = false; // caller handles due date check
+    const isLate = Boolean(dueDate && new Date(dueDate) < new Date());
     const { error } = await supabase.from('assignment_submissions').upsert({
       assignment_id: assignmentId,
       student_id: user?.id,

@@ -77,6 +77,7 @@ const adminNav = [
 const studentNav = [
   { to: '/student', icon: LayoutDashboard, label: 'My Dashboard' },
   { to: '/student/classrooms', icon: School, label: 'My Classrooms' },
+  { to: '/student/notifications', icon: Bell, label: 'Notifications' },
   { to: '/student/invoices', icon: FileText, label: 'My Invoices' },
   { to: '/student/payments', icon: CreditCard, label: 'Payment History' },
 ];

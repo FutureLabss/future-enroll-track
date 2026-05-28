@@ -37,6 +37,7 @@ import StudentInvoicesPage from "@/pages/student/StudentInvoicesPage";
 import StudentInvoiceDetailPage from "@/pages/student/StudentInvoiceDetailPage";
 import PaymentCallbackPage from "@/pages/student/PaymentCallbackPage";
 import StudentPaymentsPage from "@/pages/student/StudentPaymentsPage";
+import StudentNotificationsPage from "@/pages/student/StudentNotificationsPage";
 import PendingPaymentsPage from "@/pages/admin/PendingPaymentsPage";
 import OrgDashboard from "@/pages/org/OrgDashboard";
 import OrgEnrollmentsPage from "@/pages/org/OrgEnrollmentsPage";
@@ -152,6 +153,7 @@ const App = () => (
               <Route path="/student/invoices/:id" element={<StudentInvoiceDetailPage />} />
               <Route path="/student/invoices/:id/payment-callback" element={<PaymentCallbackPage />} />
               <Route path="/student/payments" element={<StudentPaymentsPage />} />
+              <Route path="/student/notifications" element={<StudentNotificationsPage />} />
               <Route path="/student/classrooms" element={<StudentClassroomsPage />} />
               <Route path="/student/classrooms/:id" element={<StudentClassroomPage />} />
               

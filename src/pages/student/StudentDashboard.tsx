@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   ArrowRight,
   BarChart3,
+  Bell,
   BookOpen,
   Calendar,
   CheckCircle2,
@@ -20,7 +21,10 @@ import {
   CreditCard,
   FileText,
   GraduationCap,
+  HelpCircle,
   LayoutList,
+  Mail,
+  UserCircle,
 } from 'lucide-react';
 
 const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
@@ -32,6 +36,7 @@ export default function StudentDashboard() {
   const [classrooms, setClassrooms] = useState<any[]>([]);
   const [schedules, setSchedules] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
   const [submittedAssignmentIds, setSubmittedAssignmentIds] = useState<Set<string>>(new Set());
   const [profileMeta, setProfileMeta] = useState({ total: 0, completed: 0, requiredMissing: 0 });
   const [progress, setProgress] = useState<any>(null);
@@ -65,7 +70,7 @@ export default function StudentDashboard() {
       const fields = fieldsRes.data || [];
       const classroomIds = classroomRows.map((row: any) => row.classroom_id).filter(Boolean);
 
-      const [scheduleRes, assignmentRes, submissionRes, fieldValuesRes] = await Promise.all([
+      const [scheduleRes, assignmentRes, submissionRes, fieldValuesRes, notificationRes] = await Promise.all([
         classroomIds.length
           ? supabase
               .from('schedules')
@@ -96,6 +101,12 @@ export default function StudentDashboard() {
               .select('field_id, value')
               .eq('enrollment_id', enrollmentRows[0].id)
           : Promise.resolve({ data: [] } as any),
+        supabase
+          .from('notifications')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(5),
       ]);
 
       const submitted = new Set((submissionRes.data || []).map((row: any) => row.assignment_id));
@@ -119,6 +130,7 @@ export default function StudentDashboard() {
       setClassrooms(classroomRows);
       setSchedules(scheduleRes.data || []);
       setAssignments(assignmentRes.data || []);
+      setNotifications(notificationRes.data || []);
       setSubmittedAssignmentIds(submitted);
       setProfileMeta({ total: fields.length, completed: filledFieldIds.size, requiredMissing });
       setLoading(false);
@@ -136,6 +148,7 @@ export default function StudentDashboard() {
     return s + balance;
   }, 0);
   const overdue = enrollments.filter(e => e.enrollment_status === 'overdue').length;
+  const unreadNotifications = notifications.filter(notification => !notification.read);
 
   const pendingAssignments = useMemo(() => {
     return assignments.filter((assignment) => !submittedAssignmentIds.has(assignment.id));
@@ -175,7 +188,7 @@ export default function StudentDashboard() {
         <StatCard title="Outstanding" value={formatCurrency(totalOwed)} icon={AlertTriangle} />
         <StatCard title="Total Paid" value={formatCurrency(totalPaid)} icon={CreditCard} />
         <StatCard title="Pending Assignments" value={pendingAssignments.length} icon={BookOpen} />
-        <StatCard title="Overdue Enrollments" value={overdue} icon={FileText} />
+        <StatCard title="Unread Notices" value={unreadNotifications.length} icon={Bell} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 mb-8">
@@ -310,6 +323,66 @@ export default function StudentDashboard() {
           ) : (
             <p className="text-sm text-muted-foreground py-4 text-center">Progress starts when you join a cohort.</p>
           )}
+        </section>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 mb-8">
+        <section className="glass-card rounded-xl p-5">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="font-heading font-semibold">Notifications</h2>
+              <p className="text-sm text-muted-foreground">Recent payment and account messages</p>
+            </div>
+            <Bell className="h-5 w-5 text-primary" />
+          </div>
+          <div className="space-y-3">
+            {notifications.slice(0, 3).map((notification: any) => (
+              <div key={notification.id} className={`rounded-lg border px-3 py-2.5 ${notification.read ? 'border-border' : 'border-primary/30 bg-primary/5'}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{notification.title}</p>
+                    <p className="text-xs text-muted-foreground line-clamp-2">{notification.message}</p>
+                  </div>
+                  {!notification.read && <Badge className="shrink-0">New</Badge>}
+                </div>
+              </div>
+            ))}
+            {notifications.length === 0 && <p className="text-sm text-muted-foreground py-4 text-center">No notifications yet.</p>}
+          </div>
+          <Button variant="outline" size="sm" className="mt-4" onClick={() => navigate('/student/notifications')}>
+            View Notifications <ArrowRight className="h-4 w-4 ml-1.5" />
+          </Button>
+        </section>
+
+        <section className="glass-card rounded-xl p-5">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="font-heading font-semibold">Support</h2>
+              <p className="text-sm text-muted-foreground">Get help with classes, payments, or profile access</p>
+            </div>
+            <HelpCircle className="h-5 w-5 text-primary" />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Button asChild variant="outline" className="justify-start">
+              <a href="mailto:support@futurelabs.ng?subject=Student%20support%20request">
+                <Mail className="mr-2 h-4 w-4" /> Email Support
+              </a>
+            </Button>
+            <Button variant="outline" className="justify-start" onClick={() => navigate('/profile')}>
+              <UserCircle className="mr-2 h-4 w-4" /> Update Profile
+            </Button>
+            <Button variant="outline" className="justify-start" onClick={() => navigate('/student/invoices')}>
+              <CreditCard className="mr-2 h-4 w-4" /> Payment Help
+            </Button>
+            {primaryClassroom && (
+              <Button variant="outline" className="justify-start" onClick={() => navigate(`/student/classrooms/${primaryClassroom.id}`)}>
+                <BookOpen className="mr-2 h-4 w-4" /> Class Help
+              </Button>
+            )}
+          </div>
+          <p className="mt-4 text-xs text-muted-foreground">
+            Include your full name, program, and invoice or classroom name when asking for help.
+          </p>
         </section>
       </div>
 

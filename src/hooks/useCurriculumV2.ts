@@ -125,6 +125,17 @@ export function useCurriculumV2(classroomId: string) {
     await fetchAll();
   };
 
+  const cloneCurriculum = async (sourceCurriculumId: string, targetClassroomId: string, title?: string): Promise<string> => {
+    const { data, error } = await supabase.rpc('clone_curriculum_v2' as any, {
+      p_source_curriculum_id: sourceCurriculumId,
+      p_target_classroom_id: targetClassroomId,
+      p_title: title?.trim() || null,
+    });
+    if (error) throw error;
+    if (targetClassroomId === classroomId) await fetchAll();
+    return data as string;
+  };
+
   // ── Track CRUD ───────────────────────────────────────────────────────────────
   const addTrack = async (curriculumId: string, title: string, description?: string) => {
     const { error } = await supabase.rpc('curriculum_add_track', { p_curriculum_id: curriculumId, p_title: title, p_description: description ?? null });
@@ -221,6 +232,7 @@ export function useCurriculumV2(classroomId: string) {
     createCurriculum,
     updateCurriculum,
     deleteCurriculum,
+    cloneCurriculum,
     addTrack,
     updateTrack,
     deleteTrack,

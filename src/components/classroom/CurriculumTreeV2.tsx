@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ChevronRight, ChevronDown, Plus, Pencil, Trash2, BookOpen, Layers, FolderOpen, FileText, BookMarked, Loader2, Link, Video } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ChevronRight, ChevronDown, Plus, Pencil, Trash2, BookOpen, Layers, FolderOpen, FileText, BookMarked, Loader2, Link, Video, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 
 // ── Inline name editor ───────────────────────────────────────────────────────
@@ -21,6 +22,93 @@ function InlineEdit({ value, onSave, onCancel }: { value: string; onSave: (v: st
       <Button type="submit" size="sm" className="h-7 px-2 text-xs">Save</Button>
       <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={onCancel}>✕</Button>
     </form>
+  );
+}
+
+function CopyCurriculumDialog({
+  open,
+  curriculum,
+  currentClassroomId,
+  hook,
+  onClose,
+}: {
+  open: boolean;
+  curriculum: CurriculumV2;
+  currentClassroomId: string;
+  hook: ReturnType<typeof useCurriculumV2>;
+  onClose: () => void;
+}) {
+  const [classrooms, setClassrooms] = useState<any[]>([]);
+  const [targetClassroomId, setTargetClassroomId] = useState('');
+  const [title, setTitle] = useState(`${curriculum.title} Copy`);
+  const [loading, setLoading] = useState(false);
+  const [copying, setCopying] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setTitle(`${curriculum.title} Copy`);
+    setTargetClassroomId('');
+    setLoading(true);
+    supabase
+      .from('classrooms')
+      .select('id, name, programs(program_name)')
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        setClassrooms((data || []).filter((row: any) => row.id !== currentClassroomId));
+        setLoading(false);
+      });
+  }, [open, curriculum.id, curriculum.title, currentClassroomId]);
+
+  const handleCopy = async () => {
+    if (!targetClassroomId) { toast.error('Select a target classroom'); return; }
+    setCopying(true);
+    try {
+      await hook.cloneCurriculum(curriculum.id, targetClassroomId, title);
+      toast.success('Curriculum copied');
+      onClose();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setCopying(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={v => !v && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>Copy Curriculum</DialogTitle></DialogHeader>
+        <div className="space-y-4 mt-2">
+          <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
+            <span className="text-muted-foreground">Source: </span>
+            <span className="font-medium">{curriculum.title}</span>
+          </div>
+          <div>
+            <label className="text-sm font-medium">New title</label>
+            <Input value={title} onChange={e => setTitle(e.target.value)} className="mt-1.5" />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Target classroom *</label>
+            <Select value={targetClassroomId} onValueChange={setTargetClassroomId} disabled={loading || classrooms.length === 0}>
+              <SelectTrigger className="mt-1.5">
+                <SelectValue placeholder={loading ? 'Loading classrooms...' : classrooms.length ? 'Select classroom' : 'No other active classrooms'} />
+              </SelectTrigger>
+              <SelectContent>
+                {classrooms.map((classroom: any) => (
+                  <SelectItem key={classroom.id} value={classroom.id}>
+                    {classroom.name}{classroom.programs?.program_name ? ` - ${classroom.programs.program_name}` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button onClick={handleCopy} disabled={copying || !targetClassroomId || classrooms.length === 0} className="w-full">
+            {copying ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Copy className="h-4 w-4 mr-2" />}
+            {copying ? 'Copying...' : 'Copy Curriculum'}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -370,9 +458,10 @@ function TrackSection({ track, curriculumId, hook }: { track: TrackV2; curriculu
 }
 
 // ── Curriculum panel ──────────────────────────────────────────────────────────
-function CurriculumPanel({ curriculum, hook, onDeleted }: { curriculum: CurriculumV2; hook: ReturnType<typeof useCurriculumV2>; onDeleted: () => void }) {
+function CurriculumPanel({ curriculum, hook, classroomId, onDeleted }: { curriculum: CurriculumV2; hook: ReturnType<typeof useCurriculumV2>; classroomId: string; onDeleted: () => void }) {
   const [addTrack, setAddTrack] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [copyOpen, setCopyOpen] = useState(false);
 
   return (
     <div className="space-y-4">
@@ -385,6 +474,7 @@ function CurriculumPanel({ curriculum, hook, onDeleted }: { curriculum: Curricul
         ) : (
           <>
             <h3 className="font-semibold text-lg flex-1">{curriculum.title}</h3>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCopyOpen(true)} title="Copy to another classroom"><Copy className="h-4 w-4" /></Button>
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditing(true)}><Pencil className="h-4 w-4" /></Button>
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={async () => {
               if (!confirm(`Delete curriculum "${curriculum.title}" and all its content?`)) return;
@@ -416,6 +506,13 @@ function CurriculumPanel({ curriculum, hook, onDeleted }: { curriculum: Curricul
         open={addTrack} title="Add track" onClose={() => setAddTrack(false)}
         showDescription
         onAdd={(title, description) => hook.addTrack(curriculum.id, title, description)}
+      />
+      <CopyCurriculumDialog
+        open={copyOpen}
+        curriculum={curriculum}
+        currentClassroomId={classroomId}
+        hook={hook}
+        onClose={() => setCopyOpen(false)}
       />
     </div>
   );
@@ -504,7 +601,7 @@ export function CurriculumTreeV2({ classroomId }: { classroomId: string }) {
       {/* Main: selected curriculum tree */}
       <div className="flex-1 min-w-0">
         {selected ? (
-          <CurriculumPanel key={selected.id} curriculum={selected} hook={hook} onDeleted={() => setSelectedId(null)} />
+          <CurriculumPanel key={selected.id} curriculum={selected} classroomId={classroomId} hook={hook} onDeleted={() => setSelectedId(null)} />
         ) : (
           <div className="text-center py-16 text-muted-foreground">
             <BookOpen className="h-10 w-10 mx-auto mb-3 opacity-20" />

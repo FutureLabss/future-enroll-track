@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useCurriculumV2 } from '@/hooks/useCurriculumV2';
 import { supabase } from '@/lib/supabase';
-import { ChevronRight, ChevronDown, BookOpen, Layers, FolderOpen, FileText, Loader2 } from 'lucide-react';
+import { ChevronRight, ChevronDown, BookOpen, Layers, FolderOpen, FileText, Loader2, ExternalLink, Video } from 'lucide-react';
 
 function LessonPanel({ lesson }: { lesson: any }) {
   const [open, setOpen] = useState(false);
@@ -13,11 +13,11 @@ function LessonPanel({ lesson }: { lesson: any }) {
       >
         <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
         <span className="flex-1 font-medium">{lesson.title}</span>
-        {(lesson.content || lesson.objectives) && (
+        {(lesson.content || lesson.objectives || lesson.video_url || lesson.external_link) && (
           open ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
         )}
       </button>
-      {open && (lesson.content || lesson.objectives) && (
+      {open && (lesson.content || lesson.objectives || lesson.video_url || lesson.external_link) && (
         <div className="px-4 pb-3 space-y-2 border-t border-border bg-muted/20 text-sm">
           {lesson.objectives && (
             <div className="pt-2">
@@ -29,6 +29,30 @@ function LessonPanel({ lesson }: { lesson: any }) {
             <div className="pt-1">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Content</p>
               <p className="text-sm whitespace-pre-wrap">{lesson.content}</p>
+            </div>
+          )}
+          {(lesson.video_url || lesson.external_link) && (
+            <div className="flex flex-wrap gap-2 pt-1">
+              {lesson.video_url && (
+                <a
+                  href={lesson.video_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium hover:bg-background"
+                >
+                  <Video className="h-3.5 w-3.5" /> Watch video
+                </a>
+              )}
+              {lesson.external_link && (
+                <a
+                  href={lesson.external_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium hover:bg-background"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" /> Open resource
+                </a>
+              )}
             </div>
           )}
         </div>

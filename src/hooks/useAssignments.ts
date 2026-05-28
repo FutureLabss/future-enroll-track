@@ -46,7 +46,7 @@ export function useAssignments(classroomId: string) {
   return { assignments, loading, refetch: fetchAssignments, createAssignment, updateAssignment, publishAssignment };
 }
 
-export function useStudentAssignments(classroomId: string) {
+export function useStudentAssignments(classroomId: string, cohortId?: string) {
   const { user } = useAuth();
   const [assignments, setAssignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,7 +54,7 @@ export function useStudentAssignments(classroomId: string) {
   const fetchAssignments = async () => {
     if (!classroomId || !user) return;
     setLoading(true);
-    const { data } = await supabase
+    let query = supabase
       .from('assignments')
       .select(`
         *,
@@ -66,13 +66,19 @@ export function useStudentAssignments(classroomId: string) {
       .eq('status', 'published')
       .eq('assignment_submissions.student_id', user.id)
       .order('due_date', { ascending: true });
+
+    query = cohortId
+      ? query.or(`cohort_id.is.null,cohort_id.eq.${cohortId}`)
+      : query.is('cohort_id', null);
+
+    const { data } = await query;
     setAssignments(data || []);
     setLoading(false);
   };
 
   useEffect(() => {
     fetchAssignments();
-  }, [classroomId, user]);
+  }, [classroomId, cohortId, user]);
 
   return { assignments, loading, refetch: fetchAssignments };
 }

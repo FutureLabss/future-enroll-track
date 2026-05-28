@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useCurriculumV2 } from '@/hooks/useCurriculumV2';
 import { supabase } from '@/lib/supabase';
 import { ChevronRight, ChevronDown, BookOpen, Layers, FolderOpen, FileText, Loader2, ExternalLink, Video } from 'lucide-react';
@@ -183,10 +183,45 @@ function CurriculumSection({ curriculum, onExpand }: { curriculum: any; onExpand
 
 interface Props {
   classroomId: string;
+  scopeType?: string | null;
+  scopeId?: string | null;
 }
 
-export function StudentCurriculumView({ classroomId }: Props) {
+export function StudentCurriculumView({ classroomId, scopeType, scopeId }: Props) {
   const { curricula, loading, fetchError, refreshCurriculum } = useCurriculumV2(classroomId);
+  const [loadedScopeKey, setLoadedScopeKey] = useState('');
+  const scopedByTree = scopeType === 'track' || scopeType === 'module';
+  const scopeKey = `${scopeType || 'classroom'}:${scopeId || 'all'}:${curricula.map(cur => cur.id).join(',')}`;
+
+  useEffect(() => {
+    if (!scopedByTree || !scopeId || loading || loadedScopeKey === scopeKey) return;
+
+    setLoadedScopeKey(scopeKey);
+    curricula.forEach(cur => {
+      if (cur.tracks.length === 0) refreshCurriculum(cur.id);
+    });
+  }, [curricula, loadedScopeKey, loading, refreshCurriculum, scopeId, scopeKey, scopedByTree]);
+
+  const visibleCurricula = useMemo(() => {
+    if (!scopeType || !scopeId) return curricula;
+    if (scopeType === 'curriculum') return curricula.filter(cur => cur.id === scopeId);
+    if (scopeType === 'track') {
+      return curricula
+        .map(cur => ({ ...cur, tracks: cur.tracks.filter((track: any) => track.id === scopeId) }))
+        .filter(cur => cur.tracks.length > 0);
+    }
+    if (scopeType === 'module') {
+      return curricula
+        .map(cur => ({
+          ...cur,
+          tracks: cur.tracks
+            .map((track: any) => ({ ...track, modules: (track.modules || []).filter((mod: any) => mod.id === scopeId) }))
+            .filter((track: any) => track.modules.length > 0),
+        }))
+        .filter(cur => cur.tracks.length > 0);
+    }
+    return curricula;
+  }, [curricula, scopeId, scopeType]);
 
   if (loading) {
     return (
@@ -204,7 +239,15 @@ export function StudentCurriculumView({ classroomId }: Props) {
     );
   }
 
-  if (curricula.length === 0) {
+  if (scopedByTree && scopeId && visibleCurricula.length === 0 && curricula.some(cur => cur.tracks.length === 0)) {
+    return (
+      <div className="flex justify-center py-16">
+        <Loader2 className="animate-spin h-7 w-7 text-primary" />
+      </div>
+    );
+  }
+
+  if (visibleCurricula.length === 0) {
     return (
       <div className="text-center py-16 text-muted-foreground">
         <BookOpen className="h-10 w-10 mx-auto mb-3 opacity-30" />
@@ -216,7 +259,7 @@ export function StudentCurriculumView({ classroomId }: Props) {
 
   return (
     <div className="space-y-6">
-      {curricula.map(cur => (
+      {visibleCurricula.map(cur => (
         <CurriculumSection key={cur.id} curriculum={cur} onExpand={() => refreshCurriculum(cur.id)} />
       ))}
     </div>

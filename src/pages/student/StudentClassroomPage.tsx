@@ -30,7 +30,7 @@ const ATTENDANCE_STATUS_COLOURS: Record<string, string> = {
   invalid: 'bg-muted text-muted-foreground border-muted',
 };
 
-function AttendanceTab({ classroomId }: { classroomId: string }) {
+function AttendanceTab({ classroomId, cohortId }: { classroomId: string; cohortId?: string }) {
   const { markAttendance } = useMarkAttendance();
   const { user } = useAuth();
   const [code, setCode] = useState('');
@@ -54,17 +54,18 @@ function AttendanceTab({ classroomId }: { classroomId: string }) {
       .order('marked_at', { ascending: false }),
       supabase
         .from('attendance_sessions')
-        .select('id, code_expires_at, created_at, duration_mins, status, old_lessons(title), schedules(title, scheduled_date, start_time, end_time, lessons(title))')
+        .select('id, cohort_id, code_expires_at, created_at, duration_mins, status, old_lessons(title), schedules(title, scheduled_date, start_time, end_time, lessons(title))')
         .eq('classroom_id', classroomId)
         .eq('status', 'open')
         .gt('code_expires_at', new Date().toISOString())
         .order('created_at', { ascending: false }),
     ]);
-    setRecords(recordsRes.data || []);
-    setOpenSessions(sessionsRes.data || []);
+    const inCohortScope = (row: any) => !row.cohort_id || row.cohort_id === cohortId;
+    setRecords((recordsRes.data || []).filter(inCohortScope));
+    setOpenSessions((sessionsRes.data || []).filter(inCohortScope));
   };
 
-  useEffect(() => { loadRecords(); }, [classroomId, user]);
+  useEffect(() => { loadRecords(); }, [classroomId, cohortId, user]);
 
   const handleMark = async () => {
     if (!code.trim()) { toast.error('Enter the attendance code'); return; }
@@ -268,8 +269,8 @@ function AttendanceTab({ classroomId }: { classroomId: string }) {
   );
 }
 
-function AssignmentsTab({ classroomId }: { classroomId: string }) {
-  const { assignments, loading, refetch } = useStudentAssignments(classroomId);
+function AssignmentsTab({ classroomId, cohortId }: { classroomId: string; cohortId?: string }) {
+  const { assignments, loading, refetch } = useStudentAssignments(classroomId, cohortId);
   const [selected, setSelected] = useState<any>(null);
   const [subText, setSubText] = useState('');
   const [fileUrl, setFileUrl] = useState('');
@@ -460,6 +461,7 @@ export default function StudentClassroomPage() {
   const [cohortInfo, setCohortInfo] = useState<{
     cohort_label: string;
     scope_type?: string;
+    scope_id?: string | null;
     status?: string;
     start_date?: string | null;
     end_date?: string | null;
@@ -479,25 +481,34 @@ export default function StudentClassroomPage() {
     Promise.all([
       supabase.from('classrooms').select('*, programs(program_name)').eq('id', id).single(),
       supabase.from('cohort_students')
-        .select('cohort_id, cohorts!inner(cohort_label, scope_type, status, start_date, end_date, capacity)')
+        .select('cohort_id, status, joined_at, cohorts!inner(cohort_label, scope_type, scope_id, status, start_date, end_date, capacity)')
         .eq('student_id', user.id)
         .eq('cohorts.classroom_id', id)
-        .maybeSingle(),
+        .order('joined_at', { ascending: false })
+        .limit(10),
       supabase.from('old_lessons')
         .select('*, cohorts(cohort_label)')
         .eq('classroom_id', id)
         .neq('status', 'cancelled')
         .order('lesson_date')
         .order('start_time'),
-      supabase.from('assignments').select('id, due_date').eq('classroom_id', id).eq('status', 'published'),
+      supabase.from('assignments').select('id, due_date, cohort_id').eq('classroom_id', id).eq('status', 'published'),
       supabase.from('assignment_submissions').select('assignment_id').eq('student_id', user.id),
     ]).then(([clsRes, cohortRes, lessonsRes, assignmentsRes, submissionsRes]) => {
+      const cohortRows = cohortRes.data || [];
+      const selectedCohortRow = cohortRows.find((row: any) => row.status === 'active' && row.cohorts?.status === 'active')
+        || cohortRows.find((row: any) => row.status === 'active')
+        || cohortRows.find((row: any) => row.cohorts?.status === 'active')
+        || cohortRows[0];
+
       setClassroom(clsRes.data);
-      setCohortId(cohortRes.data?.cohort_id || '');
-      setCohortInfo((cohortRes.data as any)?.cohorts || null);
+      setCohortId(selectedCohortRow?.cohort_id || '');
+      setCohortInfo((selectedCohortRow as any)?.cohorts || null);
       setLessons(lessonsRes.data || []);
+      const currentCohortId = selectedCohortRow?.cohort_id || '';
       const submittedIds = new Set((submissionsRes.data || []).map((submission: any) => submission.assignment_id));
-      const pendingAssignments = (assignmentsRes.data || []).filter((assignment: any) => !submittedIds.has(assignment.id));
+      const visibleAssignments = (assignmentsRes.data || []).filter((assignment: any) => !assignment.cohort_id || assignment.cohort_id === currentCohortId);
+      const pendingAssignments = visibleAssignments.filter((assignment: any) => !submittedIds.has(assignment.id));
       setAssignmentSummary({
         pending: pendingAssignments.length,
         overdue: pendingAssignments.filter((assignment: any) => assignment.due_date && new Date(assignment.due_date) < new Date()).length,
@@ -509,13 +520,15 @@ export default function StudentClassroomPage() {
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
   if (!classroom) return <div className="text-center py-20 text-muted-foreground">Classroom not found.</div>;
 
-  const todayLessons = lessons.filter(l => l.lesson_date === today);
-  const upcomingLessons = lessons.filter(l => l.lesson_date > today);
-  const pastLessons = lessons.filter(l => l.lesson_date < today);
-  const activeSchedules = schedules.filter(s => s.status !== 'cancelled');
+  const visibleLessons = lessons.filter(l => !l.cohort_id || l.cohort_id === cohortId);
+  const todayLessons = visibleLessons.filter(l => l.lesson_date === today);
+  const upcomingLessons = visibleLessons.filter(l => l.lesson_date > today);
+  const pastLessons = visibleLessons.filter(l => l.lesson_date < today);
+  const visibleSchedules = schedules.filter(s => !s.cohort_id || s.cohort_id === cohortId);
+  const activeSchedules = visibleSchedules.filter(s => s.status !== 'cancelled');
   const todaySchedules = activeSchedules.filter(s => s.scheduled_date === today);
   const upcomingSchedules = activeSchedules.filter(s => s.scheduled_date > today);
-  const pastSchedules = schedules.filter(s => s.scheduled_date < today);
+  const pastSchedules = visibleSchedules.filter(s => s.scheduled_date < today);
   const nextSchedule = todaySchedules[0] || upcomingSchedules[0];
   const attendancePct = Number(progress?.attendance_pct || 0);
   const assignmentPct = Number(progress?.assignment_pct || 0);
@@ -546,10 +559,17 @@ export default function StudentClassroomPage() {
 
   return (
     <div>
-      <PageHeader title={classroom.name} description={classroom.programs?.program_name} />
+      <PageHeader
+        title={classroom.name}
+        description={[
+          classroom.programs?.program_name,
+          cohortInfo?.cohort_label ? `Cohort: ${cohortInfo.cohort_label}` : null,
+        ].filter(Boolean).join(' · ')}
+      />
 
-      {cohortInfo && (
-        <div className="mb-5 flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-5 flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+        {cohortInfo ? (
+          <>
           <div className="flex flex-wrap items-center gap-2">
             <Users className="h-4 w-4 text-primary" />
             <span className="text-muted-foreground">Your cohort:</span>
@@ -569,8 +589,15 @@ export default function StudentClassroomPage() {
               {cohortInfo.capacity && <span>Capacity: {cohortInfo.capacity}</span>}
             </div>
           )}
-        </div>
-      )}
+          </>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <Users className="h-4 w-4 text-muted-foreground" />
+            <span className="text-muted-foreground">Your cohort:</span>
+            <Badge variant="outline" className="text-muted-foreground">No cohort assigned</Badge>
+          </div>
+        )}
+      </div>
 
       <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <div className="glass-card rounded-xl border border-border p-4">
@@ -656,7 +683,7 @@ export default function StudentClassroomPage() {
                 </div>
               );
 
-              if (schedules.length === 0 && lessons.length === 0) return (
+              if (visibleSchedules.length === 0 && visibleLessons.length === 0) return (
                 <p className="text-center text-muted-foreground py-10">No sessions scheduled yet</p>
               );
 
@@ -683,7 +710,7 @@ export default function StudentClassroomPage() {
                       {showPast && <div className="space-y-3 opacity-70">{[...pastSchedules].reverse().map(s => <ScheduleCard key={s.id} s={s} />)}</div>}
                     </div>
                   )}
-                  {schedules.length === 0 && lessons.length > 0 && (
+                  {visibleSchedules.length === 0 && visibleLessons.length > 0 && (
                     <div className="space-y-3">
                       <p className="text-xs text-muted-foreground mb-1">Historical lessons</p>
                       {todayLessons.map(l => <LessonCard key={l.id} lesson={l} />)}
@@ -698,17 +725,21 @@ export default function StudentClassroomPage() {
 
         {/* CURRICULUM */}
         <TabsContent value="curriculum">
-          <StudentCurriculumView classroomId={id!} />
+          <StudentCurriculumView
+            classroomId={id!}
+            scopeType={cohortInfo?.scope_type}
+            scopeId={cohortInfo?.scope_id}
+          />
         </TabsContent>
 
         {/* ATTENDANCE */}
         <TabsContent value="attendance">
-          <AttendanceTab classroomId={id!} />
+          <AttendanceTab classroomId={id!} cohortId={cohortId} />
         </TabsContent>
 
         {/* ASSIGNMENTS */}
         <TabsContent value="assignments">
-          <AssignmentsTab classroomId={id!} />
+          <AssignmentsTab classroomId={id!} cohortId={cohortId} />
         </TabsContent>
 
         {/* PROGRESS */}

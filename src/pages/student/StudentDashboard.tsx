@@ -28,6 +28,9 @@ import {
 } from 'lucide-react';
 
 const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
+const formatDate = (date?: string | null) => date
+  ? new Date(`${date}T00:00:00`).toLocaleDateString('en-NG', { month: 'short', day: 'numeric', year: 'numeric' })
+  : null;
 
 const withTimeout = async <T,>(request: PromiseLike<T>, fallback: T, label: string): Promise<T> => {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -54,6 +57,7 @@ export default function StudentDashboard() {
   const navigate = useNavigate();
   const [enrollments, setEnrollments] = useState<any[]>([]);
   const [classrooms, setClassrooms] = useState<any[]>([]);
+  const [cohortMemberships, setCohortMemberships] = useState<any[]>([]);
   const [schedules, setSchedules] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -106,7 +110,18 @@ export default function StudentDashboard() {
         const fields = fieldsRes.data || [];
         const classroomIds = classroomRows.map((row: any) => row.classroom_id).filter(Boolean);
 
-        const [scheduleRes, assignmentRes, submissionRes, fieldValuesRes, notificationRes] = await Promise.all([
+        const [cohortRes, scheduleRes, assignmentRes, submissionRes, fieldValuesRes, notificationRes] = await Promise.all([
+          classroomIds.length
+            ? withTimeout(
+                supabase
+                  .from('cohort_students')
+                  .select('cohort_id, enrollment_id, cohorts!inner(id, cohort_label, classroom_id, scope_type, status, start_date, end_date, capacity)')
+                  .eq('student_id', user.id)
+                  .in('cohorts.classroom_id', classroomIds),
+                { data: [] } as any,
+                'cohort memberships'
+              )
+            : Promise.resolve({ data: [] } as any),
           classroomIds.length
             ? withTimeout(
                 supabase
@@ -169,16 +184,20 @@ export default function StudentDashboard() {
         const fieldValues = fieldValuesRes.data || [];
         const filledFieldIds = new Set(fieldValues.filter((row: any) => row.value?.trim?.()).map((row: any) => row.field_id));
         const requiredMissing = fields.filter((field: any) => field.required && !filledFieldIds.has(field.id)).length;
+        const cohortRows = cohortRes.data || [];
+        const cohortIds = new Set(cohortRows.map((row: any) => row.cohort_id).filter(Boolean));
+        const isInStudentScope = (row: any) => !row.cohort_id || cohortIds.has(row.cohort_id);
 
         setEnrollments(enrollmentRows);
         setClassrooms(classroomRows);
-        setSchedules(scheduleRes.data || []);
-        setAssignments(assignmentRes.data || []);
+        setCohortMemberships(cohortRows);
+        setSchedules((scheduleRes.data || []).filter(isInStudentScope));
+        setAssignments((assignmentRes.data || []).filter(isInStudentScope));
         setNotifications(notificationRes.data || []);
         setSubmittedAssignmentIds(submitted);
         setProfileMeta({ total: fields.length, completed: filledFieldIds.size, requiredMissing });
 
-        const activeCohort = enrollmentRows.find((row: any) => row.cohort_id)?.cohort_id;
+        const activeCohort = cohortRows[0]?.cohort_id || enrollmentRows.find((row: any) => row.cohort_id)?.cohort_id;
         if (activeCohort) {
           const progressRes = await withTimeout(
             supabase.rpc('get_student_progress', {
@@ -220,6 +239,10 @@ export default function StudentDashboard() {
 
   const nextSchedule = schedules[0];
   const primaryClassroom = classrooms[0]?.classrooms;
+  const primaryCohortMembership = primaryClassroom
+    ? cohortMemberships.find((row: any) => row.cohorts?.classroom_id === primaryClassroom.id) || cohortMemberships[0]
+    : cohortMemberships[0];
+  const primaryCohort = primaryCohortMembership?.cohorts;
   const profileComplete = profileMeta.total === 0 || (profileMeta.requiredMissing === 0 && profileMeta.completed >= profileMeta.total);
 
   const columns = [
@@ -270,7 +293,22 @@ export default function StudentDashboard() {
                 <p className="font-semibold">{primaryClassroom.name}</p>
                 <p className="text-sm text-muted-foreground">{primaryClassroom.programs?.program_name || 'No program'}</p>
               </div>
-              {classrooms[0]?.cohort_id && <Badge variant="outline">Cohort assigned</Badge>}
+              {primaryCohort ? (
+                <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className="border-primary/30 text-primary">{primaryCohort.cohort_label}</Badge>
+                    {primaryCohort.status && <Badge variant="secondary" className="capitalize">{primaryCohort.status}</Badge>}
+                    {primaryCohort.scope_type && <Badge variant="outline" className="capitalize">{primaryCohort.scope_type}</Badge>}
+                  </div>
+                  {(primaryCohort.start_date || primaryCohort.end_date) && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {formatDate(primaryCohort.start_date)}{primaryCohort.end_date ? ` - ${formatDate(primaryCohort.end_date)}` : ''}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <Badge variant="outline" className="w-fit text-muted-foreground">No cohort assigned</Badge>
+              )}
               <Button size="sm" onClick={() => navigate(`/student/classrooms/${primaryClassroom.id}`)}>
                 Open Classroom <ArrowRight className="h-4 w-4 ml-1.5" />
               </Button>

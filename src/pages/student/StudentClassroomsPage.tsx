@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStudentClassrooms } from '@/hooks/useClassroom';
+import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,29 +10,57 @@ import { BookOpen, Calendar, Clock, MapPin, ArrowRight, Loader2, Layers } from '
 
 export default function StudentClassroomsPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { classrooms, loading } = useStudentClassrooms();
   const [scheduleMap, setScheduleMap] = useState<Record<string, any[]>>({});
+  const [cohortMap, setCohortMap] = useState<Record<string, any>>({});
 
   useEffect(() => {
     const classroomIds = classrooms.map((row: any) => row.classroom_id).filter(Boolean);
-    if (classroomIds.length === 0) return;
+    if (classroomIds.length === 0 || !user) {
+      setCohortMap({});
+      setScheduleMap({});
+      return;
+    }
 
-    supabase
-      .from('schedules')
-      .select('*, lessons(title), cohorts(cohort_label), staff:instructor_id(full_name)')
-      .in('classroom_id', classroomIds)
-      .neq('status', 'cancelled')
-      .gte('scheduled_date', new Date().toISOString().split('T')[0])
-      .order('scheduled_date', { ascending: true })
-      .order('start_time', { ascending: true })
-      .then(({ data }) => {
+    Promise.all([
+      supabase
+        .from('cohort_students')
+        .select('cohort_id, status, cohorts!inner(id, cohort_label, classroom_id, scope_type, status, start_date, end_date)')
+        .eq('student_id', user.id)
+        .eq('status', 'active')
+        .in('cohorts.classroom_id', classroomIds),
+      supabase
+        .from('schedules')
+        .select('*, lessons(title), cohorts(cohort_label), staff:instructor_id(full_name)')
+        .in('classroom_id', classroomIds)
+        .neq('status', 'cancelled')
+        .gte('scheduled_date', new Date().toISOString().split('T')[0])
+        .order('scheduled_date', { ascending: true })
+        .order('start_time', { ascending: true }),
+    ]).then(([cohortRes, scheduleRes]) => {
+        const membershipsByClassroom: Record<string, any> = {};
+        (cohortRes.data || []).forEach((membership: any) => {
+          const classroomId = membership.cohorts?.classroom_id;
+          if (!classroomId) return;
+
+          const existing = membershipsByClassroom[classroomId];
+          if (!existing || membership.cohorts?.status === 'active') {
+            membershipsByClassroom[classroomId] = membership;
+          }
+        });
+
         const grouped: Record<string, any[]> = {};
-        (data || []).forEach((schedule: any) => {
+        (scheduleRes.data || []).forEach((schedule: any) => {
+          const studentCohortId = membershipsByClassroom[schedule.classroom_id]?.cohort_id;
+          if (schedule.cohort_id && schedule.cohort_id !== studentCohortId) return;
           grouped[schedule.classroom_id] = [...(grouped[schedule.classroom_id] || []), schedule];
         });
+
+        setCohortMap(membershipsByClassroom);
         setScheduleMap(grouped);
       });
-  }, [classrooms]);
+  }, [classrooms, user]);
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
 
@@ -48,6 +77,7 @@ export default function StudentClassroomsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {classrooms.map((cs: any) => {
             const cls = cs.classrooms;
+            const studentCohort = cohortMap[cls.id]?.cohorts;
             const nextSchedule = scheduleMap[cls.id]?.[0];
             const activeCohorts = (cls.cohorts || []).filter((cohort: any) => cohort.status === 'active' || cohort.status === 'upcoming');
             return (
@@ -74,6 +104,17 @@ export default function StudentClassroomsPage() {
                     <Layers className="h-3.5 w-3.5" />
                     {activeCohorts.length} active/upcoming cohort{activeCohorts.length === 1 ? '' : 's'}
                   </p>
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Your cohort</span>
+                    {studentCohort ? (
+                      <>
+                        <Badge variant="outline" className="border-primary/30 text-primary">{studentCohort.cohort_label}</Badge>
+                        {studentCohort.status && <Badge variant="secondary" className="capitalize">{studentCohort.status}</Badge>}
+                      </>
+                    ) : (
+                      <Badge variant="outline" className="text-muted-foreground">Not assigned</Badge>
+                    )}
+                  </div>
                 </div>
 
                 <div className="mt-4 rounded-xl border border-border bg-muted/20 p-3">

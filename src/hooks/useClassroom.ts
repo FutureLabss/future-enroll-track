@@ -148,7 +148,7 @@ export function useStudentClassrooms() {
     if (!user) return;
     supabase
       .from('classroom_students')
-      .select('*, classrooms(*, programs(program_name))')
+      .select('*, classrooms(*, programs(program_name), cohorts(id, cohort_label, status, start_date, end_date))')
       .eq('student_id', user.id)
       .then(({ data }) => {
         setClassrooms((data as any[]) || []);

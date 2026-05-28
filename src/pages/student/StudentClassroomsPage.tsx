@@ -1,20 +1,43 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStudentClassrooms } from '@/hooks/useClassroom';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { BookOpen, MapPin, ArrowRight, Loader2 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { BookOpen, Calendar, Clock, MapPin, ArrowRight, Loader2, Layers } from 'lucide-react';
 
 export default function StudentClassroomsPage() {
   const navigate = useNavigate();
   const { classrooms, loading } = useStudentClassrooms();
+  const [scheduleMap, setScheduleMap] = useState<Record<string, any[]>>({});
+
+  useEffect(() => {
+    const classroomIds = classrooms.map((row: any) => row.classroom_id).filter(Boolean);
+    if (classroomIds.length === 0) return;
+
+    supabase
+      .from('schedules')
+      .select('*, lessons(title), cohorts(cohort_label), staff:instructor_id(full_name)')
+      .in('classroom_id', classroomIds)
+      .neq('status', 'cancelled')
+      .gte('scheduled_date', new Date().toISOString().split('T')[0])
+      .order('scheduled_date', { ascending: true })
+      .order('start_time', { ascending: true })
+      .then(({ data }) => {
+        const grouped: Record<string, any[]> = {};
+        (data || []).forEach((schedule: any) => {
+          grouped[schedule.classroom_id] = [...(grouped[schedule.classroom_id] || []), schedule];
+        });
+        setScheduleMap(grouped);
+      });
+  }, [classrooms]);
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
 
   return (
     <div>
-      <PageHeader title="My Classrooms" description="Access your enrolled classrooms" />
+      <PageHeader title="My Classrooms" description="Access your learning spaces and upcoming sessions" />
       {classrooms.length === 0 ? (
         <div className="text-center py-20 border-2 border-dashed border-border rounded-2xl text-muted-foreground">
           <BookOpen className="h-10 w-10 mx-auto mb-3 opacity-40" />
@@ -25,26 +48,58 @@ export default function StudentClassroomsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {classrooms.map((cs: any) => {
             const cls = cs.classrooms;
+            const nextSchedule = scheduleMap[cls.id]?.[0];
+            const activeCohorts = (cls.cohorts || []).filter((cohort: any) => cohort.status === 'active' || cohort.status === 'upcoming');
             return (
               <div
                 key={cs.id}
                 onClick={() => navigate(`/student/classrooms/${cls.id}`)}
                 className="glass-card rounded-2xl p-6 cursor-pointer hover:shadow-lg hover:scale-[1.01] transition-all border border-border group"
               >
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <h3 className="font-heading font-semibold text-lg">{cls.name}</h3>
-                    <p className="text-sm text-muted-foreground">{cls.programs?.program_name}</p>
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div className="min-w-0">
+                    <h3 className="font-heading font-semibold text-lg truncate">{cls.name}</h3>
+                    <p className="text-sm text-muted-foreground truncate">{cls.programs?.program_name}</p>
                   </div>
-                  <Badge variant="default" className="bg-success/15 text-success border-success/30">Enrolled</Badge>
+                  <Badge variant="default" className="bg-success/15 text-success border-success/30 shrink-0">Enrolled</Badge>
                 </div>
-                {cls.location && (
-                  <p className="text-sm text-muted-foreground flex items-center gap-1 mt-2">
-                    <MapPin className="h-3.5 w-3.5" />{cls.location}
+
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  {cls.location && (
+                    <p className="flex items-center gap-1.5">
+                      <MapPin className="h-3.5 w-3.5" />{cls.location}
+                    </p>
+                  )}
+                  <p className="flex items-center gap-1.5">
+                    <Layers className="h-3.5 w-3.5" />
+                    {activeCohorts.length} active/upcoming cohort{activeCohorts.length === 1 ? '' : 's'}
                   </p>
-                )}
-                <div className="flex justify-end mt-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <ArrowRight className="h-4 w-4 text-primary" />
+                </div>
+
+                <div className="mt-4 rounded-xl border border-border bg-muted/20 p-3">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <Calendar className="h-3.5 w-3.5 text-primary" />
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Next class</p>
+                  </div>
+                  {nextSchedule ? (
+                    <div>
+                      <p className="text-sm font-medium">{nextSchedule.lessons?.title || nextSchedule.title || 'Scheduled session'}</p>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                        <Clock className="h-3 w-3" />
+                        {new Date(nextSchedule.scheduled_date + 'T00:00:00').toLocaleDateString('en-NG', { weekday: 'short', month: 'short', day: 'numeric' })}
+                        {' · '}
+                        {nextSchedule.start_time} - {nextSchedule.end_time}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No upcoming session scheduled</p>
+                  )}
+                </div>
+
+                <div className="flex justify-end mt-4">
+                  <Button size="sm" variant="ghost" className="gap-1.5 opacity-80 group-hover:opacity-100">
+                    Open <ArrowRight className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             );

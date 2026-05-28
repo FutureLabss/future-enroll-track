@@ -20,7 +20,7 @@ import { StudentCurriculumView } from '@/components/classroom/StudentCurriculumV
 import {
   Calendar, ClipboardList, BookOpen, BarChart2, Loader2,
   CheckCircle2, Clock, AlertCircle, MapPin, ChevronDown, ChevronUp, LayoutList,
-  Users, Video, ExternalLink, FileText, Send,
+  Users, Video, ExternalLink, FileText, Send, ShieldCheck,
 } from 'lucide-react';
 
 const ATTENDANCE_STATUS_COLOURS: Record<string, string> = {
@@ -38,17 +38,30 @@ function AttendanceTab({ classroomId }: { classroomId: string }) {
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState('');
   const [records, setRecords] = useState<any[]>([]);
+  const [openSessions, setOpenSessions] = useState<any[]>([]);
+  const [historyFilter, setHistoryFilter] = useState<'today' | 'recent' | 'all'>('recent');
   const [gpsStatus, setGpsStatus] = useState<'idle' | 'captured' | 'unavailable'>('idle');
+  const today = new Date().toISOString().split('T')[0];
 
   const loadRecords = async () => {
     if (!user) return;
-    const { data } = await supabase
+    const [recordsRes, sessionsRes] = await Promise.all([
+      supabase
       .from('attendance_records')
-      .select('*, attendance_sessions(code, created_at, duration_mins, old_lessons(title), schedules(title, lessons(title)))')
+      .select('*, attendance_sessions(code, created_at, duration_mins, code_expires_at, status, old_lessons(title), schedules(title, scheduled_date, start_time, end_time, lessons(title)))')
       .eq('student_id', user.id)
       .eq('classroom_id', classroomId)
-      .order('marked_at', { ascending: false });
-    setRecords(data || []);
+      .order('marked_at', { ascending: false }),
+      supabase
+        .from('attendance_sessions')
+        .select('id, code_expires_at, created_at, duration_mins, status, old_lessons(title), schedules(title, scheduled_date, start_time, end_time, lessons(title))')
+        .eq('classroom_id', classroomId)
+        .eq('status', 'open')
+        .gt('code_expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false }),
+    ]);
+    setRecords(recordsRes.data || []);
+    setOpenSessions(sessionsRes.data || []);
   };
 
   useEffect(() => { loadRecords(); }, [classroomId, user]);
@@ -75,7 +88,7 @@ function AttendanceTab({ classroomId }: { classroomId: string }) {
       const data = await markAttendance(code, lat, lng);
       setResult(data);
       setCode('');
-      loadRecords();
+      await loadRecords();
       toast.success('Attendance marked!');
     } catch (e: any) {
       const msg: string = e.message || 'Failed to mark attendance';
@@ -90,24 +103,90 @@ function AttendanceTab({ classroomId }: { classroomId: string }) {
     }
   };
 
+  const todayRecords = records.filter((record) => record.marked_at?.startsWith(today));
+  const recentRecords = records.slice(0, 8);
+  const visibleRecords = historyFilter === 'today'
+    ? todayRecords
+    : historyFilter === 'recent'
+      ? recentRecords
+      : records;
+  const presentCount = records.filter((record) => record.attendance_status === 'present' || record.attendance_status === 'late').length;
+  const attendanceRate = records.length > 0 ? Math.round((presentCount / records.length) * 100) : 0;
+  const markedOpenSessionIds = new Set(records.map((record) => record.session_id));
+  const pendingOpenSessions = openSessions.filter((session) => !markedOpenSessionIds.has(session.id));
+
+  const getSessionTitle = (session: any) => (
+    session?.schedules?.lessons?.title
+    || session?.schedules?.title
+    || session?.old_lessons?.title
+    || 'Attendance session'
+  );
+
   return (
     <div className="space-y-6">
-      <div className="glass-card rounded-2xl p-6 max-w-md">
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="glass-card rounded-xl border border-border p-4">
+          <p className="text-sm font-medium">Attendance Rate</p>
+          <p className="mt-2 text-2xl font-semibold">{attendanceRate}%</p>
+          <p className="text-xs text-muted-foreground">{presentCount}/{records.length} marked present or late</p>
+        </div>
+        <div className="glass-card rounded-xl border border-border p-4">
+          <p className="text-sm font-medium">Today</p>
+          <p className="mt-2 text-2xl font-semibold">{todayRecords.length}</p>
+          <p className="text-xs text-muted-foreground">{todayRecords.length === 1 ? 'record marked' : 'records marked'}</p>
+        </div>
+        <div className="glass-card rounded-xl border border-border p-4">
+          <p className="text-sm font-medium">Open Sessions</p>
+          <p className="mt-2 text-2xl font-semibold">{pendingOpenSessions.length}</p>
+          <p className="text-xs text-muted-foreground">{pendingOpenSessions.length === 1 ? 'awaiting attendance' : 'awaiting attendance'}</p>
+        </div>
+      </div>
+
+      {pendingOpenSessions.length > 0 && (
+        <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-primary" />
+            <h3 className="font-semibold">Open attendance now</h3>
+          </div>
+          <div className="space-y-2">
+            {pendingOpenSessions.map((session) => (
+              <div key={session.id} className="flex flex-col gap-1 rounded-xl border border-primary/20 bg-background/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium">{getSessionTitle(session)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Expires {new Date(session.code_expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+                {session.schedules?.scheduled_date && (
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(`${session.schedules.scheduled_date}T00:00:00`).toLocaleDateString('en-NG', { weekday: 'short', month: 'short', day: 'numeric' })}
+                    {session.schedules.start_time ? ` · ${session.schedules.start_time}` : ''}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="glass-card rounded-2xl p-6 max-w-xl">
         <h3 className="font-semibold mb-1">Enter Attendance Code</h3>
-        <p className="text-sm text-muted-foreground mb-4">Ask your tutor for today's 6-character code</p>
-        <div className="flex gap-2">
+        <p className="text-sm text-muted-foreground mb-4">Use the 6-character code from your tutor while the session is open</p>
+        <div className="flex flex-col gap-2 sm:flex-row">
           <Input
             value={code}
-            onChange={e => { setCode(e.target.value.toUpperCase()); setError(''); }}
+            onChange={e => { setCode(e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()); setError(''); }}
             onKeyDown={e => e.key === 'Enter' && handleMark()}
             placeholder="e.g. WD4821"
-            className="font-mono text-lg tracking-widest text-center"
+            className="font-mono text-lg tracking-widest text-center uppercase"
             maxLength={6}
+            inputMode="text"
           />
-          <Button onClick={handleMark} disabled={marking || code.length !== 6}>
+          <Button onClick={handleMark} disabled={marking || code.length !== 6} className="sm:w-32">
             {marking ? <Loader2 className="animate-spin h-4 w-4" /> : 'Mark'}
           </Button>
         </div>
+        <p className="mt-2 text-xs text-muted-foreground">Location is requested when available to validate on-site attendance.</p>
 
         {gpsStatus === 'captured' && (
           <p className="mt-2 text-xs flex items-center gap-1 text-muted-foreground"><MapPin className="h-3.5 w-3.5 text-success" />Location captured</p>
@@ -117,9 +196,14 @@ function AttendanceTab({ classroomId }: { classroomId: string }) {
         )}
 
         {result && (
-          <div className="mt-3 flex items-center gap-2 text-success text-sm">
-            <CheckCircle2 className="h-4 w-4" />
-            Marked as <strong>{result.attendance_status}</strong>
+          <div className="mt-4 rounded-xl border border-success/30 bg-success/10 p-3 text-sm text-success">
+            <div className="flex items-center gap-2 font-medium">
+              <CheckCircle2 className="h-4 w-4" />
+              Marked as {result.attendance_status}
+            </div>
+            {typeof result.distance_metres === 'number' && (
+              <p className="mt-1 text-xs text-muted-foreground">Distance from class location: {Math.round(result.distance_metres)}m</p>
+            )}
           </div>
         )}
         {error && (
@@ -130,29 +214,56 @@ function AttendanceTab({ classroomId }: { classroomId: string }) {
         )}
       </div>
 
-      {records.length > 0 && (
-        <div>
-          <h3 className="font-semibold mb-3">My Attendance History</h3>
-          <div className="space-y-2">
-            {records.map((r: any) => (
-              <div key={r.id} className="flex items-center justify-between rounded-xl border border-border px-4 py-3">
-                <div>
-                  <p className="font-medium text-sm">
-                    {r.attendance_sessions?.schedules?.lessons?.title
-                      || r.attendance_sessions?.schedules?.title
-                      || r.attendance_sessions?.old_lessons?.title
-                      || <span className="font-mono">{r.attendance_sessions?.code}</span>}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{new Date(r.marked_at).toLocaleString()}</p>
-                </div>
-                <Badge variant="outline" className={`capitalize ${ATTENDANCE_STATUS_COLOURS[r.attendance_status] || ''}`}>
-                  {r.attendance_status}
-                </Badge>
-              </div>
+      <div>
+        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h3 className="font-semibold">My Attendance History</h3>
+          <div className="flex rounded-lg border border-border p-1">
+            {[
+              { key: 'today', label: 'Today' },
+              { key: 'recent', label: 'Recent' },
+              { key: 'all', label: 'All' },
+            ].map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setHistoryFilter(item.key as typeof historyFilter)}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium ${historyFilter === item.key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                {item.label}
+              </button>
             ))}
           </div>
         </div>
-      )}
+        {visibleRecords.length > 0 ? (
+          <div className="space-y-2">
+            {visibleRecords.map((r: any) => {
+              const session = r.attendance_sessions;
+              return (
+                <div key={r.id} className="flex flex-col gap-3 rounded-xl border border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="font-medium text-sm">{getSessionTitle(session)}</p>
+                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                      <span>{new Date(r.marked_at).toLocaleString()}</span>
+                      <span className="capitalize">Method: {r.method}</span>
+                      {r.geofence_passed !== null && r.geofence_passed !== undefined && (
+                        <span>{r.geofence_passed ? 'Location verified' : 'Location outside range'}</span>
+                      )}
+                      {r.distance_metres !== null && r.distance_metres !== undefined && (
+                        <span>{Math.round(Number(r.distance_metres))}m away</span>
+                      )}
+                    </div>
+                  </div>
+                  <Badge variant="outline" className={`capitalize ${ATTENDANCE_STATUS_COLOURS[r.attendance_status] || ''}`}>
+                    {r.attendance_status}
+                  </Badge>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-center text-muted-foreground py-10">No attendance records in this view</p>
+        )}
+      </div>
     </div>
   );
 }

@@ -50,6 +50,7 @@ function CohortModal({ classroomId, programId, existing, onClose, onSaved, staff
     start_date: existing?.start_date || '',
     end_date: existing?.end_date || '',
     status: existing?.status || 'upcoming',
+    capacity: existing?.capacity?.toString() || '',
     scope_type: (existing?.scope_type || '') as '' | 'curriculum' | 'track' | 'module',
     scope_id: existing?.scope_id || '',
   });
@@ -61,7 +62,12 @@ function CohortModal({ classroomId, programId, existing, onClose, onSaved, staff
     if (!existing && scheduleOpts.enabled && scheduleOpts.days.length === 0) { toast.error('Select at least one day for scheduling'); return; }
     setSaving(true);
     try {
-      const payload = { ...form, scope_type: form.scope_type || null, scope_id: form.scope_id || null };
+      const payload = {
+        ...form,
+        capacity: form.capacity ? Number(form.capacity) : null,
+        scope_type: form.scope_type || null,
+        scope_id: form.scope_id || null,
+      };
       if (existing) {
         await updateCohort(existing.id, payload);
         toast.success('Cohort updated');
@@ -95,6 +101,10 @@ function CohortModal({ classroomId, programId, existing, onClose, onSaved, staff
       <div className="grid grid-cols-2 gap-3">
         <div><Label>Start Date</Label><Input type="date" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} className="mt-1.5" /></div>
         <div><Label>End Date</Label><Input type="date" value={form.end_date} onChange={e => setForm({ ...form, end_date: e.target.value })} className="mt-1.5" /></div>
+      </div>
+      <div>
+        <Label>Capacity</Label>
+        <Input type="number" min="1" value={form.capacity} onChange={e => setForm({ ...form, capacity: e.target.value })} className="mt-1.5" placeholder="Optional maximum students" />
       </div>
       <div>
         <Label>Status</Label>
@@ -843,6 +853,7 @@ export default function ClassroomDetailPage() {
       <Badge variant="outline" className={`capitalize ${STATUS_COLOURS[r.status] || ''}`}>{r.status || '—'}</Badge>
     )},
     { key: 'students', header: 'Students', render: (r: any) => r.cohort_students?.[0]?.count ?? 0 },
+    { key: 'capacity', header: 'Capacity', render: (r: any) => r.capacity || '—' },
     { key: 'scope', header: 'Scope', render: (r: any) => r.scope_type ? <span className="capitalize">{r.scope_type}</span> : 'Entire classroom' },
     { key: 'start_date', header: 'Start', render: (r: any) => r.start_date ? new Date(r.start_date).toLocaleDateString() : '—' },
     { key: 'end_date', header: 'End', render: (r: any) => r.end_date ? new Date(r.end_date).toLocaleDateString() : '—' },

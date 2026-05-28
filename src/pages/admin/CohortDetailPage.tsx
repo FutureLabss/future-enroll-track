@@ -1,75 +1,271 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable } from '@/components/shared/DataTable';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, GraduationCap, School, Loader2, Trash2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  Archive,
+  CalendarDays,
+  ClipboardCheck,
+  ClipboardList,
+  GraduationCap,
+  Loader2,
+  Pencil,
+  RotateCcw,
+  School,
+  Trash2,
+  UserMinus,
+  UserPlus,
+  Users,
+} from 'lucide-react';
 import { toast } from 'sonner';
+
+const COHORT_STATUSES = ['upcoming', 'active', 'completed', 'archived'] as const;
 
 const STATUS_COLOURS: Record<string, string> = {
   upcoming: 'bg-blue-500/15 text-blue-600 border-blue-500/30',
   active: 'bg-success/15 text-success border-success/30',
   completed: 'bg-muted text-muted-foreground border-muted',
   archived: 'bg-muted/50 text-muted-foreground/60 border-muted',
+  open: 'bg-success/15 text-success border-success/30',
+  closed: 'bg-muted text-muted-foreground border-muted',
+  draft: 'bg-warning/15 text-warning border-warning/30',
+  published: 'bg-success/15 text-success border-success/30',
 };
 
 const ENROLL_COLOURS: Record<string, string> = {
   active: 'bg-success/15 text-success border-success/30',
   pending: 'bg-warning/15 text-warning border-warning/30',
+  overdue: 'bg-destructive/15 text-destructive border-destructive/30',
   cancelled: 'bg-destructive/15 text-destructive border-destructive/30',
   completed: 'bg-muted text-muted-foreground border-muted',
 };
 
-function derivedStatus(cohort: any): string | null {
-  if (cohort.status) return cohort.status;
-  const now = new Date();
-  if (cohort.start_date && new Date(cohort.start_date) > now) return 'upcoming';
-  if (cohort.end_date && new Date(cohort.end_date) < now) return 'completed';
-  if (cohort.start_date) return 'active';
-  return null;
+const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
+
+function CohortEditForm({ cohort, onSaved }: { cohort: any; onSaved: () => void }) {
+  const [form, setForm] = useState({
+    cohort_label: cohort.cohort_label || '',
+    start_date: cohort.start_date || '',
+    end_date: cohort.end_date || '',
+    status: cohort.status || 'upcoming',
+    capacity: cohort.capacity?.toString() || '',
+  });
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    if (!form.cohort_label.trim()) { toast.error('Cohort label is required'); return; }
+    setSaving(true);
+    const { error } = await supabase.from('cohorts').update({
+      cohort_label: form.cohort_label.trim(),
+      start_date: form.start_date || null,
+      end_date: form.end_date || null,
+      status: form.status,
+      capacity: form.capacity ? Number(form.capacity) : null,
+    }).eq('id', cohort.id);
+    setSaving(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success('Cohort updated');
+    onSaved();
+  };
+
+  return (
+    <div className="space-y-4 mt-2">
+      <div><Label>Cohort Label *</Label><Input value={form.cohort_label} onChange={e => setForm({ ...form, cohort_label: e.target.value })} className="mt-1.5" /></div>
+      <div className="grid grid-cols-2 gap-3">
+        <div><Label>Start Date</Label><Input type="date" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} className="mt-1.5" /></div>
+        <div><Label>End Date</Label><Input type="date" value={form.end_date} onChange={e => setForm({ ...form, end_date: e.target.value })} className="mt-1.5" /></div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label>Status</Label>
+          <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
+            <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+            <SelectContent>{COHORT_STATUSES.map(s => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+        <div><Label>Capacity</Label><Input type="number" min="1" value={form.capacity} onChange={e => setForm({ ...form, capacity: e.target.value })} className="mt-1.5" placeholder="Optional" /></div>
+      </div>
+      <Button onClick={save} disabled={saving} className="w-full">{saving ? 'Saving...' : 'Save Changes'}</Button>
+    </div>
+  );
 }
 
-const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
+function ManageStudentsDialog({ cohort, classroomId, onChanged }: { cohort: any; classroomId: string; onChanged: () => void }) {
+  const [enrolled, setEnrolled] = useState<any[]>([]);
+  const [memberRows, setMemberRows] = useState<Map<string, string>>(new Map());
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    const [{ data: students }, { data: members }] = await Promise.all([
+      supabase.rpc('get_classroom_students', { p_classroom_id: classroomId }),
+      supabase.rpc('get_cohort_members', { p_cohort_id: cohort.id }),
+    ]);
+    setEnrolled(students || []);
+    setMemberRows(new Map((members || []).map((row: any) => [row.student_id, row.id])));
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, [cohort.id, classroomId]);
+
+  const toggle = async (student: any) => {
+    if (!student.user_id) return;
+    const isMember = memberRows.has(student.user_id);
+    if (!isMember && cohort.capacity && memberRows.size >= cohort.capacity) {
+      toast.error('This cohort is already at capacity');
+      return;
+    }
+
+    setBusy(student.user_id);
+    try {
+      const rowId = memberRows.get(student.user_id);
+      if (rowId) {
+        const { error } = await supabase.rpc('remove_student_from_cohort', { p_id: rowId });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.rpc('add_student_to_cohort', {
+          p_cohort_id: cohort.id,
+          p_student_id: student.user_id,
+          p_enrollment_id: student.id,
+        });
+        if (error) throw error;
+      }
+      await load();
+      onChanged();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="space-y-3 mt-2 max-h-[60vh] overflow-y-auto">
+      {loading ? (
+        <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+      ) : enrolled.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-6">No classroom students available.</p>
+      ) : (
+        enrolled.map(student => {
+          const inCohort = memberRows.has(student.user_id);
+          return (
+            <div key={student.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
+              <div className="min-w-0">
+                <p className="text-sm font-medium truncate">{student.full_name || '—'}</p>
+                <p className="text-xs text-muted-foreground truncate">{student.email}</p>
+              </div>
+              {!student.user_id ? (
+                <span className="text-xs text-muted-foreground border border-border rounded px-2 py-0.5">No account</span>
+              ) : (
+                <Button size="sm" variant={inCohort ? 'destructive' : 'outline'} className="h-7 text-xs" disabled={busy === student.user_id} onClick={() => toggle(student)}>
+                  {busy === student.user_id ? <Loader2 className="h-3 w-3 animate-spin" /> : inCohort ? <><UserMinus className="h-3 w-3 mr-1" />Remove</> : <><UserPlus className="h-3 w-3 mr-1" />Add</>}
+                </Button>
+              )}
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
 
 export default function CohortDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [cohort, setCohort] = useState<any>(null);
   const [members, setMembers] = useState<any[]>([]);
+  const [attendanceSessions, setAttendanceSessions] = useState<any[]>([]);
+  const [assignments, setAssignments] = useState<any[]>([]);
+  const [editOpen, setEditOpen] = useState(false);
+  const [studentsOpen, setStudentsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [statusBusy, setStatusBusy] = useState(false);
 
-  useEffect(() => {
+  const load = async () => {
     if (!id) return;
-    const load = async () => {
-      const [cRes, mRes] = await Promise.all([
-        supabase.from('cohorts').select('*, programs(program_name), classrooms(id, name, location)').eq('id', id).single(),
-        supabase.from('cohort_students').select('id, student_id, enrollment_id, enrollments(enrollment_status, total_amount, amount_paid, outstanding_balance)').eq('cohort_id', id),
-      ]);
-      setCohort(cRes.data);
-      const rows = mRes.data || [];
+    setLoading(true);
+    const [cRes, mRes] = await Promise.all([
+      supabase.from('cohorts').select('*, programs(program_name), classrooms(id, name, location)').eq('id', id).single(),
+      supabase.from('cohort_students').select('id, student_id, enrollment_id, enrollments(enrollment_status, total_amount, amount_paid, outstanding_balance)').eq('cohort_id', id),
+    ]);
+    const cohortRow = cRes.data;
+    const rows = mRes.data || [];
 
-      // Two-step profile lookup: student_id → auth.users, not profiles directly
-      const studentIds = [...new Set(rows.map((r: any) => r.student_id).filter(Boolean))];
-      const { data: profiles } = studentIds.length
-        ? await supabase.from('profiles').select('user_id, full_name, email').in('user_id', studentIds)
-        : { data: [] };
-      const profileMap = new Map((profiles || []).map((p: any) => [p.user_id, p]));
+    const [sessionsRes, assignmentsRes] = cohortRow?.classroom_id ? await Promise.all([
+      supabase.from('attendance_sessions').select('*, old_lessons(title, lesson_date)').eq('cohort_id', id).order('created_at', { ascending: false }),
+      supabase.from('assignments').select('*, old_lessons(title, lesson_date)').eq('cohort_id', id).order('created_at', { ascending: false }),
+    ]) : [{ data: [] }, { data: [] }];
 
-      setMembers(rows.map((r: any) => ({ ...r, profile: profileMap.get(r.student_id) || null })));
-      setLoading(false);
-    };
+    const studentIds = [...new Set(rows.map((r: any) => r.student_id).filter(Boolean))];
+    const { data: profiles } = studentIds.length
+      ? await supabase.from('profiles').select('user_id, full_name, email').in('user_id', studentIds)
+      : { data: [] };
+    const profileMap = new Map((profiles || []).map((p: any) => [p.user_id, p]));
+
+    setCohort(cohortRow);
+    setMembers(rows.map((r: any) => ({ ...r, profile: profileMap.get(r.student_id) || null })));
+    setAttendanceSessions(sessionsRes.data || []);
+    setAssignments(assignmentsRes.data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, [id]);
+
+  const updateStatus = async (status: string) => {
+    setStatusBusy(true);
+    const { error } = await supabase.from('cohorts').update({ status }).eq('id', id!);
+    setStatusBusy(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success(`Cohort marked ${status}`);
     load();
-  }, [id]);
+  };
+
+  const deleteCohort = async () => {
+    const message = members.length > 0
+      ? `This cohort has ${members.length} student(s). Archive it instead unless you are sure. Delete permanently?`
+      : `Delete cohort "${cohort.cohort_label}"? This cannot be undone.`;
+    if (!confirm(message)) return;
+    const { error } = await supabase.from('cohorts').delete().eq('id', id!);
+    if (error) { toast.error(error.message); return; }
+    toast.success('Cohort deleted');
+    navigate(cohort.classrooms?.id ? `/admin/classrooms/${cohort.classrooms.id}` : '/admin/cohorts');
+  };
+
+  const publishAssignment = async (assignmentId: string) => {
+    const { error } = await supabase.from('assignments').update({ status: 'published' }).eq('id', assignmentId);
+    if (error) { toast.error(error.message); return; }
+    toast.success('Assignment published');
+    load();
+  };
+
+  const stats = useMemo(() => {
+    const totalPaid = members.reduce((sum, m) => sum + Number(m.enrollments?.amount_paid || 0), 0);
+    const totalOutstanding = members.reduce((sum, m) => sum + Number(m.enrollments?.outstanding_balance || 0), 0);
+    const attendanceOpen = attendanceSessions.filter(s => s.status === 'open').length;
+
+    return [
+      { label: 'Students', value: members.length, icon: Users },
+      { label: 'Capacity', value: cohort?.capacity ? `${members.length}/${cohort.capacity}` : 'Open', icon: GraduationCap },
+      { label: 'Active Students', value: members.filter(m => m.enrollments?.enrollment_status === 'active').length, icon: UserPlus },
+      { label: 'Attendance', value: attendanceSessions.length, icon: ClipboardList, hint: attendanceOpen ? `${attendanceOpen} open` : undefined },
+      { label: 'Assignments', value: assignments.length, icon: ClipboardCheck },
+      { label: 'Outstanding', value: formatCurrency(totalOutstanding), icon: CalendarDays },
+      { label: 'Collected', value: formatCurrency(totalPaid), icon: School },
+    ];
+  }, [members, attendanceSessions, assignments, cohort]);
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
   if (!cohort) return <div className="text-center py-20 text-muted-foreground">Cohort not found.</div>;
-
-  const status = derivedStatus(cohort);
-  const totalPaid = members.reduce((sum, m) => sum + Number(m.enrollments?.amount_paid || 0), 0);
-  const totalOutstanding = members.reduce((sum, m) => sum + Number(m.enrollments?.outstanding_balance || 0), 0);
 
   const studentColumns = [
     { key: 'name', header: 'Student', render: (r: any) => r.profile?.full_name || <span className="text-muted-foreground text-sm">—</span> },
@@ -84,6 +280,25 @@ export default function CohortDetailPage() {
     { key: 'outstanding', header: 'Outstanding', render: (r: any) => r.enrollments ? formatCurrency(Number(r.enrollments.outstanding_balance || 0)) : '—' },
   ];
 
+  const attendanceColumns = [
+    { key: 'code', header: 'Code', render: (r: any) => <span className="font-mono font-semibold tracking-wider">{r.code}</span> },
+    { key: 'lesson', header: 'Lesson', render: (r: any) => r.old_lessons?.title || '—' },
+    { key: 'status', header: 'Status', render: (r: any) => <Badge variant="outline" className={STATUS_COLOURS[r.status] || ''}>{r.status}</Badge> },
+    { key: 'created_at', header: 'Created', render: (r: any) => new Date(r.created_at).toLocaleString() },
+  ];
+
+  const assignmentColumns = [
+    { key: 'title', header: 'Assignment', render: (r: any) => <span className="font-medium">{r.title}</span> },
+    { key: 'lesson', header: 'Lesson', render: (r: any) => r.old_lessons?.title || '—' },
+    { key: 'due_date', header: 'Due', render: (r: any) => r.due_date ? new Date(r.due_date).toLocaleDateString() : '—' },
+    { key: 'status', header: 'Status', render: (r: any) => <Badge variant="outline" className={STATUS_COLOURS[r.status] || ''}>{r.status}</Badge> },
+    { key: 'actions', header: '', render: (r: any) => r.status !== 'published' ? (
+      <Button size="sm" variant="outline" onClick={() => publishAssignment(r.id)}>
+        <ClipboardCheck className="h-3.5 w-3.5 mr-1" />Publish
+      </Button>
+    ) : null },
+  ];
+
   return (
     <div>
       <PageHeader
@@ -91,87 +306,91 @@ export default function CohortDetailPage() {
         description={cohort.programs?.program_name || 'No program'}
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="ghost" onClick={() => navigate('/admin/cohorts')}>
+            <Button variant="ghost" onClick={() => navigate(cohort.classrooms?.id ? `/admin/classrooms/${cohort.classrooms.id}` : '/admin/cohorts')}>
               <ArrowLeft className="h-4 w-4 mr-2" /> Back
             </Button>
-            <Button variant="destructive" size="sm" onClick={async () => {
-              if (!confirm(`Delete cohort "${cohort.cohort_label}"? This cannot be undone.`)) return;
-              const { error } = await supabase.from('cohorts').delete().eq('id', id!);
-              if (error) { toast.error(error.message); return; }
-              toast.success('Cohort deleted');
-              navigate('/admin/cohorts');
-            }}>
-              <Trash2 className="h-4 w-4 mr-1.5" /> Delete Cohort
+            <Dialog open={editOpen} onOpenChange={setEditOpen}>
+              <DialogTrigger asChild><Button variant="outline"><Pencil className="h-4 w-4 mr-2" />Edit</Button></DialogTrigger>
+              <DialogContent>
+                <DialogHeader><DialogTitle>Edit Cohort</DialogTitle></DialogHeader>
+                <CohortEditForm cohort={cohort} onSaved={() => { setEditOpen(false); load(); }} />
+              </DialogContent>
+            </Dialog>
+            {cohort.status !== 'archived' ? (
+              <Button variant="outline" disabled={statusBusy} onClick={() => updateStatus('archived')}>
+                <Archive className="h-4 w-4 mr-2" />Archive
+              </Button>
+            ) : (
+              <Button variant="outline" disabled={statusBusy} onClick={() => updateStatus('active')}>
+                <RotateCcw className="h-4 w-4 mr-2" />Reactivate
+              </Button>
+            )}
+            <Button variant="destructive" size="sm" onClick={deleteCohort}>
+              <Trash2 className="h-4 w-4 mr-1.5" /> Delete
             </Button>
           </div>
         }
       />
 
       <div className="flex flex-wrap items-center gap-3 mb-6">
-        {status && (
-          <Badge variant="outline" className={`capitalize ${STATUS_COLOURS[status] || ''}`}>{status}</Badge>
-        )}
-        {cohort.scope_type && (
-          <Badge variant="outline" className="capitalize text-primary/80">Scope: {cohort.scope_type}</Badge>
-        )}
-        {cohort.start_date && (
-          <span className="text-sm text-muted-foreground">
-            {new Date(cohort.start_date).toLocaleDateString()} – {cohort.end_date ? new Date(cohort.end_date).toLocaleDateString() : 'ongoing'}
-          </span>
-        )}
+        <Badge variant="outline" className={`capitalize ${STATUS_COLOURS[cohort.status] || ''}`}>{cohort.status}</Badge>
+        {cohort.scope_type && <Badge variant="outline" className="capitalize text-primary/80">Scope: {cohort.scope_type}</Badge>}
+        <span className="text-sm text-muted-foreground">
+          {cohort.start_date ? new Date(cohort.start_date).toLocaleDateString() : 'No start date'} – {cohort.end_date ? new Date(cohort.end_date).toLocaleDateString() : 'ongoing'}
+        </span>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-        {[
-          { label: 'Students', value: members.length },
-          { label: 'Active', value: members.filter(m => m.enrollments?.enrollment_status === 'active').length },
-          { label: 'Total Paid', value: formatCurrency(totalPaid) },
-          { label: 'Outstanding', value: formatCurrency(totalOutstanding) },
-        ].map(s => (
-          <div key={s.label} className="glass-card rounded-xl p-4 text-center">
-            <div className="text-2xl font-bold font-heading">{s.value}</div>
-            <div className="text-xs text-muted-foreground">{s.label}</div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-7 gap-4 mb-8">
+        {stats.map(({ label, value, icon: Icon, hint }) => (
+          <div key={label} className="glass-card rounded-xl p-4">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-medium text-muted-foreground">{label}</p>
+              <Icon className="h-4 w-4 text-primary" />
+            </div>
+            <div className="text-xl font-bold font-heading mt-2">{value}</div>
+            {hint && <p className="text-xs text-muted-foreground mt-1">{hint}</p>}
           </div>
         ))}
       </div>
 
       <Tabs defaultValue="students">
-        <TabsList className="mb-6">
-          <TabsTrigger value="students">
-            <GraduationCap className="h-4 w-4 mr-1.5" />Students ({members.length})
-          </TabsTrigger>
-          {cohort.classrooms && (
-            <TabsTrigger value="classroom">
-              <School className="h-4 w-4 mr-1.5" />Classroom
-            </TabsTrigger>
-          )}
+        <TabsList className="mb-6 flex-wrap h-auto gap-1">
+          <TabsTrigger value="students"><GraduationCap className="h-4 w-4 mr-1.5" />Students ({members.length})</TabsTrigger>
+          <TabsTrigger value="attendance"><ClipboardList className="h-4 w-4 mr-1.5" />Attendance ({attendanceSessions.length})</TabsTrigger>
+          <TabsTrigger value="assignments"><ClipboardCheck className="h-4 w-4 mr-1.5" />Assignments ({assignments.length})</TabsTrigger>
+          {cohort.classrooms && <TabsTrigger value="classroom"><School className="h-4 w-4 mr-1.5" />Classroom</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="students">
-          <DataTable
-            columns={studentColumns}
-            data={members}
-            searchable
-            searchPlaceholder="Search students..."
-            emptyMessage="No students in this cohort"
-          />
+          <div className="flex items-center justify-end mb-4">
+            <Dialog open={studentsOpen} onOpenChange={setStudentsOpen}>
+              <DialogTrigger asChild><Button size="sm"><UserPlus className="h-4 w-4 mr-1.5" />Manage Students</Button></DialogTrigger>
+              <DialogContent className="max-w-lg">
+                <DialogHeader><DialogTitle>Manage Students</DialogTitle></DialogHeader>
+                <ManageStudentsDialog cohort={cohort} classroomId={cohort.classroom_id} onChanged={load} />
+              </DialogContent>
+            </Dialog>
+          </div>
+          <DataTable columns={studentColumns} data={members} searchable searchPlaceholder="Search students..." emptyMessage="No students in this cohort" />
+        </TabsContent>
+
+        <TabsContent value="attendance">
+          <DataTable columns={attendanceColumns} data={attendanceSessions} searchable searchPlaceholder="Search attendance..." emptyMessage="No attendance sessions for this cohort" />
+        </TabsContent>
+
+        <TabsContent value="assignments">
+          <DataTable columns={assignmentColumns} data={assignments} searchable searchPlaceholder="Search assignments..." emptyMessage="No assignments for this cohort" />
         </TabsContent>
 
         {cohort.classrooms && (
           <TabsContent value="classroom">
             <div className="glass-card rounded-xl p-5">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="font-semibold">{cohort.classrooms.name}</p>
-                  {cohort.classrooms.location && (
-                    <p className="text-sm text-muted-foreground mt-0.5">{cohort.classrooms.location}</p>
-                  )}
+                  {cohort.classrooms.location && <p className="text-sm text-muted-foreground mt-0.5">{cohort.classrooms.location}</p>}
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigate(`/admin/classrooms/${cohort.classrooms.id}`)}
-                >
+                <Button variant="outline" size="sm" onClick={() => navigate(`/admin/classrooms/${cohort.classrooms.id}`)}>
                   <School className="h-3.5 w-3.5 mr-1.5" />View Classroom
                 </Button>
               </div>

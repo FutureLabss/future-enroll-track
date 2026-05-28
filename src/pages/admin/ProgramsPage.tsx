@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable } from '@/components/shared/DataTable';
@@ -9,12 +10,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Plus, Pencil } from 'lucide-react';
+import { Eye, Plus, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 
 const BLANK = { program_name: '', description: '', active: true };
 
 export default function ProgramsPage() {
+  const navigate = useNavigate();
   const [programs, setPrograms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
@@ -88,9 +90,28 @@ export default function ProgramsPage() {
     {
       key: 'actions', header: '',
       render: (r: any) => (
-        <Button variant="ghost" size="sm" onClick={() => openEdit(r)}>
-          <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(event) => {
+              event.stopPropagation();
+              navigate(`/admin/programs/${r.id}`);
+            }}
+          >
+            <Eye className="h-3.5 w-3.5 mr-1.5" /> View
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(event) => {
+              event.stopPropagation();
+              openEdit(r);
+            }}
+          >
+            <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
+          </Button>
+        </div>
       ),
     },
   ];
@@ -141,7 +162,15 @@ export default function ProgramsPage() {
 
       {loading
         ? <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>
-        : <DataTable columns={columns} data={programs} />
+        : (
+          <DataTable
+            columns={columns}
+            data={programs}
+            searchable
+            searchPlaceholder="Search programs..."
+            onRowClick={(row) => navigate(`/admin/programs/${row.id}`)}
+          />
+        )
       }
     </div>
   );

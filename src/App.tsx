@@ -15,6 +15,7 @@ import InvoiceDetailPage from "@/pages/admin/InvoiceDetailPage";
 import CreateInvoicePage from "@/pages/admin/CreateInvoicePage";
 import PaymentsPage from "@/pages/admin/PaymentsPage";
 import ProgramsPage from "@/pages/admin/ProgramsPage";
+import ProgramDetailPage from "@/pages/admin/ProgramDetailPage";
 import OrganizationsPage from "@/pages/admin/OrganizationsPage";
 import CustomFieldsPage from "@/pages/admin/CustomFieldsPage";
 import NotificationsPage from "@/pages/admin/NotificationsPage";
@@ -117,6 +118,7 @@ const App = () => (
               <Route path="/admin/payments" element={<PaymentsPage />} />
               <Route path="/admin/pending-payments" element={<PendingPaymentsPage />} />
               <Route path="/admin/programs" element={<ProgramsPage />} />
+              <Route path="/admin/programs/:id" element={<ProgramDetailPage />} />
               <Route path="/admin/organizations" element={<OrganizationsPage />} />
               <Route path="/admin/custom-fields" element={<CustomFieldsPage />} />
               <Route path="/admin/notifications" element={<NotificationsPage />} />

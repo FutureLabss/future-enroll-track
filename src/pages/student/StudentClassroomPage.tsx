@@ -43,7 +43,7 @@ function AttendanceTab({ classroomId }: { classroomId: string }) {
     if (!user) return;
     const { data } = await supabase
       .from('attendance_records')
-      .select('*, attendance_sessions(code, created_at, duration_mins, old_lessons(title))')
+      .select('*, attendance_sessions(code, created_at, duration_mins, old_lessons(title), schedules(title, lessons(title)))')
       .eq('student_id', user.id)
       .eq('classroom_id', classroomId)
       .order('marked_at', { ascending: false });
@@ -136,7 +136,12 @@ function AttendanceTab({ classroomId }: { classroomId: string }) {
             {records.map((r: any) => (
               <div key={r.id} className="flex items-center justify-between rounded-xl border border-border px-4 py-3">
                 <div>
-                  <p className="font-medium text-sm">{r.attendance_sessions?.lessons?.title || <span className="font-mono">{r.attendance_sessions?.code}</span>}</p>
+                  <p className="font-medium text-sm">
+                    {r.attendance_sessions?.schedules?.lessons?.title
+                      || r.attendance_sessions?.schedules?.title
+                      || r.attendance_sessions?.old_lessons?.title
+                      || <span className="font-mono">{r.attendance_sessions?.code}</span>}
+                  </p>
                   <p className="text-xs text-muted-foreground">{new Date(r.marked_at).toLocaleString()}</p>
                 </div>
                 <Badge variant="outline" className={`capitalize ${ATTENDANCE_STATUS_COLOURS[r.attendance_status] || ''}`}>
@@ -193,6 +198,7 @@ function AssignmentsTab({ classroomId }: { classroomId: string }) {
                   </p>
                 )}
                 {a.instructions && <p className="text-sm mt-2 text-muted-foreground line-clamp-2">{a.instructions}</p>}
+                {a.units?.title && <p className="text-xs mt-2 text-muted-foreground">Unit: {a.units.title}</p>}
               </div>
               <div className="shrink-0 flex flex-col items-end gap-2">
                 {sub ? (

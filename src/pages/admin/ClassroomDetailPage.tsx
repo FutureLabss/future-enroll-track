@@ -478,7 +478,7 @@ function AttendanceTab({ sessions, cohorts, onView }: { sessions: any[]; cohorts
                 {s.cohorts?.cohort_label && (
                   <Badge variant="outline" className="text-xs bg-primary/5 text-primary border-primary/20">{s.cohorts.cohort_label}</Badge>
                 )}
-                <span className="text-sm text-muted-foreground">{s.lessons?.title || 'No lesson'}</span>
+                <span className="text-sm text-muted-foreground">{s.schedules?.lessons?.title || s.schedules?.title || s.old_lessons?.title || 'No lesson'}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">{new Date(s.created_at).toLocaleString()}</span>
@@ -872,7 +872,7 @@ export default function ClassroomDetailPage() {
   const assignmentColumns = [
     { key: 'title', header: 'Assignment', render: (r: any) => <span className="font-medium">{r.title}</span> },
     { key: 'cohort', header: 'Cohort', render: (r: any) => r.cohorts?.cohort_label || 'All' },
-    { key: 'lesson', header: 'Lesson', render: (r: any) => r.old_lessons?.title || '—' },
+    { key: 'unit', header: 'Unit', render: (r: any) => r.units?.title || r.old_lessons?.title || '—' },
     { key: 'due_date', header: 'Due', render: (r: any) => r.due_date ? new Date(r.due_date).toLocaleDateString() : '—' },
     { key: 'status', header: 'Status', render: (r: any) => <Badge variant="outline" className="capitalize">{r.status}</Badge> },
     { key: 'actions', header: '', render: (r: any) => r.status !== 'published' ? (
@@ -1181,7 +1181,9 @@ export default function ClassroomDetailPage() {
           <DialogHeader>
             <DialogTitle>
               Session: <span className="font-mono tracking-widest">{sessionModal.session?.code}</span>
-              {sessionModal.session?.lessons?.title && <span className="font-normal text-muted-foreground ml-2">— {sessionModal.session.lessons.title}</span>}
+              {(sessionModal.session?.schedules?.lessons?.title || sessionModal.session?.schedules?.title || sessionModal.session?.old_lessons?.title) && (
+                <span className="font-normal text-muted-foreground ml-2">— {sessionModal.session.schedules?.lessons?.title || sessionModal.session.schedules?.title || sessionModal.session.old_lessons?.title}</span>
+              )}
             </DialogTitle>
           </DialogHeader>
           {sessionModal.session && <AttendanceDrillDown session={sessionModal.session} />}

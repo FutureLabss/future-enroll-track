@@ -202,8 +202,8 @@ export default function CohortDetailPage() {
     const rows = mRes.data || [];
 
     const [sessionsRes, assignmentsRes] = cohortRow?.classroom_id ? await Promise.all([
-      supabase.from('attendance_sessions').select('*, old_lessons(title, lesson_date)').eq('cohort_id', id).order('created_at', { ascending: false }),
-      supabase.from('assignments').select('*, old_lessons(title, lesson_date)').eq('cohort_id', id).order('created_at', { ascending: false }),
+      supabase.from('attendance_sessions').select('*, old_lessons(title, lesson_date), schedules(title, scheduled_date, lessons(title))').eq('cohort_id', id).order('created_at', { ascending: false }),
+      supabase.from('assignments').select('*, old_lessons(title, lesson_date), units(title)').eq('cohort_id', id).order('created_at', { ascending: false }),
     ]) : [{ data: [] }, { data: [] }];
 
     const studentIds = [...new Set(rows.map((r: any) => r.student_id).filter(Boolean))];
@@ -282,14 +282,14 @@ export default function CohortDetailPage() {
 
   const attendanceColumns = [
     { key: 'code', header: 'Code', render: (r: any) => <span className="font-mono font-semibold tracking-wider">{r.code}</span> },
-    { key: 'lesson', header: 'Lesson', render: (r: any) => r.old_lessons?.title || '—' },
+    { key: 'lesson', header: 'Lesson', render: (r: any) => r.schedules?.lessons?.title || r.schedules?.title || r.old_lessons?.title || '—' },
     { key: 'status', header: 'Status', render: (r: any) => <Badge variant="outline" className={STATUS_COLOURS[r.status] || ''}>{r.status}</Badge> },
     { key: 'created_at', header: 'Created', render: (r: any) => new Date(r.created_at).toLocaleString() },
   ];
 
   const assignmentColumns = [
     { key: 'title', header: 'Assignment', render: (r: any) => <span className="font-medium">{r.title}</span> },
-    { key: 'lesson', header: 'Lesson', render: (r: any) => r.old_lessons?.title || '—' },
+    { key: 'unit', header: 'Unit', render: (r: any) => r.units?.title || r.old_lessons?.title || '—' },
     { key: 'due_date', header: 'Due', render: (r: any) => r.due_date ? new Date(r.due_date).toLocaleDateString() : '—' },
     { key: 'status', header: 'Status', render: (r: any) => <Badge variant="outline" className={STATUS_COLOURS[r.status] || ''}>{r.status}</Badge> },
     { key: 'actions', header: '', render: (r: any) => r.status !== 'published' ? (

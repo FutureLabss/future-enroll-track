@@ -166,6 +166,7 @@ export default function ClassroomWorkspacePage() {
   const [staffList, setStaffList] = useState<any[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [scopeOptions, setScopeOptions] = useState<{ curricula: any[]; tracks: any[]; modules: any[] }>({ curricula: [], tracks: [], modules: [] });
+  const [lessonOptions, setLessonOptions] = useState<any[]>([]);
 
   const { sessions, generateSession, closeSession, regenerateCode } = useAttendance(id!);
   const { assignments, createAssignment, publishAssignment } = useAssignments(id!);
@@ -184,12 +185,12 @@ export default function ClassroomWorkspacePage() {
   // Schedule state
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleEditModal, setScheduleEditModal] = useState<{ open: boolean; schedule?: any }>({ open: false });
-  const [scheduleForm, setScheduleForm] = useState({ title: '', module_id: '', cohort_id: '', instructor_id: '', scheduled_date: '', start_time: '09:00', end_time: '11:00', location: '', meeting_link: '' });
+  const [scheduleForm, setScheduleForm] = useState({ title: '', lesson_id: '', module_id: '', cohort_id: '', instructor_id: '', scheduled_date: '', start_time: '09:00', end_time: '11:00', location: '', meeting_link: '' });
   const [savingSchedule, setSavingSchedule] = useState(false);
 
   // Assignment state
   const [assignOpen, setAssignOpen] = useState(false);
-  const [assignForm, setAssignForm] = useState({ title: '', instructions: '', due_date: '', cohort_id: '' });
+  const [assignForm, setAssignForm] = useState({ title: '', instructions: '', due_date: '', cohort_id: '', unit_id: '' });
   const [savingAssign, setSavingAssign] = useState(false);
   const [submissionsAssignment, setSubmissionsAssignment] = useState<any>(null);
 
@@ -210,8 +211,13 @@ export default function ClassroomWorkspacePage() {
 
   useEffect(() => {
     if (!id) return;
-    supabase.rpc('get_classroom_scope_options', { p_classroom_id: id })
-      .then(({ data }) => { if (data) setScopeOptions(data as any); });
+    Promise.all([
+      supabase.rpc('get_classroom_scope_options', { p_classroom_id: id }),
+      supabase.rpc('get_classroom_lesson_options' as any, { p_classroom_id: id }),
+    ]).then(([scopeRes, lessonRes]) => {
+      if (scopeRes.data) setScopeOptions(scopeRes.data as any);
+      if (lessonRes.data) setLessonOptions(lessonRes.data as any[]);
+    });
   }, [id]);
 
   useEffect(() => {
@@ -285,6 +291,7 @@ export default function ClassroomWorkspacePage() {
     try {
       await createSchedule({
         title: scheduleForm.title || null,
+        lesson_id: scheduleForm.lesson_id || null,
         module_id: scheduleForm.module_id || null,
         cohort_id: scheduleForm.cohort_id || null,
         instructor_id: scheduleForm.instructor_id || null,
@@ -296,7 +303,7 @@ export default function ClassroomWorkspacePage() {
       });
       toast.success('Schedule added');
       setScheduleOpen(false);
-      setScheduleForm({ title: '', module_id: '', cohort_id: '', instructor_id: '', scheduled_date: '', start_time: '09:00', end_time: '11:00', location: '', meeting_link: '' });
+      setScheduleForm({ title: '', lesson_id: '', module_id: '', cohort_id: '', instructor_id: '', scheduled_date: '', start_time: '09:00', end_time: '11:00', location: '', meeting_link: '' });
     } catch (e: any) {
       toast.error(e.message);
     } finally {
@@ -317,10 +324,17 @@ export default function ClassroomWorkspacePage() {
     if (!assignForm.title) { toast.error('Title required'); return; }
     setSavingAssign(true);
     try {
-      await createAssignment({ title: assignForm.title, instructions: assignForm.instructions || null, due_date: assignForm.due_date || null, cohort_id: assignForm.cohort_id || null, status: 'draft' });
+      await createAssignment({
+        title: assignForm.title,
+        instructions: assignForm.instructions || null,
+        due_date: assignForm.due_date || null,
+        cohort_id: assignForm.cohort_id || null,
+        unit_id: assignForm.unit_id || null,
+        status: 'draft',
+      });
       toast.success('Assignment created (draft)');
       setAssignOpen(false);
-      setAssignForm({ title: '', instructions: '', due_date: '', cohort_id: '' });
+      setAssignForm({ title: '', instructions: '', due_date: '', cohort_id: '', unit_id: '' });
     } catch (e: any) {
       toast.error(e.message);
     } finally {
@@ -412,6 +426,9 @@ export default function ClassroomWorkspacePage() {
   const can = permissions || {};
   const today = new Date().toISOString().split('T')[0];
   const todaySchedules = schedules.filter(s => s.scheduled_date === today && s.status === 'scheduled');
+  const unitOptions = Array.from(
+    new Map(lessonOptions.map((lesson: any) => [lesson.unit_id, lesson])).values()
+  );
 
   const scheduleColumns = [
     { key: 'date', header: 'Date', render: (r: any) => new Date(r.scheduled_date + 'T00:00:00').toLocaleDateString() },
@@ -709,6 +726,32 @@ export default function ClassroomWorkspacePage() {
                 <DialogHeader><DialogTitle>Schedule a Session</DialogTitle></DialogHeader>
                 <div className="space-y-3 mt-2">
                   <div><Label>Session Title</Label><Input value={scheduleForm.title} onChange={e => setScheduleForm({ ...scheduleForm, title: e.target.value })} className="mt-1.5" placeholder="e.g. Intro to Variables" /></div>
+                  {lessonOptions.length > 0 && (
+                    <div>
+                      <Label>Curriculum Lesson</Label>
+                      <Select
+                        value={scheduleForm.lesson_id}
+                        onValueChange={(v) => {
+                          const lesson = lessonOptions.find((item: any) => item.lesson_id === v);
+                          setScheduleForm({
+                            ...scheduleForm,
+                            lesson_id: v,
+                            module_id: lesson?.module_id || scheduleForm.module_id,
+                            title: scheduleForm.title || lesson?.lesson_title || '',
+                          });
+                        }}
+                      >
+                        <SelectTrigger className="mt-1.5"><SelectValue placeholder="Link to a v2 lesson" /></SelectTrigger>
+                        <SelectContent>
+                          {lessonOptions.map((lesson: any) => (
+                            <SelectItem key={lesson.lesson_id} value={lesson.lesson_id}>
+                              {lesson.lesson_title} - {lesson.unit_title}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   {scopeOptions.modules.length > 0 && (
                     <div>
                       <Label>Module (optional)</Label>
@@ -764,7 +807,7 @@ export default function ClassroomWorkspacePage() {
                         <Label>Today's session (optional)</Label>
                         <Select value={sessionForm.schedule_id} onValueChange={v => setSessionForm({ ...sessionForm, schedule_id: v })}>
                           <SelectTrigger className="mt-1.5"><SelectValue placeholder="Link to a scheduled session" /></SelectTrigger>
-                          <SelectContent>{todaySchedules.map(s => <SelectItem key={s.id} value={s.id}>{s.start_time} – {s.end_time}{s.lessons ? ` (${s.lessons.title})` : ''}</SelectItem>)}</SelectContent>
+                          <SelectContent>{todaySchedules.map(s => <SelectItem key={s.id} value={s.id}>{s.start_time} – {s.end_time}{s.lessons ? ` (${s.lessons.title})` : s.title ? ` (${s.title})` : ''}</SelectItem>)}</SelectContent>
                         </Select>
                       </div>
                     )}
@@ -799,7 +842,7 @@ export default function ClassroomWorkspacePage() {
                   <div className="flex items-center gap-3">
                     <span className="font-mono font-bold text-lg tracking-widest">{s.code}</span>
                     <Badge variant={s.status === 'open' ? 'default' : 'secondary'}>{s.status}</Badge>
-                    <span className="text-sm text-muted-foreground">{s.old_lessons?.title || s.cohorts?.cohort_label || '—'}</span>
+                    <span className="text-sm text-muted-foreground">{s.schedules?.lessons?.title || s.schedules?.title || s.old_lessons?.title || s.cohorts?.cohort_label || '—'}</span>
                     <span className="text-xs text-muted-foreground">{s.duration_mins} min</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -850,6 +893,21 @@ export default function ClassroomWorkspacePage() {
                   <div className="space-y-3 mt-2">
                     <div><Label>Title *</Label><Input value={assignForm.title} onChange={e => setAssignForm({ ...assignForm, title: e.target.value })} className="mt-1.5" /></div>
                     <div><Label>Instructions</Label><Textarea value={assignForm.instructions} onChange={e => setAssignForm({ ...assignForm, instructions: e.target.value })} className="mt-1.5" rows={4} /></div>
+                    {unitOptions.length > 0 && (
+                      <div>
+                        <Label>Curriculum Unit</Label>
+                        <Select value={assignForm.unit_id} onValueChange={v => setAssignForm({ ...assignForm, unit_id: v })}>
+                          <SelectTrigger className="mt-1.5"><SelectValue placeholder="Link to a v2 unit" /></SelectTrigger>
+                          <SelectContent>
+                            {unitOptions.map((unit: any) => (
+                              <SelectItem key={unit.unit_id} value={unit.unit_id}>
+                                {unit.unit_title} - {unit.module_title}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-3">
                       <div><Label>Due Date</Label><Input type="datetime-local" value={assignForm.due_date} onChange={e => setAssignForm({ ...assignForm, due_date: e.target.value })} className="mt-1.5" /></div>
                       <div>
@@ -873,6 +931,7 @@ export default function ClassroomWorkspacePage() {
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold">{a.title}</p>
                       {a.due_date && <p className="text-xs text-muted-foreground mt-0.5">Due: {new Date(a.due_date).toLocaleString()}</p>}
+                      {a.units?.title && <p className="text-xs text-muted-foreground">Unit: {a.units.title}</p>}
                       {a.cohorts && <p className="text-xs text-muted-foreground">{a.cohorts.cohort_label}</p>}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
@@ -899,7 +958,9 @@ export default function ClassroomWorkspacePage() {
           <DialogHeader>
             <DialogTitle>
               Session: <span className="font-mono tracking-widest">{drillSession?.code}</span>
-              {drillSession?.old_lessons?.title && <span className="font-normal text-muted-foreground ml-2">— {drillSession.old_lessons.title}</span>}
+              {(drillSession?.schedules?.lessons?.title || drillSession?.schedules?.title || drillSession?.old_lessons?.title) && (
+                <span className="font-normal text-muted-foreground ml-2">— {drillSession.schedules?.lessons?.title || drillSession.schedules?.title || drillSession.old_lessons?.title}</span>
+              )}
             </DialogTitle>
           </DialogHeader>
           {drillSession && <AttendanceDrillDown session={drillSession} />}

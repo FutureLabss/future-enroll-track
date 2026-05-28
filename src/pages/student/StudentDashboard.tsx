@@ -29,6 +29,26 @@ import {
 
 const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
 
+const withTimeout = async <T,>(request: PromiseLike<T>, fallback: T, label: string): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      Promise.resolve(request),
+      new Promise<T>((resolve) => {
+        timer = setTimeout(() => {
+          console.warn(`Student dashboard request timed out: ${label}`);
+          resolve(fallback);
+        }, 10000);
+      }),
+    ]);
+  } catch (error) {
+    console.warn(`Student dashboard request failed: ${label}`, error);
+    return fallback;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+};
+
 export default function StudentDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -43,97 +63,141 @@ export default function StudentDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
     const load = async () => {
       setLoading(true);
-      const [enrollmentRes, classroomRes, fieldsRes] = await Promise.all([
-        supabase
-          .from('enrollments')
-          .select('*, programs(program_name), cohorts(cohort_label, classroom_id)')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('classroom_students')
-          .select('*, classrooms(*, programs(program_name))')
-          .eq('student_id', user.id),
-        supabase
-          .from('custom_fields')
-          .select('*')
-          .eq('active', true)
-          .eq('visible_to_student', true)
-          .order('sort_order'),
-      ]);
+      try {
+        const [enrollmentRes, classroomRes, fieldsRes] = await Promise.all([
+          withTimeout(
+            supabase
+              .from('enrollments')
+              .select('*, programs(program_name), cohorts(cohort_label, classroom_id)')
+              .eq('user_id', user.id)
+              .order('created_at', { ascending: false }),
+            { data: [] } as any,
+            'enrollments'
+          ),
+          withTimeout(
+            supabase
+              .from('classroom_students')
+              .select('*, classrooms(*, programs(program_name))')
+              .eq('student_id', user.id),
+            { data: [] } as any,
+            'classrooms'
+          ),
+          withTimeout(
+            supabase
+              .from('custom_fields')
+              .select('*')
+              .eq('active', true)
+              .eq('visible_to_student', true)
+              .order('sort_order'),
+            { data: [] } as any,
+            'custom fields'
+          ),
+        ]);
 
-      const enrollmentRows = enrollmentRes.data || [];
-      const classroomRows = classroomRes.data || [];
-      const fields = fieldsRes.data || [];
-      const classroomIds = classroomRows.map((row: any) => row.classroom_id).filter(Boolean);
+        const enrollmentRows = enrollmentRes.data || [];
+        const classroomRows = classroomRes.data || [];
+        const fields = fieldsRes.data || [];
+        const classroomIds = classroomRows.map((row: any) => row.classroom_id).filter(Boolean);
 
-      const [scheduleRes, assignmentRes, submissionRes, fieldValuesRes, notificationRes] = await Promise.all([
-        classroomIds.length
-          ? supabase
-              .from('schedules')
-              .select('*, lessons(title), cohorts(cohort_label), staff:instructor_id(full_name)')
-              .in('classroom_id', classroomIds)
-              .neq('status', 'cancelled')
-              .gte('scheduled_date', new Date().toISOString().split('T')[0])
-              .order('scheduled_date', { ascending: true })
-              .order('start_time', { ascending: true })
-              .limit(8)
-          : Promise.resolve({ data: [] } as any),
-        classroomIds.length
-          ? supabase
-              .from('assignments')
-              .select('*, cohorts(cohort_label), units(title)')
-              .in('classroom_id', classroomIds)
-              .eq('status', 'published')
-              .order('due_date', { ascending: true, nullsFirst: false })
-              .limit(8)
-          : Promise.resolve({ data: [] } as any),
-        supabase
-          .from('assignment_submissions')
-          .select('assignment_id')
-          .eq('student_id', user.id),
-        enrollmentRows.length && fields.length
-          ? supabase
-              .from('field_values')
-              .select('field_id, value')
-              .eq('enrollment_id', enrollmentRows[0].id)
-          : Promise.resolve({ data: [] } as any),
-        supabase
-          .from('notifications')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(5),
-      ]);
+        const [scheduleRes, assignmentRes, submissionRes, fieldValuesRes, notificationRes] = await Promise.all([
+          classroomIds.length
+            ? withTimeout(
+                supabase
+                  .from('schedules')
+                  .select('*, lessons(title), cohorts(cohort_label), staff:instructor_id(full_name)')
+                  .in('classroom_id', classroomIds)
+                  .neq('status', 'cancelled')
+                  .gte('scheduled_date', new Date().toISOString().split('T')[0])
+                  .order('scheduled_date', { ascending: true })
+                  .order('start_time', { ascending: true })
+                  .limit(8),
+                { data: [] } as any,
+                'schedules'
+              )
+            : Promise.resolve({ data: [] } as any),
+          classroomIds.length
+            ? withTimeout(
+                supabase
+                  .from('assignments')
+                  .select('*, cohorts(cohort_label), units(title)')
+                  .in('classroom_id', classroomIds)
+                  .eq('status', 'published')
+                  .order('due_date', { ascending: true, nullsFirst: false })
+                  .limit(8),
+                { data: [] } as any,
+                'assignments'
+              )
+            : Promise.resolve({ data: [] } as any),
+          withTimeout(
+            supabase
+              .from('assignment_submissions')
+              .select('assignment_id')
+              .eq('student_id', user.id),
+            { data: [] } as any,
+            'assignment submissions'
+          ),
+          enrollmentRows.length && fields.length
+            ? withTimeout(
+                supabase
+                  .from('field_values')
+                  .select('field_id, value')
+                  .eq('enrollment_id', enrollmentRows[0].id),
+                { data: [] } as any,
+                'field values'
+              )
+            : Promise.resolve({ data: [] } as any),
+          withTimeout(
+            supabase
+              .from('notifications')
+              .select('*')
+              .eq('user_id', user.id)
+              .order('created_at', { ascending: false })
+              .limit(5),
+            { data: [] } as any,
+            'notifications'
+          ),
+        ]);
 
-      const submitted = new Set((submissionRes.data || []).map((row: any) => row.assignment_id));
-      const fieldValues = fieldValuesRes.data || [];
-      const filledFieldIds = new Set(fieldValues.filter((row: any) => row.value?.trim?.()).map((row: any) => row.field_id));
-      const requiredMissing = fields.filter((field: any) => field.required && !filledFieldIds.has(field.id)).length;
+        const submitted = new Set((submissionRes.data || []).map((row: any) => row.assignment_id));
+        const fieldValues = fieldValuesRes.data || [];
+        const filledFieldIds = new Set(fieldValues.filter((row: any) => row.value?.trim?.()).map((row: any) => row.field_id));
+        const requiredMissing = fields.filter((field: any) => field.required && !filledFieldIds.has(field.id)).length;
 
-      const activeCohort = classroomRows.find((row: any) => row.cohort_id)?.cohort_id;
-      const activeStudentId = user.id;
-      if (activeCohort) {
-        const { data } = await supabase.rpc('get_student_progress', {
-          p_student_id: activeStudentId,
-          p_cohort_id: activeCohort,
-        });
-        setProgress(data);
-      } else {
+        setEnrollments(enrollmentRows);
+        setClassrooms(classroomRows);
+        setSchedules(scheduleRes.data || []);
+        setAssignments(assignmentRes.data || []);
+        setNotifications(notificationRes.data || []);
+        setSubmittedAssignmentIds(submitted);
+        setProfileMeta({ total: fields.length, completed: filledFieldIds.size, requiredMissing });
+
+        const activeCohort = enrollmentRows.find((row: any) => row.cohort_id)?.cohort_id;
+        if (activeCohort) {
+          const progressRes = await withTimeout(
+            supabase.rpc('get_student_progress', {
+              p_student_id: user.id,
+              p_cohort_id: activeCohort,
+            }),
+            { data: null } as any,
+            'student progress'
+          );
+          setProgress(progressRes.data);
+        } else {
+          setProgress(null);
+        }
+      } catch (error) {
+        console.warn('Student dashboard failed to load', error);
         setProgress(null);
+      } finally {
+        setLoading(false);
       }
-
-      setEnrollments(enrollmentRows);
-      setClassrooms(classroomRows);
-      setSchedules(scheduleRes.data || []);
-      setAssignments(assignmentRes.data || []);
-      setNotifications(notificationRes.data || []);
-      setSubmittedAssignmentIds(submitted);
-      setProfileMeta({ total: fields.length, completed: filledFieldIds.size, requiredMissing });
-      setLoading(false);
     };
 
     load();

@@ -244,6 +244,13 @@ export default function OtherIncomePage() {
     } catch (err: any) { toast.error(err.message); }
   };
 
+  const deleteRecurring = async (id: string) => {
+    const { error } = await (supabase as any).from('recurring_income').delete().eq('id', id);
+    if (error) return toast.error(error.message);
+    toast.success('Recurring payment deleted');
+    fetchRecurring();
+  };
+
   const sendReminders = async () => {
     setSendingReminder(true);
     try {
@@ -564,6 +571,27 @@ export default function OtherIncomePage() {
                               </AlertDialogContent>
                             </AlertDialog>
                           )}
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" title="Delete">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete recurring payment?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This permanently removes the recurring template for <strong>{r.payer_name}</strong>. Past income records are kept but this setup cannot be recovered.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => deleteRecurring(r.id)}>
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         </div>
                       </div>
                     </CardContent>

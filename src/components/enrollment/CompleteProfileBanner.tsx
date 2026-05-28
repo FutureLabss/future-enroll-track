@@ -1,14 +1,18 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { CustomFieldsForm } from '@/components/enrollment/CustomFieldsForm';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { AlertTriangle, CheckCircle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { AlertTriangle, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function CompleteProfileBanner() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [customFields, setCustomFields] = useState<any[]>([]);
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
@@ -66,10 +70,11 @@ export function CompleteProfileBanner() {
   if (loading || !enrollments.length || !customFields.length) return null;
 
   const requiredFields = customFields.filter(f => f.required);
-  const allRequiredFilled = requiredFields.every(f => customValues[f.key]?.trim());
-  const isComplete = completedFieldCount >= customFields.length;
+  const missingRequired = requiredFields.filter(f => !customValues[f.key]?.trim());
+  const requiredComplete = missingRequired.length === 0;
+  const completionPct = customFields.length ? Math.round((completedFieldCount / customFields.length) * 100) : 100;
 
-  if (isComplete) return null;
+  if (requiredComplete) return null;
 
   const handleSave = async () => {
     const missingFields = requiredFields.filter(f => !customValues[f.key]?.trim());
@@ -113,7 +118,7 @@ export function CompleteProfileBanner() {
         }
       }
 
-      setCompletedFieldCount(customFields.length);
+      setCompletedFieldCount(Object.values(customValues).filter(value => value?.trim()).length);
       setOpen(false);
       toast.success('Profile information saved successfully!');
     } catch (err: any) {
@@ -128,14 +133,21 @@ export function CompleteProfileBanner() {
       <div className="mb-6 p-4 rounded-xl border border-warning/30 bg-warning/5 flex items-center gap-3">
         <AlertTriangle className="h-5 w-5 text-warning shrink-0" />
         <div className="flex-1">
-          <p className="text-sm font-medium text-foreground">Complete your profile information</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-medium text-foreground">Complete your profile information</p>
+            <Badge variant="outline" className="border-warning/30 text-warning">{missingRequired.length} required missing</Badge>
+          </div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Please fill in the required fields to complete your enrollment.
+            Fill the required enrollment fields so your student record stays ready for class operations.
           </p>
+          <Progress value={completionPct} className="mt-3 h-2 max-w-sm" />
         </div>
-        <Button size="sm" onClick={() => setOpen(true)}>
-          Complete Now
-        </Button>
+        <div className="flex shrink-0 gap-2">
+          <Button size="sm" variant="outline" onClick={() => setOpen(true)}>Quick Edit</Button>
+          <Button size="sm" onClick={() => navigate('/profile')}>
+            Open Profile <ArrowRight className="ml-1.5 h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>

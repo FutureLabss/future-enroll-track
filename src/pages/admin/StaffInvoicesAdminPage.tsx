@@ -28,14 +28,15 @@ export default function StaffInvoicesAdminPage() {
 
   const fetchRows = async () => {
     setLoading(true);
-    let q = supabase.from('staff_invoices' as any).select('*').order('created_at', { ascending: false });
-    if (!isSuperadmin) q = (q as any).eq('submitted_by', user?.id);
-    const { data } = await q;
+    // Always fetch everything RLS permits — superadmin ALL policy and
+    // admin SELECT policy both grant full access; staff see only their own.
+    // Display filtering happens below so isSuperadmin timing never blocks data.
+    const { data } = await supabase.from('staff_invoices' as any).select('*').order('created_at', { ascending: false });
     setRows(data || []);
     setLoading(false);
   };
 
-  useEffect(() => { if (user) fetchRows(); }, [user, isSA]);
+  useEffect(() => { if (user) fetchRows(); }, [user]);
 
   const submitInvoice = async () => {
     if (!user) return;
@@ -92,7 +93,10 @@ export default function StaffInvoicesAdminPage() {
     } catch (e: any) { toast.error(e.message); } finally { setBusy(null); }
   };
 
-  const filterByStatus = (s: string) => rows.filter(r => r.status === s);
+  // Superadmin sees all; everyone else sees only their own submissions.
+  // Computed every render so isSuperadmin resolving async never causes a stale view.
+  const visibleRows = isSuperadmin ? rows : rows.filter((r: any) => r.submitted_by === user?.id);
+  const filterByStatus = (s: string) => visibleRows.filter((r: any) => r.status === s);
 
   const renderList = (items: any[]) => (
     items.length === 0

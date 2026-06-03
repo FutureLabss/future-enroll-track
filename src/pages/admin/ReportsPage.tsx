@@ -37,6 +37,7 @@ export default function ReportsPage() {
   });
 
   const [exportOpen, setExportOpen] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
   const [exportForm, setExportForm] = useState({ dateFrom: '', dateTo: '', format: 'csv' });
 
   useEffect(() => {
@@ -90,10 +91,7 @@ export default function ReportsPage() {
     setExportOpen(true);
   };
 
-  const handleExport = () => {
-    // Start from `filtered` (page filters already applied), then narrow by the
-    // export date range. Date is bucketed by created_at — always populated,
-    // unlike first_payment_date which is null for manually-added enrollments.
+  const handleExport = async () => {
     const exportFiltered = filtered.filter(e => {
       if (exportForm.dateFrom && e.created_at < exportForm.dateFrom) return false;
       if (exportForm.dateTo && e.created_at > exportForm.dateTo + 'T23:59:59') return false;
@@ -102,31 +100,80 @@ export default function ReportsPage() {
 
     if (exportFiltered.length === 0) { toast.error('No records match the selected date range'); return; }
 
-    const headers = ['Full Name', 'Email', 'Phone', 'Program', 'Cohort', 'Organization', 'Status', 'Total Amount', 'Amount Paid', 'Outstanding Balance', 'Enrollment Date'];
-    const rows = exportFiltered.map(e => [
-      e.full_name, e.email, e.phone || '', e.programs?.program_name || '', e.cohorts?.cohort_label || '',
-      e.organizations?.organization_name || '', e.enrollment_status, Number(e.total_amount), Number(e.amount_paid),
-      Number(e.outstanding_balance), e.first_payment_date ? new Date(e.first_payment_date).toLocaleDateString() : '',
-    ]);
+    setExportBusy(true);
+    try {
+      // Fetch all active custom field definitions, sorted as configured
+      const { data: fieldDefs } = await supabase
+        .from('custom_fields')
+        .select('id, key, label, sort_order')
+        .eq('active', true)
+        .order('sort_order');
 
-    const filename = `enrollments-${exportForm.dateFrom || 'all'}-to-${exportForm.dateTo || 'all'}-${new Date().toISOString().split('T')[0]}`;
+      // Fetch every field_value for the enrollments being exported in one query
+      const enrollmentIds = exportFiltered.map(e => e.id);
+      const { data: fieldValues } = await supabase
+        .from('field_values')
+        .select('enrollment_id, value, custom_fields(key)')
+        .in('enrollment_id', enrollmentIds);
 
-    if (exportForm.format === 'xlsx') {
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Enrollments');
-      XLSX.writeFile(wb, `${filename}.xlsx`);
-    } else {
-      const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${v}"`).join(','))].join('\n');
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = `${filename}.csv`; a.click();
-      URL.revokeObjectURL(url);
+      // Build a lookup: enrollment_id → { field_key: value }
+      const valueMap = new Map<string, Record<string, string>>();
+      for (const fv of fieldValues || []) {
+        const key = (fv.custom_fields as any)?.key;
+        if (!key) continue;
+        if (!valueMap.has(fv.enrollment_id)) valueMap.set(fv.enrollment_id, {});
+        valueMap.get(fv.enrollment_id)![key] = fv.value ?? '';
+      }
+
+      const customCols = fieldDefs || [];
+      const headers = [
+        'Full Name', 'Email', 'Primary Phone Number', 'Program', 'Cohort',
+        'Organization', 'Status', 'Total Amount (₦)', 'Amount Paid (₦)',
+        'Outstanding (₦)', 'Enrolled Date',
+        ...customCols.map(f => f.label),
+      ];
+
+      const rows = exportFiltered.map(e => {
+        const cv = valueMap.get(e.id) || {};
+        return [
+          e.full_name,
+          e.email,
+          e.phone || '',
+          e.programs?.program_name || '',
+          e.cohorts?.cohort_label || '',
+          e.organizations?.organization_name || '',
+          e.enrollment_status,
+          Number(e.total_amount),
+          Number(e.amount_paid),
+          Number(e.outstanding_balance),
+          e.created_at ? new Date(e.created_at).toLocaleDateString() : '',
+          ...customCols.map(f => cv[f.key] ?? ''),
+        ];
+      });
+
+      const filename = `enrollments-${exportForm.dateFrom || 'all'}-to-${exportForm.dateTo || 'all'}-${new Date().toISOString().split('T')[0]}`;
+
+      if (exportForm.format === 'xlsx') {
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Enrollments');
+        XLSX.writeFile(wb, `${filename}.xlsx`);
+      } else {
+        const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `${filename}.csv`; a.click();
+        URL.revokeObjectURL(url);
+      }
+
+      setExportOpen(false);
+      toast.success(`Exported ${exportFiltered.length} records as ${exportForm.format.toUpperCase()}`);
+    } catch (err: any) {
+      toast.error(err.message || 'Export failed');
+    } finally {
+      setExportBusy(false);
     }
-
-    setExportOpen(false);
-    toast.success(`Exported ${exportFiltered.length} records as ${exportForm.format.toUpperCase()}`);
   };
 
   if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
@@ -264,8 +311,8 @@ export default function ReportsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setExportOpen(false)}>Cancel</Button>
-            <Button onClick={handleExport}>
-              <Download className="h-4 w-4 mr-2" /> Download {exportForm.format.toUpperCase()}
+            <Button onClick={handleExport} disabled={exportBusy}>
+              <Download className="h-4 w-4 mr-2" /> {exportBusy ? 'Preparing…' : `Download ${exportForm.format.toUpperCase()}`}
             </Button>
           </DialogFooter>
         </DialogContent>

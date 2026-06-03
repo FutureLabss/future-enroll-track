@@ -109,23 +109,29 @@ export default function ReportsPage() {
         .eq('active', true)
         .order('sort_order');
 
-      // Fetch every field_value for the enrollments being exported in one query
+      const customCols = fieldDefs || [];
+
+      // Build a field_id → key map so we can resolve values without a join
+      const fieldKeyById = new Map<string, string>(customCols.map(f => [f.id, f.key]));
+
+      // Fetch field values — select field_id directly, avoid the PostgREST
+      // embedded join which is unreliable when the FK column is named field_id
+      // rather than the conventional custom_fields_id.
       const enrollmentIds = exportFiltered.map(e => e.id);
       const { data: fieldValues } = await supabase
         .from('field_values')
-        .select('enrollment_id, value, custom_fields(key)')
+        .select('enrollment_id, field_id, value')
         .in('enrollment_id', enrollmentIds);
 
       // Build a lookup: enrollment_id → { field_key: value }
       const valueMap = new Map<string, Record<string, string>>();
       for (const fv of fieldValues || []) {
-        const key = (fv.custom_fields as any)?.key;
+        const key = fieldKeyById.get(fv.field_id);
         if (!key) continue;
         if (!valueMap.has(fv.enrollment_id)) valueMap.set(fv.enrollment_id, {});
         valueMap.get(fv.enrollment_id)![key] = fv.value ?? '';
       }
 
-      const customCols = fieldDefs || [];
       const headers = [
         'Full Name', 'Email', 'Primary Phone Number', 'Program', 'Cohort',
         'Organization', 'Status', 'Total Amount (₦)', 'Amount Paid (₦)',

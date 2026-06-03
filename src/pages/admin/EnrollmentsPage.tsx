@@ -126,7 +126,14 @@ export default function EnrollmentsPage() {
     ...customFields.map(f => ({
       key: `cf_${f.key}`,
       header: f.label,
-      render: (r: any) => valueMap.get(r.id)?.[f.key] || '—',
+      render: (r: any) => {
+        const val = valueMap.get(r.id)?.[f.key];
+        if (!val) return <span className="text-muted-foreground">—</span>;
+        if (f.key === 'profile_photo') {
+          return <img src={val} alt="Photo" className="h-8 w-8 rounded-full object-cover border border-border" />;
+        }
+        return <span>{val}</span>;
+      },
     })),
     { key: 'actions', header: '', render: (r: any) => (
       <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); navigate(`/admin/enrollments/${r.id}`); }}>

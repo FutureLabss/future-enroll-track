@@ -120,18 +120,13 @@ export default function ReportsPage() {
   const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
 
   const openExport = () => {
-    setExportForm({ dateFrom: filters.dateFrom, dateTo: filters.dateTo, format: 'csv' });
+    setExportForm({ dateFrom: '', dateTo: '', format: 'csv' });
     setExportOpen(true);
   };
 
   const handleExport = () => {
-    const exportFiltered = filtered.filter(e => {
-      if (exportForm.dateFrom && e.created_at < exportForm.dateFrom) return false;
-      if (exportForm.dateTo && e.created_at > exportForm.dateTo + 'T23:59:59') return false;
-      return true;
-    });
-
-    if (exportFiltered.length === 0) { toast.error('No records match the selected date range'); return; }
+    const exportFiltered = filtered;
+    if (exportFiltered.length === 0) { toast.error('No records to export'); return; }
 
     // customFields and valueMap are loaded at page load — same pattern as EnrollmentsPage table
     const headers = [
@@ -159,7 +154,7 @@ export default function ReportsPage() {
       ];
     });
 
-    const filename = `enrollments-${exportForm.dateFrom || 'all'}-to-${exportForm.dateTo || 'all'}-${new Date().toISOString().split('T')[0]}`;
+    const filename = `enrollments-${filters.dateFrom || 'all'}-to-${filters.dateTo || 'all'}-${new Date().toISOString().split('T')[0]}`;
 
     if (exportForm.format === 'xlsx') {
       const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
@@ -183,7 +178,60 @@ export default function ReportsPage() {
 
   return (
     <div>
-      <PageHeader title="Reports & Analytics" description="Visualize data and export enrollment reports" />
+      <PageHeader
+        title="Reports & Analytics"
+        description="Visualize data and export enrollment reports"
+        actions={
+          <Button onClick={openExport}>
+            <Download className="h-4 w-4 mr-2" /> Export
+          </Button>
+        }
+      />
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3 mb-6 items-end">
+        <div>
+          <Label className="text-xs text-muted-foreground">From</Label>
+          <Input type="date" className="mt-1 w-36" value={filters.dateFrom} onChange={e => setFilters({ ...filters, dateFrom: e.target.value })} />
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">To</Label>
+          <Input type="date" className="mt-1 w-36" value={filters.dateTo} onChange={e => setFilters({ ...filters, dateTo: e.target.value })} />
+        </div>
+        <Select value={filters.program_id} onValueChange={v => setFilters({ ...filters, program_id: v })}>
+          <SelectTrigger className="w-44"><SelectValue placeholder="All Programs" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Programs</SelectItem>
+            {programs.map(p => <SelectItem key={p.id} value={p.id}>{p.program_name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={filters.cohort_id} onValueChange={v => setFilters({ ...filters, cohort_id: v })}>
+          <SelectTrigger className="w-40"><SelectValue placeholder="All Cohorts" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Cohorts</SelectItem>
+            {cohorts.map(c => <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={filters.organization_id} onValueChange={v => setFilters({ ...filters, organization_id: v })}>
+          <SelectTrigger className="w-44"><SelectValue placeholder="All Organizations" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Organizations</SelectItem>
+            {organizations.map(o => <SelectItem key={o.id} value={o.id}>{o.organization_name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={filters.enrollment_status} onValueChange={v => setFilters({ ...filters, enrollment_status: v })}>
+          <SelectTrigger className="w-36"><SelectValue placeholder="All Status" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="overdue">Overdue</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
+          </SelectContent>
+        </Select>
+        <span className="text-sm text-muted-foreground self-center">{filtered.length} records</span>
+      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -194,7 +242,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="glass-card rounded-xl p-6">
           <h3 className="font-heading font-semibold mb-4">Enrollment Status</h3>
           {pieData.length > 0 ? (
@@ -224,82 +272,13 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* Filters & Export */}
-      <div className="glass-card rounded-2xl p-8">
-        <h3 className="font-heading font-semibold text-lg mb-6">Export Filters</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-          <div><Label>From Date</Label><Input type="date" value={filters.dateFrom} onChange={e => setFilters({ ...filters, dateFrom: e.target.value })} className="mt-1.5" /></div>
-          <div><Label>To Date</Label><Input type="date" value={filters.dateTo} onChange={e => setFilters({ ...filters, dateTo: e.target.value })} className="mt-1.5" /></div>
-          <div>
-            <Label>Program</Label>
-            <Select value={filters.program_id} onValueChange={v => setFilters({ ...filters, program_id: v })}>
-              <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Programs</SelectItem>
-                {programs.map(p => <SelectItem key={p.id} value={p.id}>{p.program_name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Cohort</Label>
-            <Select value={filters.cohort_id} onValueChange={v => setFilters({ ...filters, cohort_id: v })}>
-              <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Cohorts</SelectItem>
-                {cohorts.map(c => <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Organization</Label>
-            <Select value={filters.organization_id} onValueChange={v => setFilters({ ...filters, organization_id: v })}>
-              <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Organizations</SelectItem>
-                {organizations.map(o => <SelectItem key={o.id} value={o.id}>{o.organization_name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Enrollment Status</Label>
-            <Select value={filters.enrollment_status} onValueChange={v => setFilters({ ...filters, enrollment_status: v })}>
-              <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="overdue">Overdue</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <Button onClick={openExport} size="lg">
-            <Download className="h-4 w-4 mr-2" /> Export
-          </Button>
-          <span className="text-sm text-muted-foreground">{filtered.length} records match filters</span>
-        </div>
-      </div>
-
+      {/* Export dialog — format only, page filters already applied */}
       <Dialog open={exportOpen} onOpenChange={setExportOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Export Enrollments</DialogTitle>
+            <DialogTitle>Export {filtered.length} Records</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-2">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Enrolled From</Label>
-                <Input type="date" className="mt-1.5" value={exportForm.dateFrom} onChange={e => setExportForm(f => ({ ...f, dateFrom: e.target.value }))} />
-              </div>
-              <div>
-                <Label>Enrolled To</Label>
-                <Input type="date" className="mt-1.5" value={exportForm.dateTo} onChange={e => setExportForm(f => ({ ...f, dateTo: e.target.value }))} />
-              </div>
-            </div>
             <div>
               <Label>Format</Label>
               <Select value={exportForm.format} onValueChange={v => setExportForm(f => ({ ...f, format: v }))}>
@@ -310,7 +289,7 @@ export default function ReportsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <p className="text-xs text-muted-foreground">Other active filters (program, cohort, status) are applied on top of the date range.</p>
+            <p className="text-xs text-muted-foreground">All active page filters (date range, program, cohort, status) are applied to the export.</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setExportOpen(false)}>Cancel</Button>

@@ -25,6 +25,8 @@ export default function ReportsPage() {
   const [cohorts, setCohorts] = useState<any[]>([]);
   const [organizations, setOrganizations] = useState<any[]>([]);
   const [enrollments, setEnrollments] = useState<any[]>([]);
+  const [customFields, setCustomFields] = useState<any[]>([]);
+  const [valueMap, setValueMap] = useState<Map<string, Record<string, string>>>(new Map());
   const [loading, setLoading] = useState(true);
 
   const [filters, setFilters] = useState({
@@ -37,22 +39,53 @@ export default function ReportsPage() {
   });
 
   const [exportOpen, setExportOpen] = useState(false);
-  const [exportBusy, setExportBusy] = useState(false);
   const [exportForm, setExportForm] = useState({ dateFrom: '', dateTo: '', format: 'csv' });
 
   useEffect(() => {
-    Promise.all([
-      supabase.from('programs').select('id, program_name'),
-      supabase.from('cohorts').select('id, cohort_label'),
-      supabase.from('organizations').select('id, organization_name'),
-      supabase.from('enrollments').select('*, programs(program_name), cohorts(cohort_label), organizations(organization_name)').order('first_payment_date', { ascending: false, nullsFirst: false }),
-    ]).then(([p, c, o, e]) => {
+    const load = async () => {
+      const [p, c, o, e, cf] = await Promise.all([
+        supabase.from('programs').select('id, program_name'),
+        supabase.from('cohorts').select('id, cohort_label'),
+        supabase.from('organizations').select('id, organization_name'),
+        supabase.from('enrollments').select('*, programs(program_name), cohorts(cohort_label), organizations(organization_name)').order('first_payment_date', { ascending: false, nullsFirst: false }),
+        supabase.from('custom_fields').select('id, key, label, sort_order').eq('active', true).order('sort_order'),
+      ]);
+
       setPrograms(p.data || []);
       setCohorts(c.data || []);
       setOrganizations(o.data || []);
       setEnrollments(e.data || []);
+
+      const fields = cf.data || [];
+      setCustomFields(fields);
+
+      // Fetch all field values for all enrollments and build the lookup map
+      const enrollmentRows = e.data || [];
+      if (enrollmentRows.length > 0 && fields.length > 0) {
+        const fieldKeyById = new Map<string, string>(fields.map((f: any) => [f.id, f.key]));
+        const ids = enrollmentRows.map((r: any) => r.id);
+        const CHUNK = 100;
+        let allFv: any[] = [];
+        for (let i = 0; i < ids.length; i += CHUNK) {
+          const { data: fv } = await supabase
+            .from('field_values')
+            .select('enrollment_id, field_id, value')
+            .in('enrollment_id', ids.slice(i, i + CHUNK));
+          allFv = allFv.concat(fv || []);
+        }
+        const map = new Map<string, Record<string, string>>();
+        for (const fv of allFv) {
+          const key = fieldKeyById.get(fv.field_id);
+          if (!key) continue;
+          if (!map.has(fv.enrollment_id)) map.set(fv.enrollment_id, {});
+          map.get(fv.enrollment_id)![key] = fv.value ?? '';
+        }
+        setValueMap(map);
+      }
+
       setLoading(false);
-    });
+    };
+    load();
   }, []);
 
   const filtered = enrollments.filter(e => {
@@ -91,7 +124,7 @@ export default function ReportsPage() {
     setExportOpen(true);
   };
 
-  const handleExport = async () => {
+  const handleExport = () => {
     const exportFiltered = filtered.filter(e => {
       if (exportForm.dateFrom && e.created_at < exportForm.dateFrom) return false;
       if (exportForm.dateTo && e.created_at > exportForm.dateTo + 'T23:59:59') return false;
@@ -100,95 +133,50 @@ export default function ReportsPage() {
 
     if (exportFiltered.length === 0) { toast.error('No records match the selected date range'); return; }
 
-    setExportBusy(true);
-    try {
-      // Fetch all active custom field definitions, sorted as configured
-      const { data: fieldDefs, error: fieldDefsError } = await supabase
-        .from('custom_fields')
-        .select('id, key, label, sort_order')
-        .eq('active', true)
-        .order('sort_order');
+    // customFields and valueMap are loaded at page load — same pattern as EnrollmentsPage table
+    const headers = [
+      'Full Name', 'Email', 'Primary Phone Number', 'Program', 'Cohort',
+      'Organization', 'Status', 'Total Amount (₦)', 'Amount Paid (₦)',
+      'Outstanding (₦)', 'Enrolled Date',
+      ...customFields.filter(f => f.key !== 'profile_photo').map((f: any) => f.label),
+    ];
 
-      if (fieldDefsError) throw new Error(`Failed to load field definitions: ${fieldDefsError.message}`);
-
-      const customCols = fieldDefs || [];
-
-      // Build a field_id → key map so we can resolve values without a join
-      const fieldKeyById = new Map<string, string>(customCols.map(f => [f.id, f.key]));
-
-      const enrollmentIds = exportFiltered.map(e => e.id);
-
-      // Batch into chunks of 100 to avoid PostgREST URL length limits on large exports
-      const CHUNK = 100;
-      let allFieldValues: any[] = [];
-      for (let i = 0; i < enrollmentIds.length; i += CHUNK) {
-        const chunk = enrollmentIds.slice(i, i + CHUNK);
-        const { data: chunk_fv, error: fieldValuesError } = await supabase
-          .from('field_values')
-          .select('enrollment_id, field_id, value')
-          .in('enrollment_id', chunk);
-        if (fieldValuesError) throw new Error(`Failed to load field values: ${fieldValuesError.message}`);
-        allFieldValues = allFieldValues.concat(chunk_fv || []);
-      }
-      const fieldValues = allFieldValues;
-
-      // Build a lookup: enrollment_id → { field_key: value }
-      const valueMap = new Map<string, Record<string, string>>();
-      for (const fv of fieldValues || []) {
-        const key = fieldKeyById.get(fv.field_id);
-        if (!key) continue;
-        if (!valueMap.has(fv.enrollment_id)) valueMap.set(fv.enrollment_id, {});
-        valueMap.get(fv.enrollment_id)![key] = fv.value ?? '';
-      }
-
-      const headers = [
-        'Full Name', 'Email', 'Primary Phone Number', 'Program', 'Cohort',
-        'Organization', 'Status', 'Total Amount (₦)', 'Amount Paid (₦)',
-        'Outstanding (₦)', 'Enrolled Date',
-        ...customCols.map(f => f.label),
+    const rows = exportFiltered.map(e => {
+      const cv = valueMap.get(e.id) || {};
+      return [
+        e.full_name,
+        e.email,
+        e.phone || '',
+        e.programs?.program_name || '',
+        e.cohorts?.cohort_label || '',
+        e.organizations?.organization_name || '',
+        e.enrollment_status,
+        Number(e.total_amount),
+        Number(e.amount_paid),
+        Number(e.outstanding_balance),
+        e.created_at ? new Date(e.created_at).toLocaleDateString() : '',
+        ...customFields.filter(f => f.key !== 'profile_photo').map((f: any) => cv[f.key] ?? ''),
       ];
+    });
 
-      const rows = exportFiltered.map(e => {
-        const cv = valueMap.get(e.id) || {};
-        return [
-          e.full_name,
-          e.email,
-          e.phone || '',
-          e.programs?.program_name || '',
-          e.cohorts?.cohort_label || '',
-          e.organizations?.organization_name || '',
-          e.enrollment_status,
-          Number(e.total_amount),
-          Number(e.amount_paid),
-          Number(e.outstanding_balance),
-          e.created_at ? new Date(e.created_at).toLocaleDateString() : '',
-          ...customCols.map(f => cv[f.key] ?? ''),
-        ];
-      });
+    const filename = `enrollments-${exportForm.dateFrom || 'all'}-to-${exportForm.dateTo || 'all'}-${new Date().toISOString().split('T')[0]}`;
 
-      const filename = `enrollments-${exportForm.dateFrom || 'all'}-to-${exportForm.dateTo || 'all'}-${new Date().toISOString().split('T')[0]}`;
-
-      if (exportForm.format === 'xlsx') {
-        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Enrollments');
-        XLSX.writeFile(wb, `${filename}.xlsx`);
-      } else {
-        const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n');
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = `${filename}.csv`; a.click();
-        URL.revokeObjectURL(url);
-      }
-
-      setExportOpen(false);
-      toast.success(`Exported ${exportFiltered.length} records as ${exportForm.format.toUpperCase()}`);
-    } catch (err: any) {
-      toast.error(err.message || 'Export failed');
-    } finally {
-      setExportBusy(false);
+    if (exportForm.format === 'xlsx') {
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Enrollments');
+      XLSX.writeFile(wb, `${filename}.xlsx`);
+    } else {
+      const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${filename}.csv`; a.click();
+      URL.revokeObjectURL(url);
     }
+
+    setExportOpen(false);
+    toast.success(`Exported ${exportFiltered.length} records as ${exportForm.format.toUpperCase()}`);
   };
 
   if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
@@ -326,8 +314,8 @@ export default function ReportsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setExportOpen(false)}>Cancel</Button>
-            <Button onClick={handleExport} disabled={exportBusy}>
-              <Download className="h-4 w-4 mr-2" /> {exportBusy ? 'Preparing…' : `Download ${exportForm.format.toUpperCase()}`}
+            <Button onClick={handleExport}>
+              <Download className="h-4 w-4 mr-2" /> Download {exportForm.format.toUpperCase()}
             </Button>
           </DialogFooter>
         </DialogContent>

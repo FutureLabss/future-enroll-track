@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import * as XLSX from 'xlsx';
 import { useNavigate } from 'react-router-dom';
 import { format, subMonths, startOfMonth } from 'date-fns';
 import { supabase } from '@/lib/supabase';
@@ -9,10 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { CalendarIcon, Eye, LayoutGrid, List } from 'lucide-react';
+import { CalendarIcon, Download, Eye, LayoutGrid, List } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 export default function EnrollmentsPage() {
   const navigate = useNavigate();
@@ -28,6 +31,8 @@ export default function EnrollmentsPage() {
   const [dateMode, setDateMode] = useState('all'); // 'all' | '1' | '3' | '6' | '12' | 'custom'
   const [dateFrom, setDateFrom] = useState<Date | undefined>();
   const [dateTo, setDateTo] = useState<Date | undefined>();
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState('csv');
 
   useEffect(() => {
     supabase.from('programs').select('id, program_name').eq('active', true).order('program_name')
@@ -128,6 +133,50 @@ export default function EnrollmentsPage() {
     ? new Date(r.first_payment_date).toLocaleDateString()
     : '—';
 
+  const handleExport = () => {
+    const exportRows = groupByPayment && groupedEnrollments
+      ? Object.values(groupedEnrollments).flat()
+      : filteredEnrollments;
+    if (exportRows.length === 0) { toast.error('No records to export'); return; }
+
+    const exportCustomFields = customFields.filter(f => f.key !== 'profile_photo');
+    const headers = [
+      'Full Name', 'Email', 'Primary Phone Number', 'Program', 'Cohort',
+      'Organization', 'Enrollment Status', 'Payment Status',
+      'Total Amount (₦)', 'Amount Paid (₦)', 'Outstanding (₦)', 'Enrolled Date',
+      ...exportCustomFields.map((f: any) => f.label),
+    ];
+    const rows = exportRows.map(e => {
+      const cv = valueMap.get(e.id) || {};
+      return [
+        e.full_name, e.email, e.phone || '',
+        e.programs?.program_name || '', e.cohorts?.cohort_label || '',
+        e.organizations?.organization_name || '',
+        e.enrollment_status, getPaymentStatus(e),
+        Number(e.total_amount), Number(e.amount_paid), Number(e.outstanding_balance),
+        e.created_at ? new Date(e.created_at).toLocaleDateString() : '',
+        ...exportCustomFields.map((f: any) => cv[f.key] ?? ''),
+      ];
+    });
+
+    const filename = `enrollments-${new Date().toISOString().split('T')[0]}`;
+    if (exportFormat === 'xlsx') {
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Enrollments');
+      XLSX.writeFile(wb, `${filename}.xlsx`);
+    } else {
+      const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${filename}.csv`; a.click();
+      URL.revokeObjectURL(url);
+    }
+    setExportOpen(false);
+    toast.success(`Exported ${exportRows.length} records as ${exportFormat.toUpperCase()}`);
+  };
+
   const columns = [
     { key: 'full_name', header: 'Student' },
     { key: 'email', header: 'Email' },
@@ -177,7 +226,15 @@ export default function EnrollmentsPage() {
 
   return (
     <div>
-      <PageHeader title="Enrollments" description="Manage all student enrollments" />
+      <PageHeader
+        title="Enrollments"
+        description="Manage all student enrollments"
+        actions={
+          <Button onClick={() => setExportOpen(true)}>
+            <Download className="h-4 w-4 mr-2" /> Export
+          </Button>
+        }
+      />
 
       <div className="flex flex-wrap gap-3 mb-6 items-end">
         <div>
@@ -290,6 +347,33 @@ export default function EnrollmentsPage() {
       ) : (
         renderTable(filteredEnrollments)
       )}
+
+      <Dialog open={exportOpen} onOpenChange={setExportOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Export {filteredEnrollments.length} Records</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div>
+              <Label>Format</Label>
+              <Select value={exportFormat} onValueChange={setExportFormat}>
+                <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="csv">CSV (.csv)</SelectItem>
+                  <SelectItem value="xlsx">Excel (.xlsx)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-xs text-muted-foreground">All active filters (period, status, program, payment) are applied to the export.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExportOpen(false)}>Cancel</Button>
+            <Button onClick={handleExport}>
+              <Download className="h-4 w-4 mr-2" /> Download {exportFormat.toUpperCase()}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

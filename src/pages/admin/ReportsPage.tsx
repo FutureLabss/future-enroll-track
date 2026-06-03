@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import * as XLSX from 'xlsx';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatCard } from '@/components/shared/StatCard';
@@ -6,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Download, Users, FileText, CreditCard, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
@@ -33,6 +35,9 @@ export default function ReportsPage() {
     organization_id: 'all',
     enrollment_status: 'all',
   });
+
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportForm, setExportForm] = useState({ dateFrom: '', dateTo: '', format: 'csv' });
 
   useEffect(() => {
     Promise.all([
@@ -80,21 +85,49 @@ export default function ReportsPage() {
 
   const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
 
+  const openExport = () => {
+    setExportForm({ dateFrom: filters.dateFrom, dateTo: filters.dateTo, format: 'csv' });
+    setExportOpen(true);
+  };
+
   const handleExport = () => {
-    if (filtered.length === 0) { toast.error('No data to export'); return; }
+    const exportFiltered = enrollments.filter(e => {
+      if (filters.program_id !== 'all' && e.program_id !== filters.program_id) return false;
+      if (filters.cohort_id !== 'all' && e.cohort_id !== filters.cohort_id) return false;
+      if (filters.organization_id !== 'all' && e.organization_id !== filters.organization_id) return false;
+      if (filters.enrollment_status !== 'all' && e.enrollment_status !== filters.enrollment_status) return false;
+      if (exportForm.dateFrom && (!e.first_payment_date || e.first_payment_date < exportForm.dateFrom)) return false;
+      if (exportForm.dateTo && (!e.first_payment_date || e.first_payment_date > exportForm.dateTo + 'T23:59:59')) return false;
+      return true;
+    });
+
+    if (exportFiltered.length === 0) { toast.error('No records match the selected date range'); return; }
+
     const headers = ['Full Name', 'Email', 'Phone', 'Program', 'Cohort', 'Organization', 'Status', 'Total Amount', 'Amount Paid', 'Outstanding Balance', 'Enrollment Date'];
-    const rows = filtered.map(e => [
+    const rows = exportFiltered.map(e => [
       e.full_name, e.email, e.phone || '', e.programs?.program_name || '', e.cohorts?.cohort_label || '',
-      e.organizations?.organization_name || '', e.enrollment_status, e.total_amount, e.amount_paid,
-      e.outstanding_balance, e.first_payment_date ? new Date(e.first_payment_date).toLocaleDateString() : '',
+      e.organizations?.organization_name || '', e.enrollment_status, Number(e.total_amount), Number(e.amount_paid),
+      Number(e.outstanding_balance), e.first_payment_date ? new Date(e.first_payment_date).toLocaleDateString() : '',
     ]);
-    const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${v}"`).join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `enrollments-report-${new Date().toISOString().split('T')[0]}.csv`; a.click();
-    URL.revokeObjectURL(url);
-    toast.success(`Exported ${filtered.length} records`);
+
+    const filename = `enrollments-${exportForm.dateFrom || 'all'}-to-${exportForm.dateTo || 'all'}-${new Date().toISOString().split('T')[0]}`;
+
+    if (exportForm.format === 'xlsx') {
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Enrollments');
+      XLSX.writeFile(wb, `${filename}.xlsx`);
+    } else {
+      const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${v}"`).join(','))].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${filename}.csv`; a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    setExportOpen(false);
+    toast.success(`Exported ${exportFiltered.length} records as ${exportForm.format.toUpperCase()}`);
   };
 
   if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
@@ -195,12 +228,49 @@ export default function ReportsPage() {
         </div>
 
         <div className="flex items-center gap-4">
-          <Button onClick={handleExport} size="lg">
-            <Download className="h-4 w-4 mr-2" /> Export to CSV
+          <Button onClick={openExport} size="lg">
+            <Download className="h-4 w-4 mr-2" /> Export
           </Button>
           <span className="text-sm text-muted-foreground">{filtered.length} records match filters</span>
         </div>
       </div>
+
+      <Dialog open={exportOpen} onOpenChange={setExportOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Export Enrollments</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>From Date</Label>
+                <Input type="date" className="mt-1.5" value={exportForm.dateFrom} onChange={e => setExportForm(f => ({ ...f, dateFrom: e.target.value }))} />
+              </div>
+              <div>
+                <Label>To Date</Label>
+                <Input type="date" className="mt-1.5" value={exportForm.dateTo} onChange={e => setExportForm(f => ({ ...f, dateTo: e.target.value }))} />
+              </div>
+            </div>
+            <div>
+              <Label>Format</Label>
+              <Select value={exportForm.format} onValueChange={v => setExportForm(f => ({ ...f, format: v }))}>
+                <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="csv">CSV (.csv)</SelectItem>
+                  <SelectItem value="xlsx">Excel (.xlsx)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-xs text-muted-foreground">Other active filters (program, cohort, status) are applied on top of the date range.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExportOpen(false)}>Cancel</Button>
+            <Button onClick={handleExport}>
+              <Download className="h-4 w-4 mr-2" /> Download {exportForm.format.toUpperCase()}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

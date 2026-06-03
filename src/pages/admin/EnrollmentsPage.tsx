@@ -219,8 +219,6 @@ export default function EnrollmentsPage() {
       emptyMessage="No enrollments found"
       searchable
       searchPlaceholder="Search by name or email..."
-      exportable
-      exportFilename="enrollments"
     />
   );
 

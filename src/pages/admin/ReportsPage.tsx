@@ -91,13 +91,12 @@ export default function ReportsPage() {
   };
 
   const handleExport = () => {
-    const exportFiltered = enrollments.filter(e => {
-      if (filters.program_id !== 'all' && e.program_id !== filters.program_id) return false;
-      if (filters.cohort_id !== 'all' && e.cohort_id !== filters.cohort_id) return false;
-      if (filters.organization_id !== 'all' && e.organization_id !== filters.organization_id) return false;
-      if (filters.enrollment_status !== 'all' && e.enrollment_status !== filters.enrollment_status) return false;
-      if (exportForm.dateFrom && (!e.first_payment_date || e.first_payment_date < exportForm.dateFrom)) return false;
-      if (exportForm.dateTo && (!e.first_payment_date || e.first_payment_date > exportForm.dateTo + 'T23:59:59')) return false;
+    // Start from `filtered` (page filters already applied), then narrow by the
+    // export date range. Date is bucketed by created_at — always populated,
+    // unlike first_payment_date which is null for manually-added enrollments.
+    const exportFiltered = filtered.filter(e => {
+      if (exportForm.dateFrom && e.created_at < exportForm.dateFrom) return false;
+      if (exportForm.dateTo && e.created_at > exportForm.dateTo + 'T23:59:59') return false;
       return true;
     });
 
@@ -243,11 +242,11 @@ export default function ReportsPage() {
           <div className="space-y-4 mt-2">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>From Date</Label>
+                <Label>Enrolled From</Label>
                 <Input type="date" className="mt-1.5" value={exportForm.dateFrom} onChange={e => setExportForm(f => ({ ...f, dateFrom: e.target.value }))} />
               </div>
               <div>
-                <Label>To Date</Label>
+                <Label>Enrolled To</Label>
                 <Input type="date" className="mt-1.5" value={exportForm.dateTo} onChange={e => setExportForm(f => ({ ...f, dateTo: e.target.value }))} />
               </div>
             </div>

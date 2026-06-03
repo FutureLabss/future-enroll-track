@@ -103,25 +103,34 @@ export default function ReportsPage() {
     setExportBusy(true);
     try {
       // Fetch all active custom field definitions, sorted as configured
-      const { data: fieldDefs } = await supabase
+      const { data: fieldDefs, error: fieldDefsError } = await supabase
         .from('custom_fields')
         .select('id, key, label, sort_order')
         .eq('active', true)
         .order('sort_order');
+
+      if (fieldDefsError) throw new Error(`Failed to load field definitions: ${fieldDefsError.message}`);
 
       const customCols = fieldDefs || [];
 
       // Build a field_id → key map so we can resolve values without a join
       const fieldKeyById = new Map<string, string>(customCols.map(f => [f.id, f.key]));
 
-      // Fetch field values — select field_id directly, avoid the PostgREST
-      // embedded join which is unreliable when the FK column is named field_id
-      // rather than the conventional custom_fields_id.
       const enrollmentIds = exportFiltered.map(e => e.id);
-      const { data: fieldValues } = await supabase
-        .from('field_values')
-        .select('enrollment_id, field_id, value')
-        .in('enrollment_id', enrollmentIds);
+
+      // Batch into chunks of 100 to avoid PostgREST URL length limits on large exports
+      const CHUNK = 100;
+      let allFieldValues: any[] = [];
+      for (let i = 0; i < enrollmentIds.length; i += CHUNK) {
+        const chunk = enrollmentIds.slice(i, i + CHUNK);
+        const { data: chunk_fv, error: fieldValuesError } = await supabase
+          .from('field_values')
+          .select('enrollment_id, field_id, value')
+          .in('enrollment_id', chunk);
+        if (fieldValuesError) throw new Error(`Failed to load field values: ${fieldValuesError.message}`);
+        allFieldValues = allFieldValues.concat(chunk_fv || []);
+      }
+      const fieldValues = allFieldValues;
 
       // Build a lookup: enrollment_id → { field_key: value }
       const valueMap = new Map<string, Record<string, string>>();

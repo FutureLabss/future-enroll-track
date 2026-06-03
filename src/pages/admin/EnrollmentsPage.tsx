@@ -1,13 +1,18 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { format, subMonths, startOfMonth } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable } from '@/components/shared/DataTable';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Eye, LayoutGrid, List } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { Label } from '@/components/ui/label';
+import { CalendarIcon, Eye, LayoutGrid, List } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 export default function EnrollmentsPage() {
   const navigate = useNavigate();
@@ -20,6 +25,9 @@ export default function EnrollmentsPage() {
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [programFilter, setProgramFilter] = useState('all');
   const [groupByPayment, setGroupByPayment] = useState(false);
+  const [dateMode, setDateMode] = useState('all'); // 'all' | '1' | '3' | '6' | '12' | 'custom'
+  const [dateFrom, setDateFrom] = useState<Date | undefined>();
+  const [dateTo, setDateTo] = useState<Date | undefined>();
 
   useEffect(() => {
     supabase.from('programs').select('id, program_name').eq('active', true).order('program_name')
@@ -82,9 +90,21 @@ export default function EnrollmentsPage() {
   };
 
   const filteredEnrollments = useMemo(() => {
-    if (paymentFilter === 'all') return enrollments;
-    return enrollments.filter(e => getPaymentStatus(e) === paymentFilter);
-  }, [enrollments, paymentFilter]);
+    const presetFrom = dateMode !== 'all' && dateMode !== 'custom'
+      ? startOfMonth(subMonths(new Date(), Number(dateMode) - 1))
+      : null;
+    const customFrom = dateMode === 'custom' ? dateFrom : null;
+    const customTo = dateMode === 'custom' ? dateTo : null;
+
+    return enrollments.filter(e => {
+      if (paymentFilter !== 'all' && getPaymentStatus(e) !== paymentFilter) return false;
+      const enrolled = e.created_at ? new Date(e.created_at) : null;
+      if (presetFrom && enrolled && enrolled < presetFrom) return false;
+      if (customFrom && enrolled && enrolled < customFrom) return false;
+      if (customTo && enrolled && enrolled > customTo) return false;
+      return true;
+    });
+  }, [enrollments, paymentFilter, dateMode, dateFrom, dateTo]);
 
   const groupedEnrollments = useMemo(() => {
     if (!groupByPayment) return null;
@@ -160,6 +180,54 @@ export default function EnrollmentsPage() {
       <PageHeader title="Enrollments" description="Manage all student enrollments" />
 
       <div className="flex flex-wrap gap-3 mb-6 items-end">
+        <div>
+          <Label className="text-xs text-muted-foreground">Period</Label>
+          <Select value={dateMode} onValueChange={v => { setDateMode(v); if (v !== 'custom') { setDateFrom(undefined); setDateTo(undefined); } }}>
+            <SelectTrigger className="w-40 mt-1"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All time</SelectItem>
+              <SelectItem value="1">This month</SelectItem>
+              <SelectItem value="3">Last 3 months</SelectItem>
+              <SelectItem value="6">Last 6 months</SelectItem>
+              <SelectItem value="12">Last 12 months</SelectItem>
+              <SelectItem value="custom">Custom range</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {dateMode === 'custom' && (
+          <>
+            <div>
+              <Label className="text-xs text-muted-foreground">From</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className={cn('w-36 mt-1 justify-start text-left font-normal', !dateFrom && 'text-muted-foreground')}>
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateFrom ? format(dateFrom, 'dd MMM yyyy') : 'Start date'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={dateFrom} onSelect={setDateFrom} initialFocus className="p-3 pointer-events-auto" />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">To</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className={cn('w-36 mt-1 justify-start text-left font-normal', !dateTo && 'text-muted-foreground')}>
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateTo ? format(dateTo, 'dd MMM yyyy') : 'End date'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={dateTo} onSelect={setDateTo} disabled={d => (dateFrom ? d < dateFrom : false)} initialFocus className="p-3 pointer-events-auto" />
+                </PopoverContent>
+              </Popover>
+            </div>
+          </>
+        )}
+
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-40"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>

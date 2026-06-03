@@ -13,6 +13,8 @@ export default function EnrollmentsPage() {
   const navigate = useNavigate();
   const [enrollments, setEnrollments] = useState<any[]>([]);
   const [programs, setPrograms] = useState<any[]>([]);
+  const [customFields, setCustomFields] = useState<any[]>([]);
+  const [valueMap, setValueMap] = useState<Map<string, Record<string, string>>>(new Map());
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const [paymentFilter, setPaymentFilter] = useState('all');
@@ -22,6 +24,9 @@ export default function EnrollmentsPage() {
   useEffect(() => {
     supabase.from('programs').select('id, program_name').eq('active', true).order('program_name')
       .then(({ data }) => setPrograms(data || []));
+
+    supabase.from('custom_fields').select('id, key, label, sort_order').eq('active', true).order('sort_order')
+      .then(({ data }) => setCustomFields(data || []));
   }, []);
 
   useEffect(() => {
@@ -34,11 +39,36 @@ export default function EnrollmentsPage() {
       if (statusFilter !== 'all') query = query.eq('enrollment_status', statusFilter);
       if (programFilter !== 'all') query = query.eq('program_id', programFilter);
       const { data } = await query;
-      setEnrollments(data || []);
+      const rows = data || [];
+      setEnrollments(rows);
+
+      // Fetch custom field values for all loaded enrollments
+      if (rows.length > 0 && customFields.length > 0) {
+        const fieldKeyById = new Map<string, string>(customFields.map(f => [f.id, f.key]));
+        const ids = rows.map(e => e.id);
+        const CHUNK = 100;
+        let allFv: any[] = [];
+        for (let i = 0; i < ids.length; i += CHUNK) {
+          const { data: fv } = await supabase
+            .from('field_values')
+            .select('enrollment_id, field_id, value')
+            .in('enrollment_id', ids.slice(i, i + CHUNK));
+          allFv = allFv.concat(fv || []);
+        }
+        const map = new Map<string, Record<string, string>>();
+        for (const fv of allFv) {
+          const key = fieldKeyById.get(fv.field_id);
+          if (!key) continue;
+          if (!map.has(fv.enrollment_id)) map.set(fv.enrollment_id, {});
+          map.get(fv.enrollment_id)![key] = fv.value ?? '';
+        }
+        setValueMap(map);
+      }
+
       setLoading(false);
     };
     fetchEnrollments();
-  }, [statusFilter, programFilter]);
+  }, [statusFilter, programFilter, customFields]);
 
   const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
 
@@ -81,7 +111,8 @@ export default function EnrollmentsPage() {
   const columns = [
     { key: 'full_name', header: 'Student' },
     { key: 'email', header: 'Email' },
-    { key: 'enrollment_date', header: 'Enrollment Date', render: formatEnrollmentDate },
+    { key: 'phone', header: 'Phone', render: (r: any) => r.phone || '—' },
+    { key: 'enrollment_date', header: 'Enrolled', render: formatEnrollmentDate },
     { key: 'program', header: 'Program', render: (r: any) => r.programs?.program_name || '—' },
     { key: 'cohort', header: 'Cohort', render: (r: any) => r.cohorts?.cohort_label || '—' },
     { key: 'organization', header: 'Sponsor', render: (r: any) => r.organizations?.organization_name || '—' },
@@ -90,14 +121,13 @@ export default function EnrollmentsPage() {
       const ps = getPaymentStatus(r);
       return <Badge variant="outline" className={`font-medium ${paymentBadgeStyle[ps] || ''}`}>{ps}</Badge>;
     }},
-    { key: 'verification_status', header: 'Verification', render: (r: any) => {
-      const s = r.verification_status;
-      if (!s || s === 'pending') return r.payment_evidence_url
-        ? <span className="text-warning font-medium text-sm">Needs Review</span>
-        : <span className="text-muted-foreground text-sm">—</span>;
-      return <StatusBadge status={s === 'approved' ? 'active' : 'cancelled'} />;
-    }},
     { key: 'enrollment_status', header: 'Status', render: (r: any) => <StatusBadge status={r.enrollment_status} /> },
+    // Custom profile fields
+    ...customFields.map(f => ({
+      key: `cf_${f.key}`,
+      header: f.label,
+      render: (r: any) => valueMap.get(r.id)?.[f.key] || '—',
+    })),
     { key: 'actions', header: '', render: (r: any) => (
       <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); navigate(`/admin/enrollments/${r.id}`); }}>
         <Eye className="h-4 w-4" />

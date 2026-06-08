@@ -113,7 +113,9 @@ export default function OutstandingInvoicesPage() {
                     <TableRow key={r.invoice_id}>
                       <TableCell className="font-medium">{r.invoice_number}</TableCell>
                       <TableCell>
-                        <div>{r.full_name}</div>
+                        <Link to={`/admin/enrollments/${r.enrollment_id}`} className="font-medium hover:underline text-foreground">
+                          {r.full_name}
+                        </Link>
                         <div className="text-xs text-muted-foreground">{r.email}</div>
                       </TableCell>
                       <TableCell>

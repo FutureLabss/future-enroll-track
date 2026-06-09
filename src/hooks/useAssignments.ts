@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { toast } from 'sonner';
 
 export function useAssignments(classroomId: string) {
   const { user } = useAuth();
@@ -8,11 +9,12 @@ export function useAssignments(classroomId: string) {
   const [loading, setLoading] = useState(true);
 
   const fetchAssignments = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('assignments')
-      .select('*, cohorts(cohort_label), old_lessons(title, lesson_date), units(title), assignment_resources(*)')
+      .select('*, cohorts(cohort_label), units(title), assignment_resources(*)')
       .eq('classroom_id', classroomId)
       .order('created_at', { ascending: false });
+    if (error) toast.error(`Could not load assignments: ${error.message}`);
     setAssignments(data || []);
     setLoading(false);
   };

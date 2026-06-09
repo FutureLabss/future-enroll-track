@@ -910,7 +910,7 @@ export default function ClassroomDetailPage() {
   const assignmentColumns = [
     { key: 'title', header: 'Assignment', render: (r: any) => <span className="font-medium">{r.title}</span> },
     { key: 'cohort', header: 'Cohort', render: (r: any) => r.cohorts?.cohort_label || 'All' },
-    { key: 'unit', header: 'Unit', render: (r: any) => r.units?.title || r.old_lessons?.title || '—' },
+    { key: 'unit', header: 'Unit', render: (r: any) => r.units?.title || '—' },
     { key: 'due_date', header: 'Due', render: (r: any) => r.due_date ? new Date(r.due_date).toLocaleDateString() : '—' },
     { key: 'status', header: 'Status', render: (r: any) => <Badge variant="outline" className="capitalize">{r.status}</Badge> },
     { key: 'actions', header: '', render: (r: any) => r.status !== 'published' ? (

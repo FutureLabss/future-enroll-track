@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
 
 export interface Schedule {
   id: string;
@@ -30,12 +31,13 @@ export function useSchedules(classroomId: string) {
   const fetchAll = useCallback(async () => {
     if (!classroomId) { setLoading(false); return; }
     setLoading(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('schedules')
       .select('*, lessons(title, units(title)), modules(title), cohorts(cohort_label), staff:instructor_id(full_name)')
       .eq('classroom_id', classroomId)
       .order('scheduled_date', { ascending: true })
       .order('start_time', { ascending: true });
+    if (error) toast.error(`Could not load schedule: ${error.message}`);
     setSchedules((data as any[]) || []);
     setLoading(false);
   }, [classroomId]);

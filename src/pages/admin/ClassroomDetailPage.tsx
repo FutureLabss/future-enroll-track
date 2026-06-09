@@ -560,7 +560,7 @@ export default function ClassroomDetailPage() {
   const { classroom, loading, updateClassroom } = useClassroom(id!);
   const { cohorts, refetch: refetchCohorts } = useClassroomCohorts(id!);
   const { sessions } = useAttendance(id!);
-  const { assignments, publishAssignment } = useAssignments(id!);
+  const { assignments, publishAssignment, createAssignment } = useAssignments(id!);
 
   const [staff, setStaff] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
@@ -588,12 +588,36 @@ export default function ClassroomDetailPage() {
   const [sessionModal, setSessionModal] = useState<{ open: boolean; session?: any }>({ open: false });
   const [switchModal, setSwitchModal] = useState<{ open: boolean; student?: any }>({ open: false });
   const [sendingReminders, setSendingReminders] = useState(false);
+  const [assignmentModal, setAssignmentModal] = useState(false);
+  const [assignmentForm, setAssignmentForm] = useState({ title: '', instructions: '', due_date: '', cohort_id: '', status: 'draft' });
+  const [savingAssignment, setSavingAssignment] = useState(false);
 
   useEffect(() => { if (id) loadAll(); }, [id]);
 
   useEffect(() => {
     if (id) supabase.rpc('get_classroom_students', { p_classroom_id: id }).then(({ data }) => setStudents(data || []));
   }, [id]);
+
+  const handleCreateAssignment = async () => {
+    if (!assignmentForm.title.trim()) { toast.error('Title is required'); return; }
+    setSavingAssignment(true);
+    try {
+      await createAssignment({
+        title: assignmentForm.title.trim(),
+        instructions: assignmentForm.instructions.trim() || null,
+        due_date: assignmentForm.due_date || null,
+        cohort_id: assignmentForm.cohort_id || null,
+        status: assignmentForm.status,
+      });
+      toast.success('Assignment created');
+      setAssignmentModal(false);
+      setAssignmentForm({ title: '', instructions: '', due_date: '', cohort_id: '', status: 'draft' });
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSavingAssignment(false);
+    }
+  };
 
   const handleSendReminders = async () => {
     if (!classroom?.program_id) return;
@@ -1089,12 +1113,17 @@ export default function ClassroomDetailPage() {
 
         {/* ASSIGNMENTS */}
         <TabsContent value="assignments">
+          <div className="flex justify-end mb-4">
+            <Button onClick={() => setAssignmentModal(true)}>
+              <Plus className="h-4 w-4 mr-1.5" />Create Assignment
+            </Button>
+          </div>
           <DataTable
             columns={assignmentColumns}
             data={assignments}
             searchable
             searchPlaceholder="Search assignments..."
-            emptyMessage="No assignments created"
+            emptyMessage="No assignments created yet"
           />
         </TabsContent>
 
@@ -1131,6 +1160,73 @@ export default function ClassroomDetailPage() {
               }}
             />
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Assignment modal */}
+      <Dialog open={assignmentModal} onOpenChange={o => { if (!o) { setAssignmentModal(false); setAssignmentForm({ title: '', instructions: '', due_date: '', cohort_id: '', status: 'draft' }); } }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Create Assignment</DialogTitle></DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div>
+              <Label>Title <span className="text-destructive">*</span></Label>
+              <Input
+                value={assignmentForm.title}
+                onChange={e => setAssignmentForm(f => ({ ...f, title: e.target.value }))}
+                placeholder="e.g. Build a to-do list app"
+                className="mt-1.5"
+              />
+            </div>
+            <div>
+              <Label>Instructions</Label>
+              <Textarea
+                value={assignmentForm.instructions}
+                onChange={e => setAssignmentForm(f => ({ ...f, instructions: e.target.value }))}
+                placeholder="Describe what students need to do..."
+                rows={4}
+                className="mt-1.5"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Due Date</Label>
+                <Input
+                  type="datetime-local"
+                  value={assignmentForm.due_date}
+                  onChange={e => setAssignmentForm(f => ({ ...f, due_date: e.target.value }))}
+                  className="mt-1.5"
+                />
+              </div>
+              <div>
+                <Label>Cohort</Label>
+                <Select value={assignmentForm.cohort_id} onValueChange={v => setAssignmentForm(f => ({ ...f, cohort_id: v === '__all__' ? '' : v }))}>
+                  <SelectTrigger className="mt-1.5">
+                    <SelectValue placeholder="All cohorts" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All cohorts</SelectItem>
+                    {cohorts.map((c: any) => (
+                      <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
+              <div>
+                <p className="text-sm font-medium">Publish immediately</p>
+                <p className="text-xs text-muted-foreground">Students will see this assignment right away</p>
+              </div>
+              <Switch
+                checked={assignmentForm.status === 'published'}
+                onCheckedChange={v => setAssignmentForm(f => ({ ...f, status: v ? 'published' : 'draft' }))}
+              />
+            </div>
+            <Button onClick={handleCreateAssignment} disabled={savingAssignment} className="w-full">
+              {savingAssignment ? <Loader2 className="animate-spin h-4 w-4 mr-1.5" /> : null}
+              Create Assignment
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

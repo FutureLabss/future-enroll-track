@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { useCurriculumV2 } from '@/hooks/useCurriculumV2';
 import { supabase } from '@/lib/supabase';
 import { ChevronRight, ChevronDown, BookOpen, Layers, FolderOpen, FileText, Loader2, ExternalLink, Video } from 'lucide-react';
@@ -168,9 +168,7 @@ function CurriculumSection({ curriculum }: { curriculum: any }) {
       </div>
       <div className="space-y-2">
         {curriculum.tracks.length === 0 && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground py-4 px-2">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading content...
-          </div>
+          <p className="text-sm text-muted-foreground py-4 px-2">No content yet</p>
         )}
         {curriculum.tracks.map((track: any) => (
           <TrackRow key={track.id} track={track} onExpand={() => {}} />
@@ -187,19 +185,8 @@ interface Props {
 }
 
 export function StudentCurriculumView({ classroomId, scopeType, scopeId }: Props) {
-  const { curricula, loading, fetchError, refreshCurriculum } = useCurriculumV2(classroomId);
-  const [loadedScopeKey, setLoadedScopeKey] = useState('');
+  const { curricula, loading, fetchError } = useCurriculumV2(classroomId);
   const scopedByTree = scopeType === 'track' || scopeType === 'module';
-  const scopeKey = `${scopeType || 'classroom'}:${scopeId || 'all'}:${curricula.map(cur => cur.id).join(',')}`;
-
-  useEffect(() => {
-    if (!scopedByTree || !scopeId || loading || loadedScopeKey === scopeKey) return;
-
-    setLoadedScopeKey(scopeKey);
-    curricula.forEach(cur => {
-      if (cur.tracks.length === 0) refreshCurriculum(cur.id);
-    });
-  }, [curricula, loadedScopeKey, loading, refreshCurriculum, scopeId, scopeKey, scopedByTree]);
 
   const visibleCurricula = useMemo(() => {
     if (!scopeType || !scopeId) return curricula;
@@ -234,14 +221,6 @@ export function StudentCurriculumView({ classroomId, scopeType, scopeId }: Props
     return (
       <div className="text-center py-12 text-muted-foreground text-sm">
         Could not load curriculum. Please try again later.
-      </div>
-    );
-  }
-
-  if (scopedByTree && scopeId && visibleCurricula.length === 0 && curricula.some(cur => cur.tracks.length === 0)) {
-    return (
-      <div className="flex justify-center py-16">
-        <Loader2 className="animate-spin h-7 w-7 text-primary" />
       </div>
     );
   }

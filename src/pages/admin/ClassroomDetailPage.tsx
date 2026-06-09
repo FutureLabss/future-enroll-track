@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useClassroom, useClassroomCohorts } from '@/hooks/useClassroom';
 import { useAttendance, useAttendanceSession } from '@/hooks/useAttendance';
 import { useAssignments } from '@/hooks/useAssignments';
+import { useSchedules } from '@/hooks/useSchedules';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -16,13 +17,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { DataTable } from '@/components/shared/DataTable';
 import { CurriculumTreeV2 } from '@/components/classroom/CurriculumTreeV2';
+import { AutoScheduleWizard } from '@/components/classroom/AutoScheduleWizard';
 import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Users, BookOpen, Calendar, ClipboardList, BarChart2, UserPlus, Loader2,
   GraduationCap, LayoutList, Layers, Plus, Pencil, Ban, CheckCircle, PlayCircle,
   XCircle, ChevronDown, ChevronRight, Eye, Mail, ArrowLeftRight, ArrowLeft,
-  Archive, RotateCcw, ClipboardCheck,
+  Archive, RotateCcw, ClipboardCheck, CalendarDays,
 } from 'lucide-react';
 
 const COHORT_STATUSES = ['upcoming', 'active', 'completed', 'archived'] as const;
@@ -561,6 +563,7 @@ export default function ClassroomDetailPage() {
   const { cohorts, refetch: refetchCohorts } = useClassroomCohorts(id!);
   const { sessions } = useAttendance(id!);
   const { assignments, publishAssignment, createAssignment } = useAssignments(id!);
+  const { schedules, refetch: refetchSchedules } = useSchedules(id!);
 
   const [staff, setStaff] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
@@ -588,6 +591,7 @@ export default function ClassroomDetailPage() {
   const [sessionModal, setSessionModal] = useState<{ open: boolean; session?: any }>({ open: false });
   const [switchModal, setSwitchModal] = useState<{ open: boolean; student?: any }>({ open: false });
   const [sendingReminders, setSendingReminders] = useState(false);
+  const [autoScheduleOpen, setAutoScheduleOpen] = useState(false);
   const [assignmentModal, setAssignmentModal] = useState(false);
   const [assignmentForm, setAssignmentForm] = useState({ title: '', instructions: '', due_date: '', cohort_id: '', status: 'draft' });
   const [savingAssignment, setSavingAssignment] = useState(false);
@@ -871,6 +875,16 @@ export default function ClassroomDetailPage() {
     )},
   ];
 
+  const scheduleColumns = [
+    { key: 'date', header: 'Date', render: (r: any) => new Date(r.scheduled_date + 'T12:00:00').toLocaleDateString('en-NG', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) },
+    { key: 'title', header: 'Session / Unit', render: (r: any) => <span className="font-medium">{r.title || r.lessons?.title || '—'}</span> },
+    { key: 'time', header: 'Time', render: (r: any) => `${r.start_time} – ${r.end_time}` },
+    { key: 'module', header: 'Module', render: (r: any) => r.modules?.title || '—' },
+    { key: 'cohort', header: 'Cohort', render: (r: any) => r.cohorts?.cohort_label || 'All' },
+    { key: 'instructor', header: 'Instructor', render: (r: any) => r.staff?.full_name || '—' },
+    { key: 'status', header: 'Status', render: (r: any) => <Badge variant="outline" className={`capitalize ${STATUS_COLOURS[r.status] || ''}`}>{r.status}</Badge> },
+  ];
+
   const cohortColumns = [
     { key: 'cohort_label', header: 'Cohort', render: (r: any) => <span className="font-medium">{r.cohort_label}</span> },
     { key: 'status', header: 'Status', render: (r: any) => (
@@ -1108,7 +1122,28 @@ export default function ClassroomDetailPage() {
 
         {/* SCHEDULE */}
         <TabsContent value="schedule">
-          <DataTable columns={lessonColumns} data={lessons} emptyMessage="No lessons scheduled" />
+          <div className="space-y-4">
+            <div className="flex justify-end">
+              <Button onClick={() => setAutoScheduleOpen(true)}>
+                <CalendarDays className="h-4 w-4 mr-1.5" />Auto Schedule
+              </Button>
+            </div>
+            <DataTable
+              columns={scheduleColumns}
+              data={schedules}
+              searchable
+              searchPlaceholder="Search schedule..."
+              emptyMessage="No sessions scheduled yet — use Auto Schedule to generate one"
+            />
+          </div>
+          <AutoScheduleWizard
+            open={autoScheduleOpen}
+            onClose={() => setAutoScheduleOpen(false)}
+            classroomId={id!}
+            classroomName={classroom.name}
+            cohorts={cohorts}
+            onGenerated={refetchSchedules}
+          />
         </TabsContent>
 
         {/* ASSIGNMENTS */}

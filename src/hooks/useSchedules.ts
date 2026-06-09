@@ -7,6 +7,7 @@ export interface Schedule {
   cohort_id: string | null;
   lesson_id: string | null;
   module_id: string | null;
+  unit_id: string | null;
   instructor_id: string | null;
   title: string | null;
   scheduled_date: string;

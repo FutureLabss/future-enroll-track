@@ -5,30 +5,31 @@ import { ChevronRight, ChevronDown, BookOpen, Layers, FolderOpen, FileText, Load
 
 function LessonPanel({ lesson }: { lesson: any }) {
   const [open, setOpen] = useState(false);
+  const hasDetail = lesson.content || lesson.objectives || lesson.video_url || lesson.external_link;
   return (
-    <div className="border border-border rounded-lg overflow-hidden">
+    <div className="rounded-lg border border-border bg-background overflow-hidden">
       <button
-        className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/40 transition-colors text-left"
+        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm hover:bg-muted/40 transition-colors text-left"
         onClick={() => setOpen(v => !v)}
       >
         <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
         <span className="flex-1 font-medium">{lesson.title}</span>
-        {(lesson.content || lesson.objectives || lesson.video_url || lesson.external_link) && (
-          open ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+        {hasDetail && (
+          open ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
         )}
       </button>
-      {open && (lesson.content || lesson.objectives || lesson.video_url || lesson.external_link) && (
-        <div className="px-4 pb-3 space-y-2 border-t border-border bg-muted/20 text-sm">
+      {open && hasDetail && (
+        <div className="px-4 pb-4 pt-1 space-y-3 border-t border-border bg-muted/10 text-sm">
           {lesson.objectives && (
-            <div className="pt-2">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Objectives</p>
-              <p className="text-sm whitespace-pre-wrap">{lesson.objectives}</p>
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Objectives</p>
+              <p className="text-sm whitespace-pre-wrap leading-relaxed">{lesson.objectives}</p>
             </div>
           )}
           {lesson.content && (
-            <div className="pt-1">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Content</p>
-              <p className="text-sm whitespace-pre-wrap">{lesson.content}</p>
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Content</p>
+              <p className="text-sm whitespace-pre-wrap leading-relaxed">{lesson.content}</p>
             </div>
           )}
           {(lesson.video_url || lesson.external_link) && (
@@ -38,7 +39,7 @@ function LessonPanel({ lesson }: { lesson: any }) {
                   href={lesson.video_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium hover:bg-background"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-background transition-colors"
                 >
                   <Video className="h-3.5 w-3.5" /> Watch video
                 </a>
@@ -48,7 +49,7 @@ function LessonPanel({ lesson }: { lesson: any }) {
                   href={lesson.external_link}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium hover:bg-background"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-background transition-colors"
                 >
                   <ExternalLink className="h-3.5 w-3.5" /> Open resource
                 </a>
@@ -79,20 +80,20 @@ function UnitRow({ unit }: { unit: any }) {
   };
 
   return (
-    <div className="ml-4">
+    <div className="rounded-lg border border-border/60 overflow-hidden">
       <button
-        className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted/30 rounded-lg transition-colors text-left"
+        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm hover:bg-muted/30 transition-colors text-left bg-muted/5"
         onClick={toggle}
       >
-        {open ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+        {open ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
         <FolderOpen className="h-3.5 w-3.5 text-primary/60 shrink-0" />
-        <span className="font-medium">{unit.title}</span>
-        {loading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground ml-auto" />}
+        <span className="flex-1 font-medium">{unit.title}</span>
+        {loading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground shrink-0" />}
       </button>
       {open && (
-        <div className="ml-5 mt-1 space-y-1">
+        <div className="px-3 py-2 space-y-1.5 border-t border-border/60 bg-background">
           {lessons.length === 0 && loaded && (
-            <p className="text-xs text-muted-foreground px-2 py-1">No lessons yet</p>
+            <p className="text-xs text-muted-foreground px-1 py-1.5">No lessons yet</p>
           )}
           {lessons.map(l => <LessonPanel key={l.id} lesson={l} />)}
         </div>
@@ -102,22 +103,23 @@ function UnitRow({ unit }: { unit: any }) {
 }
 
 function ModuleRow({ mod }: { mod: any }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
+  const unitCount = mod.units?.length ?? 0;
   return (
-    <div className="ml-3">
+    <div className="rounded-xl border border-border overflow-hidden">
       <button
-        className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted/30 rounded-lg transition-colors text-left"
+        className="w-full flex items-center gap-2.5 px-4 py-3 hover:bg-muted/20 transition-colors text-left bg-muted/5"
         onClick={() => setOpen(v => !v)}
       >
-        {open ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
-        <Layers className="h-3.5 w-3.5 text-primary/70 shrink-0" />
-        <span className="font-medium">{mod.title}</span>
-        <span className="ml-auto text-xs text-muted-foreground">{mod.units?.length ?? 0} unit{(mod.units?.length ?? 0) !== 1 ? 's' : ''}</span>
+        {open ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
+        <Layers className="h-4 w-4 text-primary/70 shrink-0" />
+        <span className="flex-1 font-semibold text-sm">{mod.title}</span>
+        <span className="text-xs text-muted-foreground">{unitCount} unit{unitCount !== 1 ? 's' : ''}</span>
       </button>
       {open && (
-        <div className="mt-1 space-y-0.5">
-          {(mod.units || []).length === 0 && (
-            <p className="text-xs text-muted-foreground px-7 py-1">No units yet</p>
+        <div className="border-t border-border px-3 py-3 space-y-2 bg-background">
+          {unitCount === 0 && (
+            <p className="text-xs text-muted-foreground px-1 py-1">No units yet</p>
           )}
           {(mod.units || []).map((u: any) => <UnitRow key={u.id} unit={u} />)}
         </div>
@@ -126,30 +128,27 @@ function ModuleRow({ mod }: { mod: any }) {
   );
 }
 
-function TrackRow({ track, onExpand }: { track: any; onExpand: () => void }) {
-  const [open, setOpen] = useState(false);
-
-  const toggle = () => {
-    if (!open) onExpand();
-    setOpen(v => !v);
-  };
-
+function TrackSection({ track }: { track: any }) {
+  const [open, setOpen] = useState(true);
+  const moduleCount = track.modules?.length ?? 0;
   return (
-    <div className="rounded-xl border border-border overflow-hidden">
+    <div className="rounded-2xl border border-border overflow-hidden">
       <button
-        className="w-full flex items-center gap-2.5 px-4 py-3 hover:bg-muted/30 transition-colors text-left"
-        onClick={toggle}
+        className="w-full flex items-center gap-3 px-5 py-4 hover:bg-muted/20 transition-colors text-left bg-primary/5"
+        onClick={() => setOpen(v => !v)}
       >
-        {open ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+        {open ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
         <BookOpen className="h-4 w-4 text-primary shrink-0" />
-        <span className="font-semibold">{track.title}</span>
-        {track.description && <span className="text-xs text-muted-foreground hidden sm:block ml-2">— {track.description}</span>}
-        <span className="ml-auto text-xs text-muted-foreground">{track.modules?.length ?? 0} module{(track.modules?.length ?? 0) !== 1 ? 's' : ''}</span>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-base leading-tight">{track.title}</p>
+          {track.description && <p className="text-xs text-muted-foreground mt-0.5 truncate">{track.description}</p>}
+        </div>
+        <span className="text-xs text-muted-foreground shrink-0">{moduleCount} module{moduleCount !== 1 ? 's' : ''}</span>
       </button>
       {open && (
-        <div className="border-t border-border px-2 py-2 space-y-1 bg-muted/10">
-          {(track.modules || []).length === 0 && (
-            <p className="text-xs text-muted-foreground px-4 py-2">No modules yet</p>
+        <div className="border-t border-border px-4 py-4 space-y-3 bg-muted/5">
+          {moduleCount === 0 && (
+            <p className="text-sm text-muted-foreground px-1 py-2">No modules yet</p>
           )}
           {(track.modules || []).map((m: any) => <ModuleRow key={m.id} mod={m} />)}
         </div>
@@ -159,19 +158,20 @@ function TrackRow({ track, onExpand }: { track: any; onExpand: () => void }) {
 }
 
 function CurriculumSection({ curriculum }: { curriculum: any }) {
-
   return (
     <div>
-      <div className="mb-3">
-        <h3 className="font-semibold text-base">{curriculum.title}</h3>
+      <div className="mb-4">
+        <h3 className="font-bold text-lg">{curriculum.title}</h3>
         {curriculum.description && <p className="text-sm text-muted-foreground mt-0.5">{curriculum.description}</p>}
       </div>
-      <div className="space-y-2">
+      <div className="space-y-3">
         {curriculum.tracks.length === 0 && (
-          <p className="text-sm text-muted-foreground py-4 px-2">No content yet</p>
+          <div className="rounded-2xl border border-border p-8 text-center text-sm text-muted-foreground">
+            No content yet — check back soon.
+          </div>
         )}
         {curriculum.tracks.map((track: any) => (
-          <TrackRow key={track.id} track={track} onExpand={() => {}} />
+          <TrackSection key={track.id} track={track} />
         ))}
       </div>
     </div>
@@ -186,7 +186,6 @@ interface Props {
 
 export function StudentCurriculumView({ classroomId, scopeType, scopeId }: Props) {
   const { curricula, loading, fetchError } = useCurriculumV2(classroomId);
-  const scopedByTree = scopeType === 'track' || scopeType === 'module';
 
   const visibleCurricula = useMemo(() => {
     if (!scopeType || !scopeId) return curricula;
@@ -236,7 +235,7 @@ export function StudentCurriculumView({ classroomId, scopeType, scopeId }: Props
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {visibleCurricula.map(cur => (
         <CurriculumSection key={cur.id} curriculum={cur} />
       ))}

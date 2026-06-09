@@ -61,7 +61,6 @@ export function useStudentAssignments(classroomId: string, cohortId?: string) {
       .select(`
         *,
         units(title),
-        assignment_resources(*),
         assignment_submissions!left(id, status, submitted_at, file_url, submission_text, grade, feedback, graded_at)
       `)
       .eq('classroom_id', classroomId)
@@ -73,7 +72,8 @@ export function useStudentAssignments(classroomId: string, cohortId?: string) {
       ? query.or(`cohort_id.is.null,cohort_id.eq.${cohortId}`)
       : query.is('cohort_id', null);
 
-    const { data } = await query;
+    const { data, error } = await query;
+    if (error) toast.error(`Could not load assignments: ${error.message}`);
     setAssignments(data || []);
     setLoading(false);
   };

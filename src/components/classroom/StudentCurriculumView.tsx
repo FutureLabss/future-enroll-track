@@ -158,8 +158,7 @@ function TrackRow({ track, onExpand }: { track: any; onExpand: () => void }) {
   );
 }
 
-function CurriculumSection({ curriculum, onExpand }: { curriculum: any; onExpand: () => void }) {
-  useEffect(() => { onExpand(); }, [curriculum.id]);
+function CurriculumSection({ curriculum }: { curriculum: any }) {
 
   return (
     <div>
@@ -260,7 +259,7 @@ export function StudentCurriculumView({ classroomId, scopeType, scopeId }: Props
   return (
     <div className="space-y-6">
       {visibleCurricula.map(cur => (
-        <CurriculumSection key={cur.id} curriculum={cur} onExpand={() => refreshCurriculum(cur.id)} />
+        <CurriculumSection key={cur.id} curriculum={cur} />
       ))}
     </div>
   );

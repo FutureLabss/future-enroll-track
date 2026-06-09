@@ -55,25 +55,6 @@ export function useCurriculumV2(classroomId: string) {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  const fetchAll = useCallback(async () => {
-    if (!classroomId) { setLoading(false); return; }
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .rpc('get_classroom_curricula', { p_classroom_id: classroomId });
-
-      if (error) {
-        console.error('useCurriculumV2 fetchAll error:', error);
-        setFetchError(error.message);
-        return;
-      }
-      setFetchError(null);
-      setCurricula((data || []).map((c: any) => ({ ...c, tracks: [] })));
-    } finally {
-      setLoading(false);
-    }
-  }, [classroomId]);
-
   const fetchTree = useCallback(async (curriculumId: string) => {
     const { data, error } = await supabase
       .rpc('get_curriculum_tree', { p_curriculum_id: curriculumId });
@@ -93,6 +74,28 @@ export function useCurriculumV2(classroomId: string) {
         })),
     }));
   }, []);
+
+  const fetchAll = useCallback(async () => {
+    if (!classroomId) { setLoading(false); return; }
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .rpc('get_classroom_curricula', { p_classroom_id: classroomId });
+
+      if (error) {
+        console.error('useCurriculumV2 fetchAll error:', error);
+        setFetchError(error.message);
+        return;
+      }
+      setFetchError(null);
+      const list = data || [];
+      // Fetch all trees in parallel so the view renders fully populated on first paint
+      const trees = await Promise.all(list.map((c: any) => fetchTree(c.id)));
+      setCurricula(list.map((c: any, i: number) => ({ ...c, tracks: trees[i] || [] })));
+    } finally {
+      setLoading(false);
+    }
+  }, [classroomId, fetchTree]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 

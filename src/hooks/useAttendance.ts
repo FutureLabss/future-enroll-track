@@ -1,6 +1,40 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { enrichSchedules, SCHEDULE_COLUMNS } from '@/hooks/useSchedules';
+
+const ATTENDANCE_SESSION_COLUMNS = 'id, classroom_id, cohort_id, lesson_id, schedule_id, code, status, created_at, closed_at, duration_mins, code_expires_at, generated_by';
+
+async function enrichAttendanceSessions(rows: any[]) {
+  if (!rows.length) return [];
+
+  const scheduleIds = Array.from(new Set(rows.map((row) => row.schedule_id).filter(Boolean)));
+  const cohortIds = Array.from(new Set(rows.map((row) => row.cohort_id).filter(Boolean)));
+  const lessonIds = Array.from(new Set(rows.map((row) => row.lesson_id).filter(Boolean)));
+
+  const [scheduleRes, cohortRes, lessonRes] = await Promise.all([
+    scheduleIds.length
+      ? supabase.from('schedules').select(SCHEDULE_COLUMNS).in('id', scheduleIds)
+      : Promise.resolve({ data: [], error: null }),
+    cohortIds.length
+      ? supabase.from('cohorts').select('id, cohort_label').in('id', cohortIds)
+      : Promise.resolve({ data: [], error: null }),
+    lessonIds.length
+      ? supabase.from('old_lessons').select('id, title, lesson_date').in('id', lessonIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  const schedulesById = new Map((await enrichSchedules(scheduleRes.data || [])).map((schedule) => [schedule.id, schedule]));
+  const cohortsById = new Map(((cohortRes.data || []) as any[]).map((cohort) => [cohort.id, cohort]));
+  const lessonsById = new Map(((lessonRes.data || []) as any[]).map((lesson) => [lesson.id, lesson]));
+
+  return rows.map((row) => ({
+    ...row,
+    schedules: row.schedule_id ? schedulesById.get(row.schedule_id) || null : null,
+    cohorts: row.cohort_id ? cohortsById.get(row.cohort_id) || null : null,
+    old_lessons: row.lesson_id ? lessonsById.get(row.lesson_id) || null : null,
+  }));
+}
 
 export function useAttendance(classroomId: string) {
   const { user } = useAuth();
@@ -8,12 +42,17 @@ export function useAttendance(classroomId: string) {
   const [loading, setLoading] = useState(true);
 
   const fetchSessions = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('attendance_sessions')
-      .select('*, old_lessons(title, lesson_date), schedules(title, scheduled_date, lessons(title)), cohorts(cohort_label)')
+      .select(ATTENDANCE_SESSION_COLUMNS)
       .eq('classroom_id', classroomId)
       .order('created_at', { ascending: false });
-    setSessions(data || []);
+    if (error) {
+      setSessions([]);
+      setLoading(false);
+      return;
+    }
+    setSessions(await enrichAttendanceSessions(data || []));
     setLoading(false);
   };
 

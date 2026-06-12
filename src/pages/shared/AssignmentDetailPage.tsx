@@ -106,7 +106,7 @@ export default function AssignmentDetailPage() {
       setLoading(true);
       const { data, error } = await supabase
         .from('assignments')
-        .select('*, classrooms(id, name, programs(program_name)), cohorts(id, cohort_label), units(id, title)')
+        .select('*')
         .eq('id', id)
         .single();
 
@@ -118,7 +118,40 @@ export default function AssignmentDetailPage() {
         return;
       }
 
-      setAssignment(data);
+      const [classroomRes, cohortRes, unitRes] = await Promise.all([
+        data.classroom_id
+          ? supabase.from('classrooms').select('id, name, program_id').eq('id', data.classroom_id).maybeSingle()
+          : Promise.resolve({ data: null, error: null }),
+        data.cohort_id
+          ? supabase.from('cohorts').select('id, cohort_label').eq('id', data.cohort_id).maybeSingle()
+          : Promise.resolve({ data: null, error: null }),
+        data.unit_id
+          ? supabase.from('units').select('id, title').eq('id', data.unit_id).maybeSingle()
+          : Promise.resolve({ data: null, error: null }),
+      ]);
+
+      if (!active) return;
+
+      let programName: string | null = null;
+      if (classroomRes.data?.program_id) {
+        const { data: program } = await supabase
+          .from('programs')
+          .select('program_name')
+          .eq('id', classroomRes.data.program_id)
+          .maybeSingle();
+        if (active) programName = program?.program_name ?? null;
+      }
+
+      if (!active) return;
+
+      setAssignment({
+        ...data,
+        classrooms: classroomRes.data
+          ? { id: classroomRes.data.id, name: classroomRes.data.name, programs: programName ? { program_name: programName } : null }
+          : null,
+        cohorts: cohortRes.data || null,
+        units: unitRes.data || null,
+      });
 
       if (user?.id && data?.classroom_id && !isAdmin) {
         const { data: staffRow } = await supabase

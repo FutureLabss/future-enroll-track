@@ -3,26 +3,67 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 
-export function useAssignments(classroomId: string) {
+type UseAssignmentsOptions = {
+  enabled?: boolean;
+};
+
+export function useAssignments(classroomId: string, options: UseAssignmentsOptions = {}) {
   const { user } = useAuth();
   const [assignments, setAssignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const enabled = options.enabled ?? Boolean(classroomId);
 
   const fetchAssignments = async () => {
+    if (!classroomId || !enabled) {
+      setAssignments([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
     const { data, error } = await supabase
       .from('assignments')
-      .select('*, cohorts(cohort_label), units(title), assignment_resources(*)')
+      .select('id, classroom_id, cohort_id, unit_id, lesson_id, curriculum_lesson_id, title, instructions, due_date, status, created_by, created_at, updated_at')
       .eq('classroom_id', classroomId)
       .order('created_at', { ascending: false });
-    if (error) toast.error(`Could not load assignments: ${error.message}`);
-    setAssignments(data || []);
+
+    if (error) {
+      toast.error(`Could not load assignments: ${error.message}`);
+      setAssignments([]);
+      setLoading(false);
+      return;
+    }
+
+    const rows = data || [];
+    const cohortIds = Array.from(new Set(rows.map((row: any) => row.cohort_id).filter(Boolean)));
+    const unitIds = Array.from(new Set(rows.map((row: any) => row.unit_id).filter(Boolean)));
+
+    const [cohortRes, unitRes] = await Promise.all([
+      cohortIds.length
+        ? supabase.from('cohorts').select('id, cohort_label').in('id', cohortIds)
+        : Promise.resolve({ data: [], error: null }),
+      unitIds.length
+        ? supabase.from('units').select('id, title').in('id', unitIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+
+    if (cohortRes.error) toast.error(`Could not load assignment cohorts: ${cohortRes.error.message}`);
+    if (unitRes.error) toast.error(`Could not load assignment units: ${unitRes.error.message}`);
+
+    const cohortsById = new Map(((cohortRes.data || []) as any[]).map((cohort) => [cohort.id, cohort]));
+    const unitsById = new Map(((unitRes.data || []) as any[]).map((unit) => [unit.id, unit]));
+
+    setAssignments(rows.map((row: any) => ({
+      ...row,
+      cohorts: row.cohort_id ? cohortsById.get(row.cohort_id) || null : null,
+      units: row.unit_id ? unitsById.get(row.unit_id) || null : null,
+    })));
     setLoading(false);
   };
 
   useEffect(() => {
-    if (!classroomId) return;
     fetchAssignments();
-  }, [classroomId]);
+  }, [classroomId, enabled]);
 
   const createAssignment = async (payload: any) => {
     const { data, error } = await supabase

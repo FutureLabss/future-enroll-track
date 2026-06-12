@@ -424,6 +424,8 @@ export default function ClassroomWorkspacePage() {
 
   const cls = classroomData.classrooms;
   const can = permissions || {};
+  const canCreateAssignments = Boolean(can.can_create_assignments);
+  const canViewAssignments = canCreateAssignments || classroomData.staff_type === 'teaching';
   const today = new Date().toISOString().split('T')[0];
   const todaySchedules = schedules.filter(s => s.scheduled_date === today && s.status === 'scheduled');
   const unitOptions = Array.from(
@@ -492,7 +494,7 @@ export default function ClassroomWorkspacePage() {
           <TabsTrigger value="schedule"><Calendar className="h-4 w-4 mr-1.5" />Schedule</TabsTrigger>
           <TabsTrigger value="attendance"><ClipboardList className="h-4 w-4 mr-1.5" />Attendance</TabsTrigger>
           {can.can_view_students && <TabsTrigger value="students"><Users className="h-4 w-4 mr-1.5" />Students ({students.length})</TabsTrigger>}
-          {can.can_create_assignments && <TabsTrigger value="assignments"><BookOpen className="h-4 w-4 mr-1.5" />Assignments</TabsTrigger>}
+          {canViewAssignments && <TabsTrigger value="assignments"><BookOpen className="h-4 w-4 mr-1.5" />Assignments</TabsTrigger>}
         </TabsList>
 
         {/* CURRICULUM */}
@@ -882,46 +884,48 @@ export default function ClassroomWorkspacePage() {
         )}
 
         {/* ASSIGNMENTS */}
-        {can.can_create_assignments && (
+        {canViewAssignments && (
           <TabsContent value="assignments">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-semibold">Assignments</h3>
-              <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
-                <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-1" />New Assignment</Button></DialogTrigger>
-                <DialogContent>
-                  <DialogHeader><DialogTitle>Create Assignment</DialogTitle></DialogHeader>
-                  <div className="space-y-3 mt-2">
-                    <div><Label>Title *</Label><Input value={assignForm.title} onChange={e => setAssignForm({ ...assignForm, title: e.target.value })} className="mt-1.5" /></div>
-                    <div><Label>Instructions</Label><Textarea value={assignForm.instructions} onChange={e => setAssignForm({ ...assignForm, instructions: e.target.value })} className="mt-1.5" rows={4} /></div>
-                    {unitOptions.length > 0 && (
-                      <div>
-                        <Label>Curriculum Unit</Label>
-                        <Select value={assignForm.unit_id} onValueChange={v => setAssignForm({ ...assignForm, unit_id: v })}>
-                          <SelectTrigger className="mt-1.5"><SelectValue placeholder="Link to a v2 unit" /></SelectTrigger>
-                          <SelectContent>
-                            {unitOptions.map((unit: any) => (
-                              <SelectItem key={unit.unit_id} value={unit.unit_id}>
-                                {unit.unit_title} - {unit.module_title}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+              {canCreateAssignments && (
+                <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
+                  <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-1" />New Assignment</Button></DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader><DialogTitle>Create Assignment</DialogTitle></DialogHeader>
+                    <div className="space-y-3 mt-2">
+                      <div><Label>Title *</Label><Input value={assignForm.title} onChange={e => setAssignForm({ ...assignForm, title: e.target.value })} className="mt-1.5" /></div>
+                      <div><Label>Instructions</Label><Textarea value={assignForm.instructions} onChange={e => setAssignForm({ ...assignForm, instructions: e.target.value })} className="mt-1.5" rows={4} /></div>
+                      {unitOptions.length > 0 && (
+                        <div>
+                          <Label>Curriculum Unit</Label>
+                          <Select value={assignForm.unit_id} onValueChange={v => setAssignForm({ ...assignForm, unit_id: v })}>
+                            <SelectTrigger className="mt-1.5"><SelectValue placeholder="Link to a v2 unit" /></SelectTrigger>
+                            <SelectContent>
+                              {unitOptions.map((unit: any) => (
+                                <SelectItem key={unit.unit_id} value={unit.unit_id}>
+                                  {unit.unit_title} - {unit.module_title}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div><Label>Due Date</Label><Input type="datetime-local" value={assignForm.due_date} onChange={e => setAssignForm({ ...assignForm, due_date: e.target.value })} className="mt-1.5" /></div>
+                        <div>
+                          <Label>Cohort</Label>
+                          <Select value={assignForm.cohort_id} onValueChange={v => setAssignForm({ ...assignForm, cohort_id: v })}>
+                            <SelectTrigger className="mt-1.5"><SelectValue placeholder="All cohorts" /></SelectTrigger>
+                            <SelectContent>{cohorts.map(c => <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>)}</SelectContent>
+                          </Select>
+                        </div>
                       </div>
-                    )}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div><Label>Due Date</Label><Input type="datetime-local" value={assignForm.due_date} onChange={e => setAssignForm({ ...assignForm, due_date: e.target.value })} className="mt-1.5" /></div>
-                      <div>
-                        <Label>Cohort</Label>
-                        <Select value={assignForm.cohort_id} onValueChange={v => setAssignForm({ ...assignForm, cohort_id: v })}>
-                          <SelectTrigger className="mt-1.5"><SelectValue placeholder="All cohorts" /></SelectTrigger>
-                          <SelectContent>{cohorts.map(c => <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>)}</SelectContent>
-                        </Select>
-                      </div>
+                      <Button onClick={handleCreateAssignment} disabled={savingAssign} className="w-full">{savingAssign ? 'Saving...' : 'Create (Draft)'}</Button>
                     </div>
-                    <Button onClick={handleCreateAssignment} disabled={savingAssign} className="w-full">{savingAssign ? 'Saving...' : 'Create (Draft)'}</Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
+                  </DialogContent>
+                </Dialog>
+              )}
             </div>
 
             <div className="space-y-3">
@@ -936,12 +940,14 @@ export default function ClassroomWorkspacePage() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <Badge variant={a.status === 'published' ? 'default' : 'secondary'} className="capitalize">{a.status}</Badge>
-                      {a.status === 'draft' && (
+                      {canCreateAssignments && a.status === 'draft' && (
                         <Button size="sm" variant="outline" onClick={() => publishAssignment(a.id)}>Publish</Button>
                       )}
-                      <Button size="sm" variant="outline" onClick={() => setSubmissionsAssignment(a)}>
-                        <Eye className="h-3.5 w-3.5 mr-1" />Submissions
-                      </Button>
+                      {canCreateAssignments && (
+                        <Button size="sm" variant="outline" onClick={() => setSubmissionsAssignment(a)}>
+                          <Eye className="h-3.5 w-3.5 mr-1" />Submissions
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>

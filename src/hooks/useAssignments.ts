@@ -86,7 +86,13 @@ export function useAssignments(classroomId: string, options: UseAssignmentsOptio
     await updateAssignment(id, { status: 'published' });
   };
 
-  return { assignments, loading, refetch: fetchAssignments, createAssignment, updateAssignment, publishAssignment };
+  const deleteAssignment = async (id: string) => {
+    const { error } = await supabase.from('assignments').delete().eq('id', id);
+    if (error) throw error;
+    await fetchAssignments();
+  };
+
+  return { assignments, loading, refetch: fetchAssignments, createAssignment, updateAssignment, publishAssignment, deleteAssignment };
 }
 
 export function useStudentAssignments(classroomId: string, cohortId?: string) {

@@ -24,7 +24,7 @@ import {
   Users, BookOpen, Calendar, ClipboardList, BarChart2, UserPlus, Loader2,
   GraduationCap, LayoutList, Layers, Plus, Pencil, Ban, CheckCircle, PlayCircle,
   XCircle, ChevronDown, ChevronRight, Eye, Mail, ArrowLeftRight, ArrowLeft,
-  Archive, RotateCcw, ClipboardCheck, CalendarDays,
+  Archive, RotateCcw, ClipboardCheck, CalendarDays, Trash2,
 } from 'lucide-react';
 
 const COHORT_STATUSES = ['upcoming', 'active', 'completed', 'archived'] as const;
@@ -36,6 +36,16 @@ const STATUS_COLOURS: Record<string, string> = {
   scheduled: 'bg-blue-500/15 text-blue-600 border-blue-500/30',
   in_progress: 'bg-warning/15 text-warning border-warning/30',
   cancelled: 'bg-destructive/15 text-destructive border-destructive/30',
+};
+
+const emptyAssignmentForm = { title: '', instructions: '', due_date: '', cohort_id: '', status: 'draft' };
+
+const toDateTimeLocal = (value?: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 16);
 };
 
 function CohortModal({ classroomId, programId, existing, onClose, onSaved, staffList }: any) {
@@ -562,7 +572,7 @@ export default function ClassroomDetailPage() {
   const { classroom, loading, updateClassroom } = useClassroom(id!);
   const { cohorts, refetch: refetchCohorts } = useClassroomCohorts(id!);
   const { sessions } = useAttendance(id!);
-  const { assignments, publishAssignment, createAssignment } = useAssignments(id!);
+  const { assignments, publishAssignment, createAssignment, updateAssignment, deleteAssignment } = useAssignments(id!);
   const { schedules, refetch: refetchSchedules } = useSchedules(id!);
 
   const [staff, setStaff] = useState<any[]>([]);
@@ -593,7 +603,8 @@ export default function ClassroomDetailPage() {
   const [sendingReminders, setSendingReminders] = useState(false);
   const [autoScheduleOpen, setAutoScheduleOpen] = useState(false);
   const [assignmentModal, setAssignmentModal] = useState(false);
-  const [assignmentForm, setAssignmentForm] = useState({ title: '', instructions: '', due_date: '', cohort_id: '', status: 'draft' });
+  const [assignmentEditing, setAssignmentEditing] = useState<any>(null);
+  const [assignmentForm, setAssignmentForm] = useState(emptyAssignmentForm);
   const [savingAssignment, setSavingAssignment] = useState(false);
 
   useEffect(() => { if (id) loadAll(); }, [id]);
@@ -602,24 +613,64 @@ export default function ClassroomDetailPage() {
     if (id) supabase.rpc('get_classroom_students', { p_classroom_id: id }).then(({ data }) => setStudents(data || []));
   }, [id]);
 
-  const handleCreateAssignment = async () => {
+  const openCreateAssignment = () => {
+    setAssignmentEditing(null);
+    setAssignmentForm(emptyAssignmentForm);
+    setAssignmentModal(true);
+  };
+
+  const openEditAssignment = (assignment: any) => {
+    setAssignmentEditing(assignment);
+    setAssignmentForm({
+      title: assignment.title || '',
+      instructions: assignment.instructions || '',
+      due_date: toDateTimeLocal(assignment.due_date),
+      cohort_id: assignment.cohort_id || '',
+      status: assignment.status || 'draft',
+    });
+    setAssignmentModal(true);
+  };
+
+  const resetAssignmentModal = () => {
+    setAssignmentModal(false);
+    setAssignmentEditing(null);
+    setAssignmentForm(emptyAssignmentForm);
+  };
+
+  const handleSaveAssignment = async () => {
     if (!assignmentForm.title.trim()) { toast.error('Title is required'); return; }
     setSavingAssignment(true);
+    const payload = {
+      title: assignmentForm.title.trim(),
+      instructions: assignmentForm.instructions.trim() || null,
+      due_date: assignmentForm.due_date || null,
+      cohort_id: assignmentForm.cohort_id || null,
+      status: assignmentForm.status,
+    };
+
     try {
-      await createAssignment({
-        title: assignmentForm.title.trim(),
-        instructions: assignmentForm.instructions.trim() || null,
-        due_date: assignmentForm.due_date || null,
-        cohort_id: assignmentForm.cohort_id || null,
-        status: assignmentForm.status,
-      });
-      toast.success('Assignment created');
-      setAssignmentModal(false);
-      setAssignmentForm({ title: '', instructions: '', due_date: '', cohort_id: '', status: 'draft' });
+      if (assignmentEditing) {
+        await updateAssignment(assignmentEditing.id, payload);
+        toast.success('Assignment updated');
+      } else {
+        await createAssignment(payload);
+        toast.success('Assignment created');
+      }
+      resetAssignmentModal();
     } catch (e: any) {
       toast.error(e.message);
     } finally {
       setSavingAssignment(false);
+    }
+  };
+
+  const handleDeleteAssignment = async (assignment: any) => {
+    if (!confirm(`Delete assignment "${assignment.title}"? This will also remove related resources and submissions.`)) return;
+    try {
+      await deleteAssignment(assignment.id);
+      toast.success('Assignment deleted');
+    } catch (e: any) {
+      toast.error(e.message);
     }
   };
 
@@ -913,13 +964,27 @@ export default function ClassroomDetailPage() {
     { key: 'unit', header: 'Unit', render: (r: any) => r.units?.title || '—' },
     { key: 'due_date', header: 'Due', render: (r: any) => r.due_date ? new Date(r.due_date).toLocaleDateString() : '—' },
     { key: 'status', header: 'Status', render: (r: any) => <Badge variant="outline" className="capitalize">{r.status}</Badge> },
-    { key: 'actions', header: '', render: (r: any) => r.status !== 'published' ? (
-      <Button size="sm" variant="outline" onClick={async () => {
-        try { await publishAssignment(r.id); toast.success('Assignment published'); } catch (e: any) { toast.error(e.message); }
-      }}>
-        <ClipboardCheck className="h-3.5 w-3.5 mr-1" />Publish
-      </Button>
-    ) : null },
+    { key: 'actions', header: '', render: (r: any) => (
+      <div className="flex items-center justify-end gap-1">
+        <Button size="sm" variant="ghost" className="h-7 px-2" onClick={(event) => { event.stopPropagation(); navigate(`/admin/assignments/${r.id}`); }}>
+          <Eye className="h-3.5 w-3.5 mr-1" />View
+        </Button>
+        <Button size="sm" variant="ghost" className="h-7 px-2" onClick={(event) => { event.stopPropagation(); openEditAssignment(r); }}>
+          <Pencil className="h-3.5 w-3.5 mr-1" />Edit
+        </Button>
+        {r.status !== 'published' && (
+          <Button size="sm" variant="ghost" className="h-7 px-2" onClick={async (event) => {
+            event.stopPropagation();
+            try { await publishAssignment(r.id); toast.success('Assignment published'); } catch (e: any) { toast.error(e.message); }
+          }}>
+            <ClipboardCheck className="h-3.5 w-3.5 mr-1" />Publish
+          </Button>
+        )}
+        <Button size="sm" variant="ghost" className="h-7 px-2 text-destructive hover:text-destructive" onClick={(event) => { event.stopPropagation(); handleDeleteAssignment(r); }}>
+          <Trash2 className="h-3.5 w-3.5 mr-1" />Delete
+        </Button>
+      </div>
+    ) },
   ];
 
   const permKeys = [
@@ -1149,7 +1214,7 @@ export default function ClassroomDetailPage() {
         {/* ASSIGNMENTS */}
         <TabsContent value="assignments">
           <div className="flex justify-end mb-4">
-            <Button onClick={() => setAssignmentModal(true)}>
+            <Button onClick={openCreateAssignment}>
               <Plus className="h-4 w-4 mr-1.5" />Create Assignment
             </Button>
           </div>
@@ -1159,6 +1224,7 @@ export default function ClassroomDetailPage() {
             searchable
             searchPlaceholder="Search assignments..."
             emptyMessage="No assignments created yet"
+            onRowClick={(row) => navigate(`/admin/assignments/${row.id}`)}
           />
         </TabsContent>
 
@@ -1198,10 +1264,10 @@ export default function ClassroomDetailPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Create Assignment modal */}
-      <Dialog open={assignmentModal} onOpenChange={o => { if (!o) { setAssignmentModal(false); setAssignmentForm({ title: '', instructions: '', due_date: '', cohort_id: '', status: 'draft' }); } }}>
+      {/* Assignment modal */}
+      <Dialog open={assignmentModal} onOpenChange={o => { if (!o) resetAssignmentModal(); }}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Create Assignment</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{assignmentEditing ? 'Edit Assignment' : 'Create Assignment'}</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-2">
             <div>
               <Label>Title <span className="text-destructive">*</span></Label>
@@ -1257,9 +1323,9 @@ export default function ClassroomDetailPage() {
                 onCheckedChange={v => setAssignmentForm(f => ({ ...f, status: v ? 'published' : 'draft' }))}
               />
             </div>
-            <Button onClick={handleCreateAssignment} disabled={savingAssignment} className="w-full">
+            <Button onClick={handleSaveAssignment} disabled={savingAssignment} className="w-full">
               {savingAssignment ? <Loader2 className="animate-spin h-4 w-4 mr-1.5" /> : null}
-              Create Assignment
+              {assignmentEditing ? 'Save Assignment' : 'Create Assignment'}
             </Button>
           </div>
         </DialogContent>

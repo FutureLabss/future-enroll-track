@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useAttendance, useAttendanceSession } from '@/hooks/useAttendance';
@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { DataTable } from '@/components/shared/DataTable';
@@ -21,7 +22,7 @@ import { toast } from 'sonner';
 import {
   Calendar, ClipboardList, Users, BookOpen, Plus, Radio, Clock, Loader2,
   LayoutList, Layers, PlayCircle, CheckCircle, XCircle, Pencil, Eye, RefreshCw,
-  UserPlus, UserMinus, UserCheck,
+  UserPlus, UserMinus, UserCheck, Trash2,
 } from 'lucide-react';
 
 const STATUS_COLOURS: Record<string, string> = {
@@ -35,6 +36,15 @@ const STATUS_COLOURS: Record<string, string> = {
 };
 
 const COHORT_STATUSES = ['upcoming', 'active', 'completed', 'archived'] as const;
+const emptyAssignmentForm = { title: '', instructions: '', due_date: '', cohort_id: '', unit_id: '', status: 'draft' };
+
+const toDateTimeLocal = (value?: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 16);
+};
 
 function AttendanceDrillDown({ session }: { session: any }) {
   const { records, absentStudents, loading } = useAttendanceSession(session.id);
@@ -158,6 +168,7 @@ function SubmissionsModal({ assignment }: { assignment: any }) {
 
 export default function ClassroomWorkspacePage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { user } = useAuth();
 
   const [classroomData, setClassroomData] = useState<any>(null);
@@ -169,7 +180,7 @@ export default function ClassroomWorkspacePage() {
   const [lessonOptions, setLessonOptions] = useState<any[]>([]);
 
   const { sessions, generateSession, closeSession, regenerateCode } = useAttendance(id!);
-  const { assignments, createAssignment, publishAssignment } = useAssignments(id!);
+  const { assignments, createAssignment, updateAssignment, publishAssignment, deleteAssignment } = useAssignments(id!);
   const { cohorts, refetch: refetchCohorts, createCohort, updateCohort } = useClassroomCohorts(id!);
   const { schedules, createSchedule, updateSchedule, deleteSchedule } = useSchedules(id!);
 
@@ -190,7 +201,8 @@ export default function ClassroomWorkspacePage() {
 
   // Assignment state
   const [assignOpen, setAssignOpen] = useState(false);
-  const [assignForm, setAssignForm] = useState({ title: '', instructions: '', due_date: '', cohort_id: '', unit_id: '' });
+  const [assignEditing, setAssignEditing] = useState<any>(null);
+  const [assignForm, setAssignForm] = useState(emptyAssignmentForm);
   const [savingAssign, setSavingAssign] = useState(false);
   const [submissionsAssignment, setSubmissionsAssignment] = useState<any>(null);
 
@@ -320,25 +332,66 @@ export default function ClassroomWorkspacePage() {
     }
   };
 
-  const handleCreateAssignment = async () => {
-    if (!assignForm.title) { toast.error('Title required'); return; }
+  const openCreateAssignment = () => {
+    setAssignEditing(null);
+    setAssignForm(emptyAssignmentForm);
+    setAssignOpen(true);
+  };
+
+  const openEditAssignment = (assignment: any) => {
+    setAssignEditing(assignment);
+    setAssignForm({
+      title: assignment.title || '',
+      instructions: assignment.instructions || '',
+      due_date: toDateTimeLocal(assignment.due_date),
+      cohort_id: assignment.cohort_id || '',
+      unit_id: assignment.unit_id || '',
+      status: assignment.status || 'draft',
+    });
+    setAssignOpen(true);
+  };
+
+  const resetAssignmentModal = () => {
+    setAssignOpen(false);
+    setAssignEditing(null);
+    setAssignForm(emptyAssignmentForm);
+  };
+
+  const handleSaveAssignment = async () => {
+    if (!assignForm.title.trim()) { toast.error('Title required'); return; }
     setSavingAssign(true);
+    const payload = {
+      title: assignForm.title.trim(),
+      instructions: assignForm.instructions.trim() || null,
+      due_date: assignForm.due_date || null,
+      cohort_id: assignForm.cohort_id || null,
+      unit_id: assignForm.unit_id || null,
+      status: assignForm.status,
+    };
+
     try {
-      await createAssignment({
-        title: assignForm.title,
-        instructions: assignForm.instructions || null,
-        due_date: assignForm.due_date || null,
-        cohort_id: assignForm.cohort_id || null,
-        unit_id: assignForm.unit_id || null,
-        status: 'draft',
-      });
-      toast.success('Assignment created (draft)');
-      setAssignOpen(false);
-      setAssignForm({ title: '', instructions: '', due_date: '', cohort_id: '', unit_id: '' });
+      if (assignEditing) {
+        await updateAssignment(assignEditing.id, payload);
+        toast.success('Assignment updated');
+      } else {
+        await createAssignment(payload);
+        toast.success('Assignment created');
+      }
+      resetAssignmentModal();
     } catch (e: any) {
       toast.error(e.message);
     } finally {
       setSavingAssign(false);
+    }
+  };
+
+  const handleDeleteAssignment = async (assignment: any) => {
+    if (!confirm(`Delete assignment "${assignment.title}"? This will also remove related resources and submissions.`)) return;
+    try {
+      await deleteAssignment(assignment.id);
+      toast.success('Assignment deleted');
+    } catch (e: any) {
+      toast.error(e.message);
     }
   };
 
@@ -889,19 +942,20 @@ export default function ClassroomWorkspacePage() {
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-semibold">Assignments</h3>
               {canCreateAssignments && (
-                <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
-                  <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-1" />New Assignment</Button></DialogTrigger>
+                <Dialog open={assignOpen} onOpenChange={o => { if (!o) resetAssignmentModal(); }}>
+                  <DialogTrigger asChild><Button size="sm" onClick={openCreateAssignment}><Plus className="h-4 w-4 mr-1" />New Assignment</Button></DialogTrigger>
                   <DialogContent>
-                    <DialogHeader><DialogTitle>Create Assignment</DialogTitle></DialogHeader>
+                    <DialogHeader><DialogTitle>{assignEditing ? 'Edit Assignment' : 'Create Assignment'}</DialogTitle></DialogHeader>
                     <div className="space-y-3 mt-2">
                       <div><Label>Title *</Label><Input value={assignForm.title} onChange={e => setAssignForm({ ...assignForm, title: e.target.value })} className="mt-1.5" /></div>
                       <div><Label>Instructions</Label><Textarea value={assignForm.instructions} onChange={e => setAssignForm({ ...assignForm, instructions: e.target.value })} className="mt-1.5" rows={4} /></div>
                       {unitOptions.length > 0 && (
                         <div>
                           <Label>Curriculum Unit</Label>
-                          <Select value={assignForm.unit_id} onValueChange={v => setAssignForm({ ...assignForm, unit_id: v })}>
+                          <Select value={assignForm.unit_id || '__none__'} onValueChange={v => setAssignForm({ ...assignForm, unit_id: v === '__none__' ? '' : v })}>
                             <SelectTrigger className="mt-1.5"><SelectValue placeholder="Link to a v2 unit" /></SelectTrigger>
                             <SelectContent>
+                              <SelectItem value="__none__">No unit</SelectItem>
                               {unitOptions.map((unit: any) => (
                                 <SelectItem key={unit.unit_id} value={unit.unit_id}>
                                   {unit.unit_title} - {unit.module_title}
@@ -915,13 +969,26 @@ export default function ClassroomWorkspacePage() {
                         <div><Label>Due Date</Label><Input type="datetime-local" value={assignForm.due_date} onChange={e => setAssignForm({ ...assignForm, due_date: e.target.value })} className="mt-1.5" /></div>
                         <div>
                           <Label>Cohort</Label>
-                          <Select value={assignForm.cohort_id} onValueChange={v => setAssignForm({ ...assignForm, cohort_id: v })}>
+                          <Select value={assignForm.cohort_id || '__all__'} onValueChange={v => setAssignForm({ ...assignForm, cohort_id: v === '__all__' ? '' : v })}>
                             <SelectTrigger className="mt-1.5"><SelectValue placeholder="All cohorts" /></SelectTrigger>
-                            <SelectContent>{cohorts.map(c => <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>)}</SelectContent>
+                            <SelectContent>
+                              <SelectItem value="__all__">All cohorts</SelectItem>
+                              {cohorts.map(c => <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>)}
+                            </SelectContent>
                           </Select>
                         </div>
                       </div>
-                      <Button onClick={handleCreateAssignment} disabled={savingAssign} className="w-full">{savingAssign ? 'Saving...' : 'Create (Draft)'}</Button>
+                      <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
+                        <div>
+                          <p className="text-sm font-medium">Publish immediately</p>
+                          <p className="text-xs text-muted-foreground">Students will see this assignment right away</p>
+                        </div>
+                        <Switch
+                          checked={assignForm.status === 'published'}
+                          onCheckedChange={v => setAssignForm(f => ({ ...f, status: v ? 'published' : 'draft' }))}
+                        />
+                      </div>
+                      <Button onClick={handleSaveAssignment} disabled={savingAssign} className="w-full">{savingAssign ? 'Saving...' : assignEditing ? 'Save Assignment' : 'Create Assignment'}</Button>
                     </div>
                   </DialogContent>
                 </Dialog>
@@ -940,12 +1007,25 @@ export default function ClassroomWorkspacePage() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <Badge variant={a.status === 'published' ? 'default' : 'secondary'} className="capitalize">{a.status}</Badge>
+                      <Button size="sm" variant="outline" onClick={() => navigate(`/staff/assignments/${a.id}`)}>
+                        <Eye className="h-3.5 w-3.5 mr-1" />View
+                      </Button>
+                      {canCreateAssignments && (
+                        <Button size="sm" variant="outline" onClick={() => openEditAssignment(a)}>
+                          <Pencil className="h-3.5 w-3.5 mr-1" />Edit
+                        </Button>
+                      )}
                       {canCreateAssignments && a.status === 'draft' && (
                         <Button size="sm" variant="outline" onClick={() => publishAssignment(a.id)}>Publish</Button>
                       )}
                       {canCreateAssignments && (
                         <Button size="sm" variant="outline" onClick={() => setSubmissionsAssignment(a)}>
                           <Eye className="h-3.5 w-3.5 mr-1" />Submissions
+                        </Button>
+                      )}
+                      {canCreateAssignments && (
+                        <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => handleDeleteAssignment(a)}>
+                          <Trash2 className="h-3.5 w-3.5 mr-1" />Delete
                         </Button>
                       )}
                     </div>

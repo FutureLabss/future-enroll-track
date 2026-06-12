@@ -61,6 +61,7 @@ import StudentClassroomsPage from "@/pages/student/StudentClassroomsPage";
 import StudentClassroomPage from "@/pages/student/StudentClassroomPage";
 import HubPortalPage from "@/pages/public/HubPortalPage";
 import SetPasswordPage from "@/pages/auth/SetPasswordPage";
+import AssignmentDetailPage from "@/pages/shared/AssignmentDetailPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -138,6 +139,7 @@ const App = () => (
               {/* Classroom admin routes */}
               <Route path="/admin/classrooms" element={<ClassroomsPage />} />
               <Route path="/admin/classrooms/:id" element={<ClassroomDetailPage />} />
+              <Route path="/admin/assignments/:id" element={<AssignmentDetailPage />} />
               <Route path="/admin/cohorts" element={<CohortsPage />} />
               <Route path="/admin/cohorts/:id" element={<CohortDetailPage />} />
               <Route path="/admin/staff-invitations" element={<StaffInvitationsAdminPage />} />
@@ -145,6 +147,7 @@ const App = () => (
               <Route path="/staff/invoices" element={<StaffInvoicesPage />} />
               <Route path="/staff/classrooms" element={<StaffClassroomsPage />} />
               <Route path="/staff/classrooms/:id" element={<ClassroomWorkspacePage />} />
+              <Route path="/staff/assignments/:id" element={<AssignmentDetailPage />} />
               <Route path="/staff/invitations" element={<StaffInvitationsPage />} />
               
               {/* Student routes */}

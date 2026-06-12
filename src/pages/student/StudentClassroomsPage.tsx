@@ -6,6 +6,7 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
+import { enrichSchedules, SCHEDULE_COLUMNS } from '@/hooks/useSchedules';
 import { BookOpen, Calendar, Clock, MapPin, ArrowRight, Loader2, Layers } from 'lucide-react';
 
 export default function StudentClassroomsPage() {
@@ -30,14 +31,18 @@ export default function StudentClassroomsPage() {
         .eq('student_id', user.id)
         .eq('status', 'active')
         .in('cohorts.classroom_id', classroomIds),
-      supabase
-        .from('schedules')
-        .select('*, lessons(title), cohorts(cohort_label), staff:instructor_id(full_name)')
-        .in('classroom_id', classroomIds)
-        .neq('status', 'cancelled')
-        .gte('scheduled_date', new Date().toISOString().split('T')[0])
-        .order('scheduled_date', { ascending: true })
-        .order('start_time', { ascending: true }),
+      (async () => {
+        const { data, error } = await supabase
+          .from('schedules')
+          .select(SCHEDULE_COLUMNS)
+          .in('classroom_id', classroomIds)
+          .neq('status', 'cancelled')
+          .gte('scheduled_date', new Date().toISOString().split('T')[0])
+          .order('scheduled_date', { ascending: true })
+          .order('start_time', { ascending: true });
+        if (error) throw error;
+        return { data: await enrichSchedules(data || []) };
+      })(),
     ]).then(([cohortRes, scheduleRes]) => {
         const membershipsByClassroom: Record<string, any> = {};
         (cohortRes.data || []).forEach((membership: any) => {

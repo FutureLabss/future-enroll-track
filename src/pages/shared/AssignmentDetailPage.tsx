@@ -51,9 +51,14 @@ function SubmissionList({ assignmentId }: { assignmentId: string }) {
           {submission.submission_text && (
             <div className="mt-3 rounded-lg bg-muted/50 p-3 text-sm whitespace-pre-wrap">{submission.submission_text}</div>
           )}
-          {submission.file_url && (
-            <a href={submission.file_url} target="_blank" rel="noreferrer" className="mt-3 inline-block text-sm text-primary hover:underline">
-              Open attached file
+          {submission.image_url && (
+            <a href={submission.image_url} target="_blank" rel="noreferrer" className="mt-3 inline-block">
+              <img src={submission.image_url} alt="Submission" className="max-h-48 rounded-lg border border-border object-cover" />
+            </a>
+          )}
+          {(submission.link_url || submission.file_url) && (
+            <a href={submission.link_url || submission.file_url} target="_blank" rel="noreferrer" className="mt-3 inline-block text-sm text-primary hover:underline">
+              Open submitted link
             </a>
           )}
 

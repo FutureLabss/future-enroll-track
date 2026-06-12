@@ -26,6 +26,8 @@ import {
   Mail,
   UserCircle,
 } from 'lucide-react';
+import { ASSIGNMENT_COLUMNS } from '@/hooks/useAssignments';
+import { enrichSchedules, SCHEDULE_COLUMNS } from '@/hooks/useSchedules';
 
 const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
 const formatDate = (date?: string | null) => date
@@ -124,28 +126,49 @@ export default function StudentDashboard() {
             : Promise.resolve({ data: [] } as any),
           classroomIds.length
             ? withTimeout(
-                supabase
-                  .from('schedules')
-                  .select('*, lessons(title), cohorts(cohort_label), staff:instructor_id(full_name)')
-                  .in('classroom_id', classroomIds)
-                  .neq('status', 'cancelled')
-                  .gte('scheduled_date', new Date().toISOString().split('T')[0])
-                  .order('scheduled_date', { ascending: true })
-                  .order('start_time', { ascending: true })
-                  .limit(8),
+                (async () => {
+                  const { data, error } = await supabase
+                    .from('schedules')
+                    .select(SCHEDULE_COLUMNS)
+                    .in('classroom_id', classroomIds)
+                    .neq('status', 'cancelled')
+                    .gte('scheduled_date', new Date().toISOString().split('T')[0])
+                    .order('scheduled_date', { ascending: true })
+                    .order('start_time', { ascending: true })
+                    .limit(8);
+                  if (error) throw error;
+                  return { data: await enrichSchedules(data || []) };
+                })(),
                 { data: [] } as any,
                 'schedules'
               )
             : Promise.resolve({ data: [] } as any),
           classroomIds.length
             ? withTimeout(
-                supabase
-                  .from('assignments')
-                  .select('*, cohorts(cohort_label), units(title)')
-                  .in('classroom_id', classroomIds)
-                  .eq('status', 'published')
-                  .order('due_date', { ascending: true, nullsFirst: false })
-                  .limit(8),
+                (async () => {
+                  const { data, error } = await supabase
+                    .from('assignments')
+                    .select(ASSIGNMENT_COLUMNS)
+                    .in('classroom_id', classroomIds)
+                    .eq('status', 'published')
+                    .order('due_date', { ascending: true, nullsFirst: false })
+                    .limit(8);
+                  if (error) throw error;
+
+                  const rows = data || [];
+                  const unitIds = Array.from(new Set(rows.map((row: any) => row.unit_id).filter(Boolean)));
+                  const unitRes = unitIds.length
+                    ? await supabase.from('units').select('id, title').in('id', unitIds)
+                    : { data: [], error: null };
+
+                  const unitsById = new Map(((unitRes.data || []) as any[]).map((unit) => [unit.id, unit]));
+                  return {
+                    data: rows.map((row: any) => ({
+                      ...row,
+                      units: row.unit_id ? unitsById.get(row.unit_id) || null : null,
+                    })),
+                  };
+                })(),
                 { data: [] } as any,
                 'assignments'
               )

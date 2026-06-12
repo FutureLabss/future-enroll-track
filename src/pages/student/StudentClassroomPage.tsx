@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useMarkAttendance } from '@/hooks/useAttendance';
-import { useStudentAssignments, useSubmissions } from '@/hooks/useAssignments';
+import { uploadAssignmentImage, useStudentAssignments, useSubmissions } from '@/hooks/useAssignments';
 import { useStudentProgress } from '@/hooks/useAttendance';
 import { useSchedules } from '@/hooks/useSchedules';
 import { supabase } from '@/lib/supabase';
@@ -270,13 +270,24 @@ function AttendanceTab({ classroomId, cohortId }: { classroomId: string; cohortI
 }
 
 function AssignmentsTab({ classroomId, cohortId }: { classroomId: string; cohortId?: string }) {
+  const { user } = useAuth();
   const { assignments, loading, refetch } = useStudentAssignments(classroomId, cohortId);
   const [selected, setSelected] = useState<any>(null);
   const [subText, setSubText] = useState('');
-  const [fileUrl, setFileUrl] = useState('');
+  const [linkUrl, setLinkUrl] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [filter, setFilter] = useState<'all' | 'pending' | 'submitted' | 'graded'>('all');
   const [submitting, setSubmitting] = useState(false);
   const { submitAssignment } = useSubmissions(selected?.id || '');
+
+  const resetSubmissionForm = () => {
+    setSubText('');
+    setLinkUrl('');
+    setImageUrl('');
+    setImageFile(null);
+  };
 
   const getSubmission = (assignment: any) => assignment.assignment_submissions?.[0];
 
@@ -306,19 +317,50 @@ function AssignmentsTab({ classroomId, cohortId }: { classroomId: string; cohort
     return true;
   });
 
+  const handleImageSelect = (file?: File | null) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please choose an image file');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be 5MB or smaller');
+      return;
+    }
+    setImageFile(file);
+    setImageUrl(URL.createObjectURL(file));
+  };
+
   const handleSubmit = async () => {
-    if (!subText.trim() && !fileUrl.trim()) { toast.error('Write a submission or add a file link'); return; }
+    if (!subText.trim() && !linkUrl.trim() && !imageFile && !imageUrl) {
+      toast.error('Add text, an image, or a link before submitting');
+      return;
+    }
+    if (!selected?.id || !user?.id) return;
+
     setSubmitting(true);
     try {
-      await submitAssignment(subText, fileUrl || undefined, selected?.due_date);
+      let uploadedImageUrl = imageUrl && !imageUrl.startsWith('blob:') ? imageUrl : '';
+      if (imageFile) {
+        setUploadingImage(true);
+        uploadedImageUrl = await uploadAssignmentImage(imageFile, selected.id, user.id);
+        setUploadingImage(false);
+      }
+
+      await submitAssignment({
+        text: subText,
+        imageUrl: uploadedImageUrl || undefined,
+        linkUrl: linkUrl || undefined,
+        dueDate: selected?.due_date,
+      });
       toast.success('Submitted!');
       setSelected(null);
-      setSubText('');
-      setFileUrl('');
+      resetSubmissionForm();
       await refetch();
     } catch (e: any) {
       toast.error(e.message);
     } finally {
+      setUploadingImage(false);
       setSubmitting(false);
     }
   };
@@ -397,7 +439,9 @@ function AssignmentsTab({ classroomId, cohortId }: { classroomId: string; cohort
                     onClick={() => {
                       setSelected(a);
                       setSubText(sub?.submission_text || '');
-                      setFileUrl(sub?.file_url || '');
+                      setLinkUrl(sub?.link_url || sub?.file_url || '');
+                      setImageUrl(sub?.image_url || '');
+                      setImageFile(null);
                     }}
                   >
                     <Send className="mr-1.5 h-3.5 w-3.5" />
@@ -412,11 +456,16 @@ function AssignmentsTab({ classroomId, cohortId }: { classroomId: string; cohort
                   <p className="font-medium">Your submission</p>
                   {sub.submitted_at && <span className="text-xs text-muted-foreground">{new Date(sub.submitted_at).toLocaleString()}</span>}
                 </div>
-                {sub.submission_text && <p className="text-muted-foreground line-clamp-3">{sub.submission_text}</p>}
-                {sub.file_url && (
-                  <a href={sub.file_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary">
-                    <FileText className="h-3.5 w-3.5" />
-                    Open submitted file
+                {sub.submission_text && <p className="text-muted-foreground whitespace-pre-wrap">{sub.submission_text}</p>}
+                {sub.image_url && (
+                  <a href={sub.image_url} target="_blank" rel="noreferrer" className="mt-2 inline-block">
+                    <img src={sub.image_url} alt="Submitted" className="max-h-40 rounded-lg border border-border object-cover" />
+                  </a>
+                )}
+                {(sub.link_url || sub.file_url) && (
+                  <a href={sub.link_url || sub.file_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary">
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Open submitted link
                   </a>
                 )}
               </div>
@@ -435,17 +484,34 @@ function AssignmentsTab({ classroomId, cohortId }: { classroomId: string; cohort
         <p className="text-center text-muted-foreground py-10">No assignments in this view</p>
       )}
 
-      <Dialog open={!!selected} onOpenChange={o => { if (!o) { setSelected(null); setSubText(''); setFileUrl(''); } }}>
+      <Dialog open={!!selected} onOpenChange={o => { if (!o) { setSelected(null); resetSubmissionForm(); } }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Submit: {selected?.title}</DialogTitle></DialogHeader>
           <div className="space-y-3 mt-2">
             {selected?.instructions && <p className="text-sm text-muted-foreground">{selected.instructions}</p>}
-            <div><Label>Your Answer / Notes</Label><Textarea value={subText} onChange={e => setSubText(e.target.value)} rows={6} className="mt-1.5" /></div>
             <div>
-              <Label>File Link</Label>
-              <Input value={fileUrl} onChange={e => setFileUrl(e.target.value)} placeholder="https://..." className="mt-1.5" />
+              <Label>Your Answer / Notes</Label>
+              <Textarea value={subText} onChange={e => setSubText(e.target.value)} rows={6} className="mt-1.5" placeholder="Write your response here..." />
             </div>
-            <Button onClick={handleSubmit} disabled={submitting} className="w-full">{submitting ? 'Submitting...' : 'Submit Assignment'}</Button>
+            <div>
+              <Label>Image</Label>
+              <Input type="file" accept="image/*" className="mt-1.5" onChange={e => handleImageSelect(e.target.files?.[0] || null)} />
+              {imageUrl && (
+                <div className="mt-2 flex items-start gap-3">
+                  <img src={imageUrl} alt="Submission preview" className="max-h-32 rounded-lg border border-border object-cover" />
+                  <Button type="button" size="sm" variant="ghost" onClick={() => { setImageUrl(''); setImageFile(null); }}>
+                    Remove
+                  </Button>
+                </div>
+              )}
+            </div>
+            <div>
+              <Label>Link</Label>
+              <Input value={linkUrl} onChange={e => setLinkUrl(e.target.value)} placeholder="https://docs.google.com/..." className="mt-1.5" />
+            </div>
+            <Button onClick={handleSubmit} disabled={submitting || uploadingImage} className="w-full">
+              {uploadingImage ? 'Uploading image...' : submitting ? 'Submitting...' : 'Submit Assignment'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

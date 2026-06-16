@@ -1,10 +1,10 @@
 project_id = "ozjxktxbzhkujavmzjrf"
 
 [functions.send-notification]
-verify_jwt = false
+verify_jwt = false  # called server-to-server from other edge functions without user JWTs
 
 [functions.check-due-reminders]
-verify_jwt = false
+verify_jwt = false  # cron-style invocation by scheduler — no user auth context
 
 [functions.paystack-verify]
-verify_jwt = false
+verify_jwt = false  # receives webhook POST from Paystack servers, no JWT supplied

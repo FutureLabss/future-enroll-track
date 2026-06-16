@@ -15,8 +15,7 @@ import { Check, X, FileText, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function StaffInvoicesAdminPage() {
-  const { user, isSuperadmin: isSA } = useAuth();
-  const isSuperadmin = isSA || user?.email?.toLowerCase() === 'manassehudim@gmail.com';
+  const { user, isSuperadmin } = useAuth();
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);

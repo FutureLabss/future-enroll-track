@@ -20,8 +20,7 @@ export default function InvoiceDetailPage() {
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const { isAdmin, user } = useAuth();
-  const isSuperadmin = user?.email?.toLowerCase() === 'manassehudim@gmail.com';
+  const { isAdmin, isSuperadmin } = useAuth();
 
   const handleDelete = async () => {
     if (!id) return;
@@ -108,8 +107,7 @@ export default function InvoiceDetailPage() {
                 extra: { amount_paid: Number(installment.amount) },
               },
             });
-          } catch (notifErr) {
-            console.error('Notification failed:', notifErr);
+          } catch (_notifErr) {
           }
         }
       }

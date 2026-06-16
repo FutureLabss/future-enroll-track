@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { ArrowLeft, CreditCard, Building2, Upload, Copy, Check, AlertTriangle, CheckCircle2, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
+import { PAYMENT_BANK } from '@/lib/siteConfig';
 
 export default function StudentInvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -89,7 +90,7 @@ export default function StudentInvoiceDetailPage() {
     if (!amount || amount <= 0) { toast.error('Nothing to pay'); return; }
     setPaying(true);
     try {
-      const callback_url = `https://admin.futurelabs.ng/student/invoices/${id}/payment-callback`;
+      const callback_url = `${window.location.origin}/student/invoices/${id}/payment-callback`;
       const { data, error } = await supabase.functions.invoke('paystack-init', {
         body: { invoice_id: id, installment_id: installment_id || null, amount, callback_url },
       });
@@ -143,7 +144,7 @@ export default function StudentInvoiceDetailPage() {
   };
 
   const copyAccount = () => {
-    navigator.clipboard.writeText('8288339819');
+    navigator.clipboard.writeText(PAYMENT_BANK.account);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -256,10 +257,10 @@ export default function StudentInvoiceDetailPage() {
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">Account number</span>
                     <button onClick={copyAccount} className="font-mono font-semibold flex items-center gap-2 hover:text-primary">
-                      8288339819 {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                      {PAYMENT_BANK.account} {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                     </button>
                   </div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Bank</span><span className="font-medium">Moniepoint MFB</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Bank</span><span className="font-medium">{PAYMENT_BANK.name}</span></div>
                 </div>
                 <p className="text-xs text-muted-foreground mt-3">After transferring, upload your receipt below. Your payment will be credited once verified by an admin.</p>
               </div>

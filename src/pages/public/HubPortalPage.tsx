@@ -9,8 +9,7 @@ import { GraduationCap, Loader2, ArrowRight, ShieldAlert } from 'lucide-react';
 export default function HubPortalPage() {
   const { hubSlug } = useParams<{ hubSlug: string }>();
   const navigate = useNavigate();
-  const { user, isAdmin, isSuperadmin: isSA, loading: authLoading } = useAuth();
-  const isSuperadmin = isSA || user?.email?.toLowerCase() === 'manassehudim@gmail.com';
+  const { user, isAdmin, isSuperadmin, loading: authLoading } = useAuth();
 
   const [hub, setHub] = useState<{ id: string; name: string; slug: string; plan: string } | null>(null);
   const [hubLoading, setHubLoading] = useState(true);

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 
 export interface LessonV2 {
@@ -83,7 +84,7 @@ export function useCurriculumV2(classroomId: string) {
         .rpc('get_classroom_curricula', { p_classroom_id: classroomId });
 
       if (error) {
-        console.error('useCurriculumV2 fetchAll error:', error);
+        toast.error(`Could not load curriculum: ${error.message}`);
         setFetchError(error.message);
         return;
       }

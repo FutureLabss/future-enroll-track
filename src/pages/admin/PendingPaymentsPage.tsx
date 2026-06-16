@@ -89,7 +89,7 @@ export default function PendingPaymentsPage() {
             extra: { amount_paid: Number(p.amount), payment_reference: reference, payment_method: 'bank_transfer' },
           },
         });
-      } catch (e) { console.error(e); }
+      } catch (_e) { }
 
       toast.success('Payment approved & recorded');
       fetchData();

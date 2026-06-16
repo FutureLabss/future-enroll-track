@@ -16,8 +16,7 @@ type Inst = { id?: string; amount: string; due_date: string; status: 'pending' |
 export default function EditInvoicePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isAdmin, user } = useAuth();
-  const isSuperadmin = user?.email?.toLowerCase() === 'manassehudim@gmail.com';
+  const { isAdmin, isSuperadmin } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [invoice, setInvoice] = useState<any>(null);

@@ -6,6 +6,10 @@ import { DataTable } from '@/components/shared/DataTable';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -268,11 +272,7 @@ export default function CohortDetailPage() {
     load();
   };
 
-  const deleteCohort = async () => {
-    const message = members.length > 0
-      ? `This cohort has ${members.length} student(s). Archive it instead unless you are sure. Delete permanently?`
-      : `Delete cohort "${cohort.cohort_label}"? This cannot be undone.`;
-    if (!confirm(message)) return;
+  const doDelete = async () => {
     const { error } = await supabase.from('cohorts').delete().eq('id', id!);
     if (error) { toast.error(error.message); return; }
     toast.success('Cohort deleted');
@@ -363,9 +363,29 @@ export default function CohortDetailPage() {
                 <RotateCcw className="h-4 w-4 mr-2" />Reactivate
               </Button>
             )}
-            <Button variant="destructive" size="sm" onClick={deleteCohort}>
-              <Trash2 className="h-4 w-4 mr-1.5" /> Delete
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm">
+                  <Trash2 className="h-4 w-4 mr-1.5" /> Delete
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Cohort?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {members.length > 0
+                      ? `This cohort has ${members.length} student(s). Archive it instead unless you are sure. This cannot be undone.`
+                      : `Delete cohort "${cohort.cohort_label}"? This cannot be undone.`}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={doDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         }
       />

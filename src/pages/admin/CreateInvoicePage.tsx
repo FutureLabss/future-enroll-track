@@ -159,8 +159,7 @@ export default function CreateInvoicePage() {
             invoice_id: invoice.id,
           },
         });
-      } catch (notifErr) {
-        console.error('Notification failed:', notifErr);
+      } catch (_notifErr) {
       }
 
       toast.success(`Invoice ${invoice.invoice_number} created!`);

@@ -9,12 +9,17 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { Send, Users } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export default function BulkEmailPage() {
   const [programs, setPrograms] = useState<any[]>([]);
   const [cohorts, setCohorts] = useState<any[]>([]);
   const [recipientCount, setRecipientCount] = useState(0);
   const [sending, setSending] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
@@ -52,7 +57,7 @@ export default function BulkEmailPage() {
     });
   }, [filters]);
 
-  const handleSend = async () => {
+  const handleSendClick = () => {
     if (!subject.trim() || !message.trim()) {
       toast.error('Subject and message are required');
       return;
@@ -61,8 +66,10 @@ export default function BulkEmailPage() {
       toast.error('No recipients match these filters');
       return;
     }
-    if (!confirm(`Send "${subject}" to ${recipientCount} recipient(s)?`)) return;
+    setConfirmOpen(true);
+  };
 
+  const doSend = async () => {
     setSending(true);
     try {
       const payload = {
@@ -78,9 +85,7 @@ export default function BulkEmailPage() {
       const { data, error } = await supabase.functions.invoke('send-bulk-email', { body: payload });
       if (error) throw error;
       toast.success(`Sent ${data.sent} email${data.sent === 1 ? '' : 's'}${data.failed ? ` · ${data.failed} failed` : ''}`);
-      if (data.failed && data.errors?.length) {
-        console.error('Failed emails:', data.errors);
-      }
+      if (data.failed) toast.error(`${data.failed} email(s) failed to send`);
       setSubject('');
       setMessage('');
     } catch (err: any) {
@@ -111,7 +116,7 @@ export default function BulkEmailPage() {
                 Available placeholders: <code className="text-foreground">{'{{name}}'}</code>, <code className="text-foreground">{'{{outstanding}}'}</code>
               </p>
             </div>
-            <Button onClick={handleSend} disabled={sending} size="lg">
+            <Button onClick={handleSendClick} disabled={sending} size="lg">
               <Send className="h-4 w-4 mr-2" />
               {sending ? 'Sending…' : `Send to ${recipientCount}`}
             </Button>
@@ -177,5 +182,22 @@ export default function BulkEmailPage() {
         </Card>
       </div>
     </div>
+
+    <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Send Bulk Email?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Send "<strong>{subject}</strong>" to {recipientCount} recipient{recipientCount === 1 ? '' : 's'}? This cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={doSend}>
+            <Send className="h-4 w-4 mr-1.5" /> Send
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

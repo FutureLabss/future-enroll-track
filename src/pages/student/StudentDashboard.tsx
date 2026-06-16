@@ -40,14 +40,10 @@ const withTimeout = async <T,>(request: PromiseLike<T>, fallback: T, label: stri
     return await Promise.race([
       Promise.resolve(request),
       new Promise<T>((resolve) => {
-        timer = setTimeout(() => {
-          console.warn(`Student dashboard request timed out: ${label}`);
-          resolve(fallback);
-        }, 10000);
+        timer = setTimeout(() => resolve(fallback), 10000);
       }),
     ]);
-  } catch (error) {
-    console.warn(`Student dashboard request failed: ${label}`, error);
+  } catch (_error) {
     return fallback;
   } finally {
     if (timer) clearTimeout(timer);
@@ -234,8 +230,7 @@ export default function StudentDashboard() {
         } else {
           setProgress(null);
         }
-      } catch (error) {
-        console.warn('Student dashboard failed to load', error);
+      } catch (_error) {
         setProgress(null);
       } finally {
         setLoading(false);

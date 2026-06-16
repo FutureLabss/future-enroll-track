@@ -10,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, Wallet, Clock } from 'lucide-react';
+import { toast } from 'sonner';
 
 type Row = {
   invoice_id: string;
@@ -42,7 +43,7 @@ export default function OutstandingInvoicesPage() {
     setLoading(true);
     supabase.rpc('list_outstanding_invoices' as any, { p_only_overdue: false })
       .then(({ data, error }) => {
-        if (error) console.error(error);
+        if (error) toast.error(error.message);
         setRows((data as any) || []);
         setLoading(false);
       });

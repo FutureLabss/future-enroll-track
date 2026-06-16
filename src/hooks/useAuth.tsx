@@ -43,8 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsSuperadmin(!!saRes.data);
       const exp = memberRes.data?.demo_expires_at;
       setDemoExpiresAt(exp ? new Date(exp) : null);
-    } catch (e) {
-      console.log('Roles table might not exist yet');
+    } catch (_e) {
     }
   };
 
@@ -102,9 +101,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         session,
         roles,
         loading,
-        isAdmin: roles.includes('admin') || user?.email?.toLowerCase() === 'manassehudim@gmail.com',
+        isAdmin: roles.includes('admin') || isSuperadmin,
         isOrganization: roles.includes('organization'),
-        isStaff: roles.includes('staff') && !roles.includes('admin') && user?.email?.toLowerCase() !== 'manassehudim@gmail.com',
+        isStaff: roles.includes('staff') && !roles.includes('admin') && !isSuperadmin,
         isSuperadmin,
         isDemo: !!demoExpiresAt && demoExpiresAt > new Date(),
         demoExpiresAt,

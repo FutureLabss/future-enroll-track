@@ -140,8 +140,7 @@ export default function PaymentsPage() {
               },
             },
           });
-        } catch (notifErr) {
-          console.error('Notification failed:', notifErr);
+        } catch (_notifErr) {
         }
       }
 

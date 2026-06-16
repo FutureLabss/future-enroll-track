@@ -60,6 +60,7 @@ export function useCurriculumV2(classroomId: string) {
     const { data, error } = await supabase
       .rpc('get_curriculum_tree', { p_curriculum_id: curriculumId });
     if (error) { setFetchError(error.message); return []; }
+    if (!data || typeof data !== 'object') return [];
 
     const { tracks = [], modules = [], units = [] } = data as any;
     setFetchError(null);
@@ -98,7 +99,7 @@ export function useCurriculumV2(classroomId: string) {
     }
   }, [classroomId, fetchTree]);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => { fetchAll().catch(() => setLoading(false)); }, [fetchAll]);
 
   // ── Curriculum CRUD ──────────────────────────────────────────────────────────
   const createCurriculum = async (title: string, description?: string): Promise<string> => {

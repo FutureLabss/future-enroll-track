@@ -15,6 +15,10 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { DataTable } from '@/components/shared/DataTable';
 import { CurriculumTreeV2 } from '@/components/classroom/CurriculumTreeV2';
 import { AutoScheduleWizard } from '@/components/classroom/AutoScheduleWizard';
@@ -38,7 +42,7 @@ const STATUS_COLOURS: Record<string, string> = {
   cancelled: 'bg-destructive/15 text-destructive border-destructive/30',
 };
 
-const emptyAssignmentForm = { title: '', instructions: '', due_date: '', cohort_id: '', status: 'draft' };
+const emptyAssignmentForm = { title: '', instructions: '', due_date: '', cohort_id: '', status: 'draft', max_score: '' };
 
 const toDateTimeLocal = (value?: string | null) => {
   if (!value) return '';
@@ -603,6 +607,7 @@ export default function ClassroomDetailPage() {
   const [sendingReminders, setSendingReminders] = useState(false);
   const [autoScheduleOpen, setAutoScheduleOpen] = useState(false);
   const [assignmentModal, setAssignmentModal] = useState(false);
+  const [pendingDeleteAssignment, setPendingDeleteAssignment] = useState<any>(null);
   const [assignmentEditing, setAssignmentEditing] = useState<any>(null);
   const [assignmentForm, setAssignmentForm] = useState(emptyAssignmentForm);
   const [savingAssignment, setSavingAssignment] = useState(false);
@@ -627,6 +632,7 @@ export default function ClassroomDetailPage() {
       due_date: toDateTimeLocal(assignment.due_date),
       cohort_id: assignment.cohort_id || '',
       status: assignment.status || 'draft',
+      max_score: assignment.max_score != null ? String(assignment.max_score) : '',
     });
     setAssignmentModal(true);
   };
@@ -646,6 +652,7 @@ export default function ClassroomDetailPage() {
       due_date: assignmentForm.due_date || null,
       cohort_id: assignmentForm.cohort_id || null,
       status: assignmentForm.status,
+      max_score: assignmentForm.max_score ? Number(assignmentForm.max_score) : null,
     };
 
     try {
@@ -664,13 +671,19 @@ export default function ClassroomDetailPage() {
     }
   };
 
-  const handleDeleteAssignment = async (assignment: any) => {
-    if (!confirm(`Delete assignment "${assignment.title}"? This will also remove related resources and submissions.`)) return;
+  const handleDeleteAssignment = (assignment: any) => {
+    setPendingDeleteAssignment(assignment);
+  };
+
+  const doDeleteAssignment = async () => {
+    if (!pendingDeleteAssignment) return;
     try {
-      await deleteAssignment(assignment.id);
+      await deleteAssignment(pendingDeleteAssignment.id);
       toast.success('Assignment deleted');
     } catch (e: any) {
       toast.error(e.message);
+    } finally {
+      setPendingDeleteAssignment(null);
     }
   };
 
@@ -1299,19 +1312,30 @@ export default function ClassroomDetailPage() {
                 />
               </div>
               <div>
-                <Label>Cohort</Label>
-                <Select value={assignmentForm.cohort_id} onValueChange={v => setAssignmentForm(f => ({ ...f, cohort_id: v === '__all__' ? '' : v }))}>
-                  <SelectTrigger className="mt-1.5">
-                    <SelectValue placeholder="All cohorts" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all__">All cohorts</SelectItem>
-                    {cohorts.map((c: any) => (
-                      <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Total Score</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={assignmentForm.max_score}
+                  onChange={e => setAssignmentForm(f => ({ ...f, max_score: e.target.value }))}
+                  placeholder="e.g. 100"
+                  className="mt-1.5"
+                />
               </div>
+            </div>
+            <div>
+              <Label>Cohort</Label>
+              <Select value={assignmentForm.cohort_id} onValueChange={v => setAssignmentForm(f => ({ ...f, cohort_id: v === '__all__' ? '' : v }))}>
+                <SelectTrigger className="mt-1.5">
+                  <SelectValue placeholder="All cohorts" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">All cohorts</SelectItem>
+                  {cohorts.map((c: any) => (
+                    <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
               <div>
@@ -1374,7 +1398,7 @@ export default function ClassroomDetailPage() {
 
       {/* Attendance drill-down modal */}
       <Dialog open={sessionModal.open} onOpenChange={o => setSessionModal({ open: o })}>
-        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               Session: <span className="font-mono tracking-widest">{sessionModal.session?.code}</span>
@@ -1386,6 +1410,23 @@ export default function ClassroomDetailPage() {
           {sessionModal.session && <AttendanceDrillDown session={sessionModal.session} />}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!pendingDeleteAssignment} onOpenChange={o => { if (!o) setPendingDeleteAssignment(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Assignment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Delete &quot;{pendingDeleteAssignment?.title}&quot;? This will also remove related resources and submissions.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={doDeleteAssignment} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

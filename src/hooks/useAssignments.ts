@@ -7,7 +7,7 @@ type UseAssignmentsOptions = {
   enabled?: boolean;
 };
 
-export const ASSIGNMENT_COLUMNS = 'id, classroom_id, cohort_id, unit_id, lesson_id, curriculum_lesson_id, title, instructions, due_date, status, created_by, created_at, updated_at';
+export const ASSIGNMENT_COLUMNS = 'id, classroom_id, cohort_id, unit_id, lesson_id, curriculum_lesson_id, title, instructions, due_date, max_score, status, created_by, created_at, updated_at';
 
 export type AssignmentSubmissionPayload = {
   text?: string;
@@ -37,7 +37,7 @@ export async function enrichStudentAssignments(rows: any[], studentId: string) {
       : Promise.resolve({ data: [], error: null }),
     supabase
       .from('assignment_submissions')
-      .select('id, assignment_id, status, submitted_at, file_url, image_url, link_url, submission_text, grade, feedback, graded_at')
+      .select('id, assignment_id, status, submitted_at, file_url, image_url, link_url, submission_text, grade, score, feedback, graded_at')
       .eq('student_id', studentId)
       .in('assignment_id', assignmentIds),
     supabase
@@ -243,10 +243,10 @@ export function useSubmissions(assignmentId: string) {
     await fetchSubmissions();
   };
 
-  const gradeSubmission = async (submissionId: string, grade: string, feedback: string) => {
+  const gradeSubmission = async (submissionId: string, grade: string, feedback: string, score?: number | null) => {
     const { data: { user } } = await supabase.auth.getUser();
     const { error } = await supabase.from('assignment_submissions')
-      .update({ grade, feedback, status: 'graded', graded_by: user?.id, graded_at: new Date().toISOString() })
+      .update({ grade, feedback, score: score ?? null, status: 'graded', graded_by: user?.id, graded_at: new Date().toISOString() })
       .eq('id', submissionId);
     if (error) throw error;
     await fetchSubmissions();

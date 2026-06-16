@@ -20,7 +20,7 @@ import { StudentCurriculumView } from '@/components/classroom/StudentCurriculumV
 import {
   Calendar, ClipboardList, BookOpen, BarChart2, Loader2,
   CheckCircle2, Clock, AlertCircle, MapPin, ChevronDown, ChevronUp, LayoutList,
-  Users, Video, ExternalLink, FileText, Send, ShieldCheck,
+  Users, Video, ExternalLink, Send, ShieldCheck,
 } from 'lucide-react';
 
 const ATTENDANCE_STATUS_COLOURS: Record<string, string> = {
@@ -29,6 +29,138 @@ const ATTENDANCE_STATUS_COLOURS: Record<string, string> = {
   absent: 'bg-destructive/15 text-destructive border-destructive/30',
   invalid: 'bg-muted text-muted-foreground border-muted',
 };
+
+function LessonCard({ lesson, today }: { lesson: any; today: string }) {
+  return (
+    <div className={`glass-card rounded-xl p-4 flex items-center justify-between border ${lesson.lesson_date === today ? 'border-primary/40 bg-primary/5' : 'border-border'}`}>
+      <div>
+        <div className="flex items-center gap-2">
+          {lesson.lesson_date === today && <span className="text-xs font-semibold text-primary uppercase tracking-wide">Today</span>}
+          <p className="font-semibold">{lesson.title}</p>
+        </div>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          {new Date(lesson.lesson_date + 'T00:00:00').toLocaleDateString('en-NG', { weekday: 'short', month: 'short', day: 'numeric' })}
+          {' · '}
+          {lesson.start_time} – {lesson.end_time}
+        </p>
+        {lesson.location && <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1"><MapPin className="h-3 w-3" />{lesson.location}</p>}
+      </div>
+      <div className="flex flex-col items-end gap-1">
+        {lesson.cohorts && <Badge variant="outline" className="text-xs">{lesson.cohorts.cohort_label}</Badge>}
+        {lesson.status === 'in_progress' && <Badge className="text-xs bg-warning/15 text-warning border-warning/30">In Progress</Badge>}
+      </div>
+    </div>
+  );
+}
+
+function ScheduleCard({ s, today }: { s: any; today: string }) {
+  return (
+    <div className={`rounded-xl p-4 flex items-center justify-between border ${s.scheduled_date === today ? 'border-primary/40 bg-primary/5' : 'border-border'}`}>
+      <div>
+        <div className="flex items-center gap-2">
+          {s.scheduled_date === today && <span className="text-xs font-semibold text-primary uppercase tracking-wide">Today</span>}
+          <p className="font-semibold">{s.lessons?.title || s.title || s.modules?.title || 'Session'}</p>
+          {s.status && <Badge variant="outline" className="text-xs capitalize">{s.status}</Badge>}
+        </div>
+        {s.lessons?.units?.title && <p className="text-xs text-muted-foreground mt-1">Unit: {s.lessons.units.title}</p>}
+        <p className="text-sm text-muted-foreground mt-0.5">
+          {new Date(s.scheduled_date + 'T00:00:00').toLocaleDateString('en-NG', { weekday: 'short', month: 'short', day: 'numeric' })}
+          {' · '}{s.start_time} – {s.end_time}
+        </p>
+        {s.location && <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1"><MapPin className="h-3 w-3" />{s.location}</p>}
+        {s.meeting_link && (
+          <Button asChild size="sm" variant="outline" className="mt-3 h-8">
+            <a href={s.meeting_link} target="_blank" rel="noreferrer">
+              <Video className="mr-1.5 h-3.5 w-3.5" />
+              Join online
+            </a>
+          </Button>
+        )}
+      </div>
+      <div className="flex flex-col items-end gap-1">
+        {s.cohorts && <Badge variant="outline" className="text-xs">{s.cohorts.cohort_label}</Badge>}
+        {s.staff && <span className="text-xs text-muted-foreground">{s.staff.full_name}</span>}
+      </div>
+    </div>
+  );
+}
+
+function ScheduleTabContent({
+  todaySchedules, upcomingSchedules, pastSchedules,
+  visibleSchedules, visibleLessons, todayLessons, upcomingLessons, today,
+}: {
+  todaySchedules: any[]; upcomingSchedules: any[]; pastSchedules: any[];
+  visibleSchedules: any[]; visibleLessons: any[];
+  todayLessons: any[]; upcomingLessons: any[]; today: string;
+}) {
+  const [showPast, setShowPast] = useState(false);
+
+  if (visibleSchedules.length === 0 && visibleLessons.length === 0) {
+    return <p className="text-center text-muted-foreground py-10">No sessions scheduled yet</p>;
+  }
+
+  return (
+    <div className="space-y-6">
+      {todaySchedules.length > 0 && (
+        <div>
+          <h3 className="font-semibold text-primary mb-3">Today</h3>
+          <div className="space-y-3">{todaySchedules.map(s => <ScheduleCard key={s.id} s={s} today={today} />)}</div>
+        </div>
+      )}
+      <div>
+        <h3 className="font-semibold mb-3">
+          Upcoming {upcomingSchedules.length > 0 && <span className="text-muted-foreground font-normal ml-1">({upcomingSchedules.length})</span>}
+        </h3>
+        {upcomingSchedules.length > 0
+          ? <div className="space-y-3">{upcomingSchedules.map(s => <ScheduleCard key={s.id} s={s} today={today} />)}</div>
+          : <p className="text-sm text-muted-foreground">No upcoming sessions</p>}
+      </div>
+      {pastSchedules.length > 0 && (
+        <div>
+          <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-3" onClick={() => setShowPast(v => !v)}>
+            {showPast ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            Past sessions ({pastSchedules.length})
+          </button>
+          {showPast && <div className="space-y-3 opacity-70">{[...pastSchedules].reverse().map(s => <ScheduleCard key={s.id} s={s} today={today} />)}</div>}
+        </div>
+      )}
+      {visibleSchedules.length === 0 && visibleLessons.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground mb-1">Historical lessons</p>
+          {todayLessons.map(l => <LessonCard key={l.id} lesson={l} today={today} />)}
+          {upcomingLessons.map(l => <LessonCard key={l.id} lesson={l} today={today} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ProgressTab({ progress }: { progress: any }) {
+  if (!progress) {
+    return <p className="text-muted-foreground text-center py-10">No progress data yet — join a cohort to start tracking</p>;
+  }
+  return (
+    <div className="space-y-5 max-w-lg">
+      <div className="glass-card rounded-2xl p-6 space-y-5">
+        <h3 className="font-semibold">My Progress</h3>
+        <div>
+          <div className="flex justify-between text-sm mb-1.5">
+            <span>Attendance</span>
+            <span className="font-medium">{progress.lessons_attended}/{progress.total_lessons} ({progress.attendance_pct}%)</span>
+          </div>
+          <Progress value={progress.attendance_pct} className="h-2" />
+        </div>
+        <div>
+          <div className="flex justify-between text-sm mb-1.5">
+            <span>Assignments Submitted</span>
+            <span className="font-medium">{progress.assignments_submitted}/{progress.total_assignments} ({progress.assignment_pct}%)</span>
+          </div>
+          <Progress value={progress.assignment_pct} className="h-2" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function AttendanceTab({ classroomId, cohortId }: { classroomId: string; cohortId?: string }) {
   const { markAttendance } = useMarkAttendance();
@@ -139,7 +271,7 @@ function AttendanceTab({ classroomId, cohortId }: { classroomId: string; cohortI
         <div className="glass-card rounded-xl border border-border p-4">
           <p className="text-sm font-medium">Open Sessions</p>
           <p className="mt-2 text-2xl font-semibold">{pendingOpenSessions.length}</p>
-          <p className="text-xs text-muted-foreground">{pendingOpenSessions.length === 1 ? 'awaiting attendance' : 'awaiting attendance'}</p>
+          <p className="text-xs text-muted-foreground">awaiting attendance</p>
         </div>
       </div>
 
@@ -470,9 +602,14 @@ function AssignmentsTab({ classroomId, cohortId }: { classroomId: string; cohort
                 )}
               </div>
             )}
-            {sub?.grade && (
+            {(sub?.grade || sub?.score != null) && (
               <div className="mt-3 p-3 rounded-lg bg-muted/50 text-sm space-y-1">
-                <p><strong>Grade:</strong> {sub.grade}</p>
+                <div className="flex flex-wrap gap-3">
+                  {sub.score != null && (
+                    <p><strong>Score:</strong> {sub.score}{a.max_score != null ? ` / ${a.max_score}` : ''}</p>
+                  )}
+                  {sub.grade && <p><strong>Grade:</strong> {sub.grade}</p>}
+                </div>
                 {sub.feedback && <p className="text-muted-foreground">{sub.feedback}</p>}
               </div>
             )}
@@ -536,7 +673,6 @@ export default function StudentClassroomPage() {
   const [lessons, setLessons] = useState<any[]>([]);
   const [assignmentSummary, setAssignmentSummary] = useState({ pending: 0, overdue: 0 });
   const [loading, setLoading] = useState(true);
-  const [showPast, setShowPast] = useState(false);
   const { progress } = useStudentProgress(user?.id || '', cohortId);
   const { schedules } = useSchedules(id!);
 
@@ -602,27 +738,6 @@ export default function StudentClassroomPage() {
     ? new Date(`${date}T00:00:00`).toLocaleDateString('en-NG', { month: 'short', day: 'numeric', year: 'numeric' })
     : null;
 
-  const LessonCard = ({ lesson }: { lesson: any }) => (
-    <div className={`glass-card rounded-xl p-4 flex items-center justify-between border ${lesson.lesson_date === today ? 'border-primary/40 bg-primary/5' : 'border-border'}`}>
-      <div>
-        <div className="flex items-center gap-2">
-          {lesson.lesson_date === today && <span className="text-xs font-semibold text-primary uppercase tracking-wide">Today</span>}
-          <p className="font-semibold">{lesson.title}</p>
-        </div>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          {new Date(lesson.lesson_date + 'T00:00:00').toLocaleDateString('en-NG', { weekday: 'short', month: 'short', day: 'numeric' })}
-          {' · '}
-          {lesson.start_time} – {lesson.end_time}
-        </p>
-        {lesson.location && <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1"><MapPin className="h-3 w-3" />{lesson.location}</p>}
-      </div>
-      <div className="flex flex-col items-end gap-1">
-        {lesson.cohorts && <Badge variant="outline" className="text-xs">{lesson.cohorts.cohort_label}</Badge>}
-        {lesson.status === 'in_progress' && <Badge className="text-xs bg-warning/15 text-warning border-warning/30">In Progress</Badge>}
-      </div>
-    </div>
-  );
-
   return (
     <div>
       <PageHeader
@@ -636,25 +751,25 @@ export default function StudentClassroomPage() {
       <div className="mb-5 flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
         {cohortInfo ? (
           <>
-          <div className="flex flex-wrap items-center gap-2">
-            <Users className="h-4 w-4 text-primary" />
-            <span className="text-muted-foreground">Your cohort:</span>
-            <span className="font-medium text-primary">{cohortInfo.cohort_label}</span>
-            {cohortInfo.status && (
-              <Badge variant="outline" className="text-xs capitalize border-primary/30 text-primary/70">{cohortInfo.status}</Badge>
-            )}
-            {cohortInfo.scope_type && (
-              <Badge variant="secondary" className="text-xs capitalize">{cohortInfo.scope_type}</Badge>
-            )}
-          </div>
-          {(cohortInfo.start_date || cohortInfo.end_date || cohortInfo.capacity) && (
-            <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-              {(cohortInfo.start_date || cohortInfo.end_date) && (
-                <span>{formatDate(cohortInfo.start_date)}{cohortInfo.end_date ? ` - ${formatDate(cohortInfo.end_date)}` : ''}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <Users className="h-4 w-4 text-primary" />
+              <span className="text-muted-foreground">Your cohort:</span>
+              <span className="font-medium text-primary">{cohortInfo.cohort_label}</span>
+              {cohortInfo.status && (
+                <Badge variant="outline" className="text-xs capitalize border-primary/30 text-primary/70">{cohortInfo.status}</Badge>
               )}
-              {cohortInfo.capacity && <span>Capacity: {cohortInfo.capacity}</span>}
+              {cohortInfo.scope_type && (
+                <Badge variant="secondary" className="text-xs capitalize">{cohortInfo.scope_type}</Badge>
+              )}
             </div>
-          )}
+            {(cohortInfo.start_date || cohortInfo.end_date || cohortInfo.capacity) && (
+              <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                {(cohortInfo.start_date || cohortInfo.end_date) && (
+                  <span>{formatDate(cohortInfo.start_date)}{cohortInfo.end_date ? ` - ${formatDate(cohortInfo.end_date)}` : ''}</span>
+                )}
+                {cohortInfo.capacity && <span>Capacity: {cohortInfo.capacity}</span>}
+              </div>
+            )}
           </>
         ) : (
           <div className="flex flex-wrap items-center gap-2">
@@ -715,81 +830,6 @@ export default function StudentClassroomPage() {
           <TabsTrigger value="progress"><BarChart2 className="h-4 w-4 mr-1.5" />Progress</TabsTrigger>
         </TabsList>
 
-        {/* SCHEDULE */}
-        <TabsContent value="schedule">
-          <div className="space-y-6">
-            {(() => {
-              const ScheduleCard = ({ s }: { s: any }) => (
-                <div className={`rounded-xl p-4 flex items-center justify-between border ${s.scheduled_date === today ? 'border-primary/40 bg-primary/5' : 'border-border'}`}>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      {s.scheduled_date === today && <span className="text-xs font-semibold text-primary uppercase tracking-wide">Today</span>}
-                      <p className="font-semibold">{s.lessons?.title || s.title || s.modules?.title || 'Session'}</p>
-                      {s.status && <Badge variant="outline" className="text-xs capitalize">{s.status}</Badge>}
-                    </div>
-                    {s.lessons?.units?.title && <p className="text-xs text-muted-foreground mt-1">Unit: {s.lessons.units.title}</p>}
-                    <p className="text-sm text-muted-foreground mt-0.5">
-                      {new Date(s.scheduled_date + 'T00:00:00').toLocaleDateString('en-NG', { weekday: 'short', month: 'short', day: 'numeric' })}
-                      {' · '}{s.start_time} – {s.end_time}
-                    </p>
-                    {s.location && <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1"><MapPin className="h-3 w-3" />{s.location}</p>}
-                    {s.meeting_link && (
-                      <Button asChild size="sm" variant="outline" className="mt-3 h-8">
-                        <a href={s.meeting_link} target="_blank" rel="noreferrer">
-                          <Video className="mr-1.5 h-3.5 w-3.5" />
-                          Join online
-                        </a>
-                      </Button>
-                    )}
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    {s.cohorts && <Badge variant="outline" className="text-xs">{s.cohorts.cohort_label}</Badge>}
-                    {s.staff && <span className="text-xs text-muted-foreground">{s.staff.full_name}</span>}
-                  </div>
-                </div>
-              );
-
-              if (visibleSchedules.length === 0 && visibleLessons.length === 0) return (
-                <p className="text-center text-muted-foreground py-10">No sessions scheduled yet</p>
-              );
-
-              return (
-                <>
-                  {todaySchedules.length > 0 && (
-                    <div>
-                      <h3 className="font-semibold text-primary mb-3">Today</h3>
-                      <div className="space-y-3">{todaySchedules.map(s => <ScheduleCard key={s.id} s={s} />)}</div>
-                    </div>
-                  )}
-                  <div>
-                    <h3 className="font-semibold mb-3">Upcoming {upcomingSchedules.length > 0 && <span className="text-muted-foreground font-normal ml-1">({upcomingSchedules.length})</span>}</h3>
-                    {upcomingSchedules.length > 0
-                      ? <div className="space-y-3">{upcomingSchedules.map(s => <ScheduleCard key={s.id} s={s} />)}</div>
-                      : <p className="text-sm text-muted-foreground">No upcoming sessions</p>}
-                  </div>
-                  {pastSchedules.length > 0 && (
-                    <div>
-                      <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-3" onClick={() => setShowPast(v => !v)}>
-                        {showPast ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                        Past sessions ({pastSchedules.length})
-                      </button>
-                      {showPast && <div className="space-y-3 opacity-70">{[...pastSchedules].reverse().map(s => <ScheduleCard key={s.id} s={s} />)}</div>}
-                    </div>
-                  )}
-                  {visibleSchedules.length === 0 && visibleLessons.length > 0 && (
-                    <div className="space-y-3">
-                      <p className="text-xs text-muted-foreground mb-1">Historical lessons</p>
-                      {todayLessons.map(l => <LessonCard key={l.id} lesson={l} />)}
-                      {upcomingLessons.map(l => <LessonCard key={l.id} lesson={l} />)}
-                    </div>
-                  )}
-                </>
-              );
-            })()}
-          </div>
-        </TabsContent>
-
-        {/* CURRICULUM */}
         <TabsContent value="curriculum">
           <StudentCurriculumView
             classroomId={id!}
@@ -798,41 +838,29 @@ export default function StudentClassroomPage() {
           />
         </TabsContent>
 
-        {/* ATTENDANCE */}
+        <TabsContent value="schedule">
+          <ScheduleTabContent
+            todaySchedules={todaySchedules}
+            upcomingSchedules={upcomingSchedules}
+            pastSchedules={pastSchedules}
+            visibleSchedules={visibleSchedules}
+            visibleLessons={visibleLessons}
+            todayLessons={todayLessons}
+            upcomingLessons={upcomingLessons}
+            today={today}
+          />
+        </TabsContent>
+
         <TabsContent value="attendance">
           <AttendanceTab classroomId={id!} cohortId={cohortId} />
         </TabsContent>
 
-        {/* ASSIGNMENTS */}
         <TabsContent value="assignments">
           <AssignmentsTab classroomId={id!} cohortId={cohortId} />
         </TabsContent>
 
-        {/* PROGRESS */}
         <TabsContent value="progress">
-          {progress ? (
-            <div className="space-y-5 max-w-lg">
-              <div className="glass-card rounded-2xl p-6 space-y-5">
-                <h3 className="font-semibold">My Progress</h3>
-                <div>
-                  <div className="flex justify-between text-sm mb-1.5">
-                    <span>Attendance</span>
-                    <span className="font-medium">{progress.lessons_attended}/{progress.total_lessons} ({progress.attendance_pct}%)</span>
-                  </div>
-                  <Progress value={progress.attendance_pct} className="h-2" />
-                </div>
-                <div>
-                  <div className="flex justify-between text-sm mb-1.5">
-                    <span>Assignments Submitted</span>
-                    <span className="font-medium">{progress.assignments_submitted}/{progress.total_assignments} ({progress.assignment_pct}%)</span>
-                  </div>
-                  <Progress value={progress.assignment_pct} className="h-2" />
-                </div>
-              </div>
-            </div>
-          ) : (
-            <p className="text-muted-foreground text-center py-10">No progress data yet — join a cohort to start tracking</p>
-          )}
+          <ProgressTab progress={progress} />
         </TabsContent>
       </Tabs>
     </div>

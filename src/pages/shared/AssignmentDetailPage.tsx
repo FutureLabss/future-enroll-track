@@ -12,16 +12,17 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { ArrowLeft, BookOpen, Calendar, CheckCircle, ClipboardCheck, Loader2, Users } from 'lucide-react';
 
-function SubmissionList({ assignmentId }: { assignmentId: string }) {
+function SubmissionList({ assignmentId, canGrade, maxScore }: { assignmentId: string; canGrade: boolean; maxScore?: number | null }) {
   const { submissions, loading, gradeSubmission } = useSubmissions(assignmentId);
-  const [grading, setGrading] = useState<{ id: string; grade: string; feedback: string } | null>(null);
+  const [grading, setGrading] = useState<{ id: string; grade: string; feedback: string; score: string } | null>(null);
   const [saving, setSaving] = useState(false);
 
   const handleGrade = async () => {
     if (!grading) return;
     setSaving(true);
     try {
-      await gradeSubmission(grading.id, grading.grade, grading.feedback);
+      const scoreNum = grading.score.trim() ? Number(grading.score) : null;
+      await gradeSubmission(grading.id, grading.grade, grading.feedback, scoreNum);
       toast.success('Submission graded');
       setGrading(null);
     } catch (e: any) {
@@ -62,17 +63,36 @@ function SubmissionList({ assignmentId }: { assignmentId: string }) {
             </a>
           )}
 
-          {submission.grade && (
+          {(submission.grade || submission.score != null) && (
             <p className="mt-3 text-sm font-medium">
-              Grade: {submission.grade}{submission.feedback && <span className="text-muted-foreground"> · {submission.feedback}</span>}
+              {submission.score != null && <span>Score: {submission.score}</span>}
+              {submission.score != null && submission.grade && <span className="text-muted-foreground"> · </span>}
+              {submission.grade && <span>Grade: {submission.grade}</span>}
+              {submission.feedback && <span className="text-muted-foreground"> · {submission.feedback}</span>}
             </p>
           )}
 
-          {grading?.id === submission.id ? (
+          {canGrade && (grading?.id === submission.id ? (
             <div className="mt-3 grid gap-2">
-              <div>
-                <Label>Grade</Label>
-                <Input value={grading.grade} onChange={e => setGrading({ ...grading, grade: e.target.value })} placeholder="e.g. A, 85/100" className="mt-1.5" />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>Score{maxScore != null ? ` (out of ${maxScore})` : ''}</Label>
+                  <div className="flex items-center gap-1.5 mt-1.5">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={maxScore ?? undefined}
+                      value={grading.score}
+                      onChange={e => setGrading({ ...grading, score: e.target.value })}
+                      placeholder="e.g. 85"
+                    />
+                    {maxScore != null && <span className="text-sm text-muted-foreground whitespace-nowrap">/ {maxScore}</span>}
+                  </div>
+                </div>
+                <div>
+                  <Label>Grade</Label>
+                  <Input value={grading.grade} onChange={e => setGrading({ ...grading, grade: e.target.value })} placeholder="e.g. A, B+" className="mt-1.5" />
+                </div>
               </div>
               <div>
                 <Label>Feedback</Label>
@@ -84,10 +104,10 @@ function SubmissionList({ assignmentId }: { assignmentId: string }) {
               </div>
             </div>
           ) : (
-            <Button size="sm" variant="outline" className="mt-3" onClick={() => setGrading({ id: submission.id, grade: submission.grade || '', feedback: submission.feedback || '' })}>
+            <Button size="sm" variant="outline" className="mt-3" onClick={() => setGrading({ id: submission.id, grade: submission.grade || '', feedback: submission.feedback || '', score: submission.score != null ? String(submission.score) : '' })}>
               Grade
             </Button>
-          )}
+          ))}
         </div>
       ))}
       {submissions.length === 0 && <p className="text-center text-muted-foreground py-10">No submissions yet</p>}
@@ -98,7 +118,7 @@ function SubmissionList({ assignmentId }: { assignmentId: string }) {
 export default function AssignmentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isStaff } = useAuth();
   const [assignment, setAssignment] = useState<any>(null);
   const [permissions, setPermissions] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -180,7 +200,8 @@ export default function AssignmentDetailPage() {
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   if (!assignment) return <div className="text-center py-20 text-muted-foreground">Assignment not found or access denied.</div>;
 
-  const canManage = isAdmin || Boolean(permissions?.can_create_assignments);
+  const canViewSubmissions = isAdmin || isStaff;
+  const canGrade = isAdmin || Boolean(permissions?.can_create_assignments);
   const overdue = assignment.due_date && new Date(assignment.due_date) < new Date();
   const classroom = assignment.classrooms;
 
@@ -217,8 +238,8 @@ export default function AssignmentDetailPage() {
         </div>
         <div className="rounded-lg border border-border p-4">
           <CheckCircle className="h-5 w-5 text-primary mb-2" />
-          <p className="text-xs text-muted-foreground">Created</p>
-          <p className="font-medium">{new Date(assignment.created_at).toLocaleDateString()}</p>
+          <p className="text-xs text-muted-foreground">Total Score</p>
+          <p className="font-medium">{assignment.max_score != null ? assignment.max_score : '—'}</p>
         </div>
       </div>
 
@@ -231,15 +252,15 @@ export default function AssignmentDetailPage() {
         )}
       </div>
 
-      {canManage && (
+      {canViewSubmissions && (
         <div className="rounded-lg border border-border p-5">
           <div className="flex items-center justify-between gap-3 mb-4">
             <div>
               <h3 className="font-semibold flex items-center gap-2"><ClipboardCheck className="h-4 w-4" />Submissions</h3>
-              <p className="text-sm text-muted-foreground">Review and grade student work for this assignment.</p>
+              <p className="text-sm text-muted-foreground">Review{canGrade ? ' and grade' : ''} student work for this assignment.</p>
             </div>
           </div>
-          <SubmissionList assignmentId={assignment.id} />
+          <SubmissionList assignmentId={assignment.id} canGrade={canGrade} maxScore={assignment.max_score ?? null} />
         </div>
       )}
     </div>

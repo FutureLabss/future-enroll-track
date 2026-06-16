@@ -196,6 +196,11 @@ export function AutoScheduleWizard({ open, onClose, classroomId, classroomName, 
                     <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
                       <Loader2 className="h-4 w-4 animate-spin" />Loading curriculum...
                     </div>
+                  ) : curricula.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground text-center">
+                      No curriculum set up for this classroom yet.<br />
+                      Add a curriculum first, then come back to auto-schedule.
+                    </div>
                   ) : (
                     <div className="space-y-2">
                       <Select value={curriculumId} onValueChange={v => { setCurriculumId(v); setTrackId(''); setModuleId(''); }}>

@@ -16,6 +16,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { DataTable } from '@/components/shared/DataTable';
 import { CurriculumTreeV2 } from '@/components/classroom/CurriculumTreeV2';
 import { toast } from 'sonner';
@@ -36,7 +40,7 @@ const STATUS_COLOURS: Record<string, string> = {
 };
 
 const COHORT_STATUSES = ['upcoming', 'active', 'completed', 'archived'] as const;
-const emptyAssignmentForm = { title: '', instructions: '', due_date: '', cohort_id: '', unit_id: '', status: 'draft' };
+const emptyAssignmentForm = { title: '', instructions: '', due_date: '', cohort_id: '', unit_id: '', status: 'draft', max_score: '' };
 
 const toDateTimeLocal = (value?: string | null) => {
   if (!value) return '';
@@ -205,6 +209,7 @@ export default function ClassroomWorkspacePage() {
   const [assignForm, setAssignForm] = useState(emptyAssignmentForm);
   const [savingAssign, setSavingAssign] = useState(false);
   const [submissionsAssignment, setSubmissionsAssignment] = useState<any>(null);
+  const [pendingDeleteAssignment, setPendingDeleteAssignment] = useState<any>(null);
 
   // Cohort state
   const [cohortOpen, setCohortOpen] = useState(false);
@@ -253,7 +258,7 @@ export default function ClassroomWorkspacePage() {
       supabase.from('classroom_staff')
         .select('*, classrooms(*, programs(program_name)), classroom_permissions(*)')
         .eq('classroom_id', id).eq('user_id', user!.id).single(),
-      supabase.from('staff').select('id, full_name').eq('active', true),
+      supabase.from('staff').select('id, full_name'),
       supabase.rpc('get_classroom_students', { p_classroom_id: id }),
     ]);
     setClassroomData(csRes.data);
@@ -347,6 +352,7 @@ export default function ClassroomWorkspacePage() {
       cohort_id: assignment.cohort_id || '',
       unit_id: assignment.unit_id || '',
       status: assignment.status || 'draft',
+      max_score: assignment.max_score != null ? String(assignment.max_score) : '',
     });
     setAssignOpen(true);
   };
@@ -367,6 +373,7 @@ export default function ClassroomWorkspacePage() {
       cohort_id: assignForm.cohort_id || null,
       unit_id: assignForm.unit_id || null,
       status: assignForm.status,
+      max_score: assignForm.max_score ? Number(assignForm.max_score) : null,
     };
 
     try {
@@ -385,13 +392,19 @@ export default function ClassroomWorkspacePage() {
     }
   };
 
-  const handleDeleteAssignment = async (assignment: any) => {
-    if (!confirm(`Delete assignment "${assignment.title}"? This will also remove related resources and submissions.`)) return;
+  const handleDeleteAssignment = (assignment: any) => {
+    setPendingDeleteAssignment(assignment);
+  };
+
+  const doDeleteAssignment = async () => {
+    if (!pendingDeleteAssignment) return;
     try {
-      await deleteAssignment(assignment.id);
+      await deleteAssignment(pendingDeleteAssignment.id);
       toast.success('Assignment deleted');
     } catch (e: any) {
       toast.error(e.message);
+    } finally {
+      setPendingDeleteAssignment(null);
     }
   };
 
@@ -968,15 +981,19 @@ export default function ClassroomWorkspacePage() {
                       <div className="grid grid-cols-2 gap-3">
                         <div><Label>Due Date</Label><Input type="datetime-local" value={assignForm.due_date} onChange={e => setAssignForm({ ...assignForm, due_date: e.target.value })} className="mt-1.5" /></div>
                         <div>
-                          <Label>Cohort</Label>
-                          <Select value={assignForm.cohort_id || '__all__'} onValueChange={v => setAssignForm({ ...assignForm, cohort_id: v === '__all__' ? '' : v })}>
-                            <SelectTrigger className="mt-1.5"><SelectValue placeholder="All cohorts" /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="__all__">All cohorts</SelectItem>
-                              {cohorts.map(c => <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
+                          <Label>Total Score</Label>
+                          <Input type="number" min={1} value={assignForm.max_score} onChange={e => setAssignForm({ ...assignForm, max_score: e.target.value })} placeholder="e.g. 100" className="mt-1.5" />
                         </div>
+                      </div>
+                      <div>
+                        <Label>Cohort</Label>
+                        <Select value={assignForm.cohort_id || '__all__'} onValueChange={v => setAssignForm({ ...assignForm, cohort_id: v === '__all__' ? '' : v })}>
+                          <SelectTrigger className="mt-1.5"><SelectValue placeholder="All cohorts" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__all__">All cohorts</SelectItem>
+                            {cohorts.map(c => <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
                         <div>
@@ -1148,6 +1165,23 @@ export default function ClassroomWorkspacePage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!pendingDeleteAssignment} onOpenChange={o => { if (!o) setPendingDeleteAssignment(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Assignment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Delete &quot;{pendingDeleteAssignment?.title}&quot;? This will also remove related resources and submissions.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={doDeleteAssignment} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

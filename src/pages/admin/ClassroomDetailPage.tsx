@@ -376,10 +376,10 @@ function SwitchClassroomDialog({ student, fromClassroomId, programId, onClose, o
       {toClassroomId && (
         <div>
           <Label>Assign to Cohort <span className="text-muted-foreground font-normal">(optional)</span></Label>
-          <Select value={toCohortId} onValueChange={setToCohortId}>
+          <Select value={toCohortId || '__none__'} onValueChange={v => setToCohortId(v === '__none__' ? '' : v)}>
             <SelectTrigger className="mt-1.5"><SelectValue placeholder={cohorts.length ? 'Select cohort...' : 'No active cohorts'} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="">No cohort</SelectItem>
+              <SelectItem value="__none__">No cohort</SelectItem>
               {cohorts.map(c => <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>)}
             </SelectContent>
           </Select>

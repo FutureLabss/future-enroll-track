@@ -280,10 +280,10 @@ export function AutoScheduleWizard({ open, onClose, classroomId, classroomName, 
                 {cohorts.length > 0 && (
                   <div className="space-y-1.5">
                     <Label className="text-sm">Cohort <span className="font-normal text-muted-foreground">(optional)</span></Label>
-                    <Select value={cohortId} onValueChange={setCohortId}>
+                    <Select value={cohortId || '__all__'} onValueChange={v => setCohortId(v === '__all__' ? '' : v)}>
                       <SelectTrigger><SelectValue placeholder="All students" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All students</SelectItem>
+                        <SelectItem value="__all__">All students</SelectItem>
                         {cohorts.map(c => <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>)}
                       </SelectContent>
                     </Select>

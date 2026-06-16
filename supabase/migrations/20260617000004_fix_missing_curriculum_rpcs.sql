@@ -4,6 +4,9 @@
 -- =====================================================================
 
 -- 1. get_classroom_curricula — list curricula for a classroom
+DROP FUNCTION IF EXISTS public.get_classroom_curricula(uuid);
+DROP FUNCTION IF EXISTS public.get_curriculum_tree(uuid);
+
 CREATE OR REPLACE FUNCTION public.get_classroom_curricula(p_classroom_id uuid)
 RETURNS jsonb
 LANGUAGE sql

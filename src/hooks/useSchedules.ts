@@ -45,7 +45,7 @@ export async function enrichSchedules(rows: any[]): Promise<Schedule[]> {
       ? supabase.from('cohorts').select('id, cohort_label').in('id', cohortIds)
       : Promise.resolve({ data: [], error: null }),
     instructorIds.length
-      ? supabase.from('staff').select('id, full_name').in('id', instructorIds)
+      ? supabase.rpc('get_staff_names', { p_ids: instructorIds })
       : Promise.resolve({ data: [], error: null }),
   ]);
 

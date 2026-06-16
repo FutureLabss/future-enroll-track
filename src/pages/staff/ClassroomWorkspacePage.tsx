@@ -328,6 +328,48 @@ export default function ClassroomWorkspacePage() {
     }
   };
 
+  const handleOpenScheduleEdit = (r: any) => {
+    setScheduleForm({
+      title: r.title || '',
+      lesson_id: r.lesson_id || '',
+      module_id: r.module_id || '',
+      cohort_id: r.cohort_id || '',
+      instructor_id: r.instructor_id || '',
+      scheduled_date: r.scheduled_date || '',
+      start_time: r.start_time || '09:00',
+      end_time: r.end_time || '11:00',
+      location: r.location || '',
+      meeting_link: r.meeting_link || '',
+    });
+    setScheduleEditModal({ open: true, schedule: r });
+  };
+
+  const handleUpdateSchedule = async () => {
+    if (!scheduleForm.scheduled_date) { toast.error('Date required'); return; }
+    setSavingSchedule(true);
+    try {
+      await updateSchedule(scheduleEditModal.schedule.id, {
+        title: scheduleForm.title || null,
+        lesson_id: scheduleForm.lesson_id || null,
+        module_id: scheduleForm.module_id || null,
+        cohort_id: scheduleForm.cohort_id || null,
+        instructor_id: scheduleForm.instructor_id || null,
+        scheduled_date: scheduleForm.scheduled_date,
+        start_time: scheduleForm.start_time,
+        end_time: scheduleForm.end_time,
+        location: scheduleForm.location || undefined,
+        meeting_link: scheduleForm.meeting_link || undefined,
+      });
+      toast.success('Schedule updated');
+      setScheduleEditModal({ open: false });
+      setScheduleForm({ title: '', lesson_id: '', module_id: '', cohort_id: '', instructor_id: '', scheduled_date: '', start_time: '09:00', end_time: '11:00', location: '', meeting_link: '' });
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSavingSchedule(false);
+    }
+  };
+
   const handleScheduleStatus = async (scheduleId: string, status: 'scheduled' | 'completed' | 'cancelled') => {
     try {
       await updateSchedule(scheduleId, { status });
@@ -509,6 +551,9 @@ export default function ClassroomWorkspacePage() {
     )},
     { key: 'actions', header: '', render: (r: any) => (
       <div className="flex gap-1">
+        <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => handleOpenScheduleEdit(r)} title="Edit">
+          <Pencil className="h-4 w-4" />
+        </Button>
         {r.status === 'scheduled' && (
           <Button size="sm" variant="ghost" className="text-success h-7 px-2" onClick={() => handleScheduleStatus(r.id, 'completed')} title="Mark completed">
             <CheckCircle className="h-4 w-4" />
@@ -857,6 +902,72 @@ export default function ClassroomWorkspacePage() {
               </DialogContent>
             </Dialog>
           </div>
+          <Dialog open={scheduleEditModal.open} onOpenChange={(open) => setScheduleEditModal(open ? scheduleEditModal : { open: false })}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader><DialogTitle>Edit Session</DialogTitle></DialogHeader>
+              <div className="space-y-3 mt-2">
+                <div><Label>Session Title</Label><Input value={scheduleForm.title} onChange={e => setScheduleForm({ ...scheduleForm, title: e.target.value })} className="mt-1.5" placeholder="e.g. Intro to Variables" /></div>
+                {lessonOptions.length > 0 && (
+                  <div>
+                    <Label>Curriculum Lesson</Label>
+                    <Select
+                      value={scheduleForm.lesson_id}
+                      onValueChange={(v) => {
+                        const lesson = lessonOptions.find((item: any) => item.lesson_id === v);
+                        setScheduleForm({
+                          ...scheduleForm,
+                          lesson_id: v,
+                          module_id: lesson?.module_id || scheduleForm.module_id,
+                        });
+                      }}
+                    >
+                      <SelectTrigger className="mt-1.5"><SelectValue placeholder="Link to a v2 lesson" /></SelectTrigger>
+                      <SelectContent>
+                        {lessonOptions.map((lesson: any) => (
+                          <SelectItem key={lesson.lesson_id} value={lesson.lesson_id}>
+                            {lesson.lesson_title} - {lesson.unit_title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {scopeOptions.modules.length > 0 && (
+                  <div>
+                    <Label>Module (optional)</Label>
+                    <Select value={scheduleForm.module_id} onValueChange={v => setScheduleForm({ ...scheduleForm, module_id: v })}>
+                      <SelectTrigger className="mt-1.5"><SelectValue placeholder="Link to a module" /></SelectTrigger>
+                      <SelectContent>{scopeOptions.modules.map(m => <SelectItem key={m.id} value={m.id}>{m.title}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Cohort</Label>
+                    <Select value={scheduleForm.cohort_id} onValueChange={v => setScheduleForm({ ...scheduleForm, cohort_id: v })}>
+                      <SelectTrigger className="mt-1.5"><SelectValue placeholder="All cohorts" /></SelectTrigger>
+                      <SelectContent>{cohorts.map(c => <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Instructor</Label>
+                    <Select value={scheduleForm.instructor_id} onValueChange={v => setScheduleForm({ ...scheduleForm, instructor_id: v })}>
+                      <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select instructor" /></SelectTrigger>
+                      <SelectContent>{staffList.map(s => <SelectItem key={s.id} value={s.id}>{s.full_name}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div><Label>Date *</Label><Input type="date" value={scheduleForm.scheduled_date} onChange={e => setScheduleForm({ ...scheduleForm, scheduled_date: e.target.value })} className="mt-1.5" /></div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><Label>Start</Label><Input type="time" value={scheduleForm.start_time} onChange={e => setScheduleForm({ ...scheduleForm, start_time: e.target.value })} className="mt-1.5" /></div>
+                  <div><Label>End</Label><Input type="time" value={scheduleForm.end_time} onChange={e => setScheduleForm({ ...scheduleForm, end_time: e.target.value })} className="mt-1.5" /></div>
+                </div>
+                <div><Label>Location</Label><Input value={scheduleForm.location} onChange={e => setScheduleForm({ ...scheduleForm, location: e.target.value })} className="mt-1.5" placeholder="Physical location" /></div>
+                <div><Label>Meeting Link</Label><Input value={scheduleForm.meeting_link} onChange={e => setScheduleForm({ ...scheduleForm, meeting_link: e.target.value })} className="mt-1.5" placeholder="https://..." /></div>
+                <Button onClick={handleUpdateSchedule} disabled={savingSchedule} className="w-full">{savingSchedule ? 'Saving...' : 'Save Changes'}</Button>
+              </div>
+            </DialogContent>
+          </Dialog>
           <DataTable columns={scheduleColumns} data={schedules} emptyMessage="No sessions scheduled" />
         </TabsContent>
 

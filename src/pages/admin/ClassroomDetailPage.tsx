@@ -577,7 +577,7 @@ export default function ClassroomDetailPage() {
   const { cohorts, refetch: refetchCohorts } = useClassroomCohorts(id!);
   const { sessions } = useAttendance(id!);
   const { assignments, publishAssignment, createAssignment, updateAssignment, deleteAssignment } = useAssignments(id!);
-  const { schedules, refetch: refetchSchedules } = useSchedules(id!);
+  const { schedules, refetch: refetchSchedules, updateSchedule, deleteSchedule } = useSchedules(id!);
 
   const [staff, setStaff] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
@@ -601,6 +601,10 @@ export default function ClassroomDetailPage() {
   const [lessonEditModal, setLessonEditModal] = useState<{ open: boolean; lesson?: any }>({ open: false });
   const [lessonForm, setLessonForm] = useState<any>({});
   const [savingLesson, setSavingLesson] = useState(false);
+
+  const [scheduleEditModal, setScheduleEditModal] = useState<{ open: boolean; schedule?: any }>({ open: false });
+  const [scheduleForm, setScheduleForm] = useState<any>({});
+  const [savingSchedule, setSavingSchedule] = useState(false);
 
   const [sessionModal, setSessionModal] = useState<{ open: boolean; session?: any }>({ open: false });
   const [switchModal, setSwitchModal] = useState<{ open: boolean; student?: any }>({ open: false });
@@ -864,6 +868,53 @@ export default function ClassroomDetailPage() {
     loadAll();
   };
 
+  const openScheduleEdit = (schedule: any) => {
+    setScheduleForm({
+      title: schedule.title || '',
+      cohort_id: schedule.cohort_id || '',
+      instructor_id: schedule.instructor_id || '',
+      scheduled_date: schedule.scheduled_date,
+      start_time: schedule.start_time,
+      end_time: schedule.end_time,
+      location: schedule.location || '',
+      meeting_link: schedule.meeting_link || '',
+    });
+    setScheduleEditModal({ open: true, schedule });
+  };
+
+  const handleSaveSchedule = async () => {
+    const schedule = scheduleEditModal.schedule;
+    if (!schedule) return;
+    setSavingSchedule(true);
+    try {
+      await updateSchedule(schedule.id, {
+        title: scheduleForm.title || null,
+        cohort_id: scheduleForm.cohort_id || null,
+        instructor_id: scheduleForm.instructor_id || null,
+        scheduled_date: scheduleForm.scheduled_date,
+        start_time: scheduleForm.start_time,
+        end_time: scheduleForm.end_time,
+        location: scheduleForm.location || null,
+        meeting_link: scheduleForm.meeting_link || null,
+      });
+      toast.success('Schedule updated');
+      setScheduleEditModal({ open: false });
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSavingSchedule(false);
+    }
+  };
+
+  const handleDeleteSchedule = async (scheduleId: string) => {
+    try {
+      await deleteSchedule(scheduleId);
+      toast.success('Schedule deleted');
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
+
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
   if (!classroom) return <div className="text-center py-20 text-muted-foreground">Classroom not found.</div>;
 
@@ -947,6 +998,12 @@ export default function ClassroomDetailPage() {
     { key: 'cohort', header: 'Cohort', render: (r: any) => r.cohorts?.cohort_label || 'All' },
     { key: 'instructor', header: 'Instructor', render: (r: any) => r.staff?.full_name || '—' },
     { key: 'status', header: 'Status', render: (r: any) => <Badge variant="outline" className={`capitalize ${STATUS_COLOURS[r.status] || ''}`}>{r.status}</Badge> },
+    { key: 'actions', header: '', render: (r: any) => (
+      <div className="flex gap-1">
+        <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => openScheduleEdit(r)} title="Edit"><Pencil className="h-4 w-4" /></Button>
+        <Button size="sm" variant="ghost" className="text-destructive h-7 px-2" onClick={() => handleDeleteSchedule(r.id)} title="Delete"><Trash2 className="h-4 w-4" /></Button>
+      </div>
+    )},
   ];
 
   const cohortColumns = [
@@ -1392,6 +1449,40 @@ export default function ClassroomDetailPage() {
               <Button onClick={handleSaveLesson} disabled={savingLesson} className="flex-1">{savingLesson ? 'Saving...' : 'Update Lesson'}</Button>
               <Button variant="destructive" onClick={() => { handleDeleteLesson(lessonEditModal.lesson?.id); setLessonEditModal({ open: false }); }}>Delete</Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Schedule edit modal */}
+      <Dialog open={scheduleEditModal.open} onOpenChange={o => setScheduleEditModal({ open: o })}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Edit Session</DialogTitle></DialogHeader>
+          <div className="space-y-3 mt-2">
+            <div><Label>Session Title</Label><Input value={scheduleForm.title || ''} onChange={e => setScheduleForm({ ...scheduleForm, title: e.target.value })} className="mt-1.5" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Cohort</Label>
+                <Select value={scheduleForm.cohort_id || ''} onValueChange={v => setScheduleForm({ ...scheduleForm, cohort_id: v })}>
+                  <SelectTrigger className="mt-1.5"><SelectValue placeholder="All cohorts" /></SelectTrigger>
+                  <SelectContent>{cohorts.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Instructor</Label>
+                <Select value={scheduleForm.instructor_id || ''} onValueChange={v => setScheduleForm({ ...scheduleForm, instructor_id: v })}>
+                  <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select instructor" /></SelectTrigger>
+                  <SelectContent>{staffRoster.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.full_name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div><Label>Date</Label><Input type="date" value={scheduleForm.scheduled_date || ''} onChange={e => setScheduleForm({ ...scheduleForm, scheduled_date: e.target.value })} className="mt-1.5" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Start</Label><Input type="time" value={scheduleForm.start_time || ''} onChange={e => setScheduleForm({ ...scheduleForm, start_time: e.target.value })} className="mt-1.5" /></div>
+              <div><Label>End</Label><Input type="time" value={scheduleForm.end_time || ''} onChange={e => setScheduleForm({ ...scheduleForm, end_time: e.target.value })} className="mt-1.5" /></div>
+            </div>
+            <div><Label>Location</Label><Input value={scheduleForm.location || ''} onChange={e => setScheduleForm({ ...scheduleForm, location: e.target.value })} className="mt-1.5" /></div>
+            <div><Label>Meeting Link</Label><Input value={scheduleForm.meeting_link || ''} onChange={e => setScheduleForm({ ...scheduleForm, meeting_link: e.target.value })} className="mt-1.5" /></div>
+            <Button onClick={handleSaveSchedule} disabled={savingSchedule} className="w-full">{savingSchedule ? 'Saving...' : 'Save Changes'}</Button>
           </div>
         </DialogContent>
       </Dialog>

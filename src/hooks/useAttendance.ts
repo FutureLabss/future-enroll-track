@@ -114,7 +114,7 @@ export function useAttendanceSession(sessionId: string) {
       const [recordsRes, sessionRes] = await Promise.all([
         supabase
           .from('attendance_records')
-          .select('*, profiles:student_id(full_name, email)')
+          .select('*')
           .eq('session_id', sessionId)
           .order('marked_at'),
         supabase
@@ -123,17 +123,33 @@ export function useAttendanceSession(sessionId: string) {
           .eq('id', sessionId)
           .single(),
       ]);
-      const attended = recordsRes.data || [];
+      const rows = recordsRes.data || [];
+      const recordStudentIds = [...new Set(rows.map((r: any) => r.student_id).filter(Boolean))];
+      const { data: recordProfiles } = recordStudentIds.length
+        ? await supabase.from('profiles').select('user_id, full_name, email').in('user_id', recordStudentIds)
+        : { data: [] };
+      const recordProfilesById = new Map((recordProfiles || []).map((p: any) => [p.user_id, p]));
+      const attended = rows.map((r: any) => ({ ...r, profiles: recordProfilesById.get(r.student_id) || null }));
       setRecords(attended);
 
       const session = sessionRes.data;
       if (session) {
         const attendedIds = new Set(attended.map((r: any) => r.student_id));
-        let enrolledQuery = session.cohort_id
-          ? supabase.from('cohort_students').select('student_id, profiles:student_id(full_name, email)').eq('cohort_id', session.cohort_id)
-          : supabase.from('classroom_students').select('student_id, profiles:student_id(full_name, email)').eq('classroom_id', session.classroom_id);
+        const enrolledQuery = session.cohort_id
+          ? supabase.from('cohort_students').select('student_id').eq('cohort_id', session.cohort_id)
+          : supabase.from('classroom_students').select('student_id').eq('classroom_id', session.classroom_id);
         const { data: enrolled } = await enrolledQuery;
-        setAbsentStudents((enrolled || []).filter((s: any) => !attendedIds.has(s.student_id)));
+        const enrolledRows = enrolled || [];
+        const enrolledIds = [...new Set(enrolledRows.map((s: any) => s.student_id).filter(Boolean))];
+        const { data: enrolledProfiles } = enrolledIds.length
+          ? await supabase.from('profiles').select('user_id, full_name, email').in('user_id', enrolledIds)
+          : { data: [] };
+        const enrolledProfilesById = new Map((enrolledProfiles || []).map((p: any) => [p.user_id, p]));
+        setAbsentStudents(
+          enrolledRows
+            .filter((s: any) => !attendedIds.has(s.student_id))
+            .map((s: any) => ({ ...s, profiles: enrolledProfilesById.get(s.student_id) || null }))
+        );
       }
       setLoading(false);
     };
@@ -167,14 +183,21 @@ export function useAttendanceReport(sessionId: string) {
 
   useEffect(() => {
     if (!sessionId) return;
-    supabase
-      .from('attendance_records')
-      .select('*, profiles:student_id(full_name, email)')
-      .eq('session_id', sessionId)
-      .then(({ data }) => {
-        setRecords(data || []);
-        setLoading(false);
-      });
+    const load = async () => {
+      const { data } = await supabase
+        .from('attendance_records')
+        .select('*')
+        .eq('session_id', sessionId);
+      const rows = data || [];
+      const studentIds = [...new Set(rows.map((r: any) => r.student_id).filter(Boolean))];
+      const { data: profileRows } = studentIds.length
+        ? await supabase.from('profiles').select('user_id, full_name, email').in('user_id', studentIds)
+        : { data: [] };
+      const profilesById = new Map((profileRows || []).map((p: any) => [p.user_id, p]));
+      setRecords(rows.map((r: any) => ({ ...r, profiles: profilesById.get(r.student_id) || null })));
+      setLoading(false);
+    };
+    load();
   }, [sessionId]);
 
   return { records, loading };

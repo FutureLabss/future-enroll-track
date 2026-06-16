@@ -143,7 +143,7 @@ export function AutoScheduleWizard({ open, onClose, classroomId, classroomName, 
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl overflow-y-auto" style={{ maxHeight: '90vh' }}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CalendarDays className="h-5 w-5" />
@@ -187,7 +187,7 @@ export function AutoScheduleWizard({ open, onClose, classroomId, classroomName, 
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-[1fr_1fr] gap-6 pt-1">
+            <div className="grid grid-cols-2 gap-6 pt-1">
               {/* Form */}
               <div className="space-y-4">
                 <div className="space-y-2">

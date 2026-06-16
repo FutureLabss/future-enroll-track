@@ -208,10 +208,16 @@ export function useSubmissions(assignmentId: string) {
   const fetchSubmissions = async () => {
     const { data } = await supabase
       .from('assignment_submissions')
-      .select('*, profiles:student_id(full_name, email)')
+      .select('*')
       .eq('assignment_id', assignmentId)
       .order('submitted_at', { ascending: false });
-    setSubmissions(data || []);
+    const rows = data || [];
+    const studentIds = [...new Set(rows.map((r: any) => r.student_id).filter(Boolean))];
+    const { data: profileRows } = studentIds.length
+      ? await supabase.from('profiles').select('user_id, full_name, email').in('user_id', studentIds)
+      : { data: [] };
+    const profilesById = new Map((profileRows || []).map((p: any) => [p.user_id, p]));
+    setSubmissions(rows.map((r: any) => ({ ...r, profiles: profilesById.get(r.student_id) || null })));
     setLoading(false);
   };
 

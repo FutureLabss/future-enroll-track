@@ -138,6 +138,7 @@ export default function ManageAdminsPage() {
   };
 
   return (
+    <>
     <div className="space-y-6">
       <PageHeader
         title="Manage Admins"
@@ -268,5 +269,6 @@ export default function ManageAdminsPage() {
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+    </>
   );
 }

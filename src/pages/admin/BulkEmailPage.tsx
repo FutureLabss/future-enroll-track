@@ -96,6 +96,7 @@ export default function BulkEmailPage() {
   };
 
   return (
+    <>
     <div>
       <PageHeader title="Bulk Email" description="Send announcements to enrolled students" />
 
@@ -199,5 +200,6 @@ export default function BulkEmailPage() {
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+    </>
   );
 }

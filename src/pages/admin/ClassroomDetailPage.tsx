@@ -775,18 +775,22 @@ export default function ClassroomDetailPage() {
   };
 
   const loadAll = async () => {
-    const [staffRes, lessonsRes, rosterRes] = await Promise.all([
+    const [clsRes, staffRes, lessonsRes, rosterRes] = await Promise.all([
+      supabase.from('classrooms').select('hub_id').eq('id', id!).single(),
       supabase.from('classroom_staff')
         .select('*, staff(full_name, email, role_title), classroom_permissions(*)')
         .eq('classroom_id', id).eq('status', 'active'),
       supabase.from('old_lessons')
         .select('*, staff:tutor_id(full_name), cohorts(cohort_label)')
         .eq('classroom_id', id).order('lesson_date', { ascending: false }),
-      supabase.from('staff').select('id, full_name, role_title, email, program_id').eq('active', true),
+      supabase.from('staff').select('id, full_name, role_title, email, program_id, hub_id').eq('active', true),
     ]);
+    const hubId = (clsRes.data as any)?.hub_id;
     setStaff(staffRes.data || []);
     setLessons(lessonsRes.data || []);
-    setStaffRoster(rosterRes.data || []);
+    setStaffRoster(hubId
+      ? (rosterRes.data || []).filter((s: any) => s.hub_id === hubId)
+      : (rosterRes.data || []));
   };
 
   const handleInvite = async () => {

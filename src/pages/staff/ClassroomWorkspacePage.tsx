@@ -24,10 +24,11 @@ import { DataTable } from '@/components/shared/DataTable';
 import { CurriculumTreeV2 } from '@/components/classroom/CurriculumTreeV2';
 import { toast } from 'sonner';
 import {
-  Calendar, ClipboardList, Users, BookOpen, Plus, Radio, Clock, Loader2,
+  Calendar, CalendarPlus, ClipboardList, Users, BookOpen, Plus, Radio, Clock, Loader2,
   LayoutList, Layers, PlayCircle, CheckCircle, XCircle, Pencil, Eye, RefreshCw,
-  UserPlus, UserMinus, UserCheck, Trash2,
+  UserPlus, UserMinus, UserCheck, Trash2, Bell,
 } from 'lucide-react';
+import { downloadICS } from '@/lib/ics';
 
 const STATUS_COLOURS: Record<string, string> = {
   upcoming: 'bg-blue-500/15 text-blue-600 border-blue-500/30',
@@ -50,8 +51,27 @@ const toDateTimeLocal = (value?: string | null) => {
   return localDate.toISOString().slice(0, 16);
 };
 
-function AttendanceDrillDown({ session }: { session: any }) {
-  const { records, absentStudents, loading } = useAttendanceSession(session.id);
+function AttendanceDrillDown({ session, canMark }: { session: any; canMark?: boolean }) {
+  const { records, absentStudents, loading, refetch } = useAttendanceSession(session.id);
+  const [marking, setMarking] = useState<string | null>(null);
+
+  const handleManualMark = async (studentId: string, status: string) => {
+    setMarking(`${studentId}-${status}`);
+    try {
+      const { error } = await supabase.rpc('staff_mark_attendance_manual', {
+        p_session_id: session.id,
+        p_student_id: studentId,
+        p_status: status,
+      });
+      if (error) throw error;
+      toast.success(`Marked ${status}`);
+      await refetch();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setMarking(null);
+    }
+  };
 
   if (loading) return <div className="flex justify-center py-8"><Loader2 className="animate-spin h-6 w-6 text-primary" /></div>;
 
@@ -99,8 +119,30 @@ function AttendanceDrillDown({ session }: { session: any }) {
           <div className="space-y-1.5">
             {absentStudents.map((s: any) => (
               <div key={s.student_id} className="flex items-center justify-between rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm">
-                <span className="font-medium">{s.profiles?.full_name || '—'}</span>
-                <span className="text-xs text-muted-foreground">{s.profiles?.email}</span>
+                <div>
+                  <span className="font-medium">{s.profiles?.full_name || '—'}</span>
+                  <span className="text-xs text-muted-foreground">{s.profiles?.email}</span>
+                </div>
+                {canMark && (
+                  <div className="flex gap-1.5">
+                    <Button
+                      size="sm" variant="outline"
+                      className="h-7 text-xs text-success border-success/40 hover:bg-success/10"
+                      disabled={!!marking}
+                      onClick={() => handleManualMark(s.student_id, 'present')}
+                    >
+                      {marking === `${s.student_id}-present` ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Mark Present'}
+                    </Button>
+                    <Button
+                      size="sm" variant="outline"
+                      className="h-7 text-xs text-warning border-warning/40 hover:bg-warning/10"
+                      disabled={!!marking}
+                      onClick={() => handleManualMark(s.student_id, 'excused')}
+                    >
+                      {marking === `${s.student_id}-excused` ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Excused'}
+                    </Button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -116,14 +158,15 @@ function AttendanceDrillDown({ session }: { session: any }) {
 
 function SubmissionsModal({ assignment }: { assignment: any }) {
   const { submissions, loading, gradeSubmission } = useSubmissions(assignment.id);
-  const [grading, setGrading] = useState<{ id: string; grade: string; feedback: string } | null>(null);
+  const [grading, setGrading] = useState<{ id: string; grade: string; feedback: string; score: string } | null>(null);
   const [saving, setSaving] = useState(false);
 
   const handleGrade = async () => {
     if (!grading) return;
     setSaving(true);
     try {
-      await gradeSubmission(grading.id, grading.grade, grading.feedback);
+      const scoreNum = grading.score.trim() ? Number(grading.score) : null;
+      await gradeSubmission(grading.id, grading.grade, grading.feedback, scoreNum);
       toast.success('Graded');
       setGrading(null);
     } catch (e: any) {
@@ -153,6 +196,7 @@ function SubmissionsModal({ assignment }: { assignment: any }) {
             grading?.id === sub.id ? (
               <div className="space-y-2 pt-1">
                 <Input placeholder="Grade (e.g. A, 85/100)" value={grading.grade} onChange={e => setGrading({ ...grading, grade: e.target.value })} />
+                <Input placeholder="Score (numeric, optional)" type="number" value={grading.score} onChange={e => setGrading({ ...grading, score: e.target.value })} />
                 <Textarea placeholder="Feedback (optional)" value={grading.feedback} onChange={e => setGrading({ ...grading, feedback: e.target.value })} rows={2} />
                 <div className="flex gap-2">
                   <Button size="sm" onClick={handleGrade} disabled={saving}>{saving ? 'Saving...' : 'Submit Grade'}</Button>
@@ -160,7 +204,7 @@ function SubmissionsModal({ assignment }: { assignment: any }) {
                 </div>
               </div>
             ) : (
-              <Button size="sm" variant="outline" onClick={() => setGrading({ id: sub.id, grade: '', feedback: '' })}>Grade</Button>
+              <Button size="sm" variant="outline" onClick={() => setGrading({ id: sub.id, grade: '', feedback: '', score: '' })}>Grade</Button>
             )
           )}
         </div>
@@ -186,7 +230,7 @@ export default function ClassroomWorkspacePage() {
   const { sessions, generateSession, closeSession, regenerateCode } = useAttendance(id!);
   const { assignments, createAssignment, updateAssignment, publishAssignment, deleteAssignment } = useAssignments(id!);
   const { cohorts, refetch: refetchCohorts, createCohort, updateCohort } = useClassroomCohorts(id!);
-  const { schedules, createSchedule, updateSchedule, deleteSchedule } = useSchedules(id!);
+  const { schedules, createSchedule, updateSchedule, deleteSchedule, notifySchedule } = useSchedules(id!);
 
   // Attendance state
   const [sessionForm, setSessionForm] = useState({ schedule_id: '', cohort_id: '', duration: '30' });
@@ -551,6 +595,34 @@ export default function ClassroomWorkspacePage() {
     )},
     { key: 'actions', header: '', render: (r: any) => (
       <div className="flex gap-1">
+        <Button
+          size="sm" variant="ghost" className="h-7 px-2 text-muted-foreground"
+          title="Add to Calendar"
+          onClick={() => downloadICS({
+            title: r.title || r.lessons?.title || r.modules?.title || 'Session',
+            date: r.scheduled_date,
+            startTime: r.start_time,
+            endTime: r.end_time,
+            location: r.location,
+            description: r.meeting_link ? `Join online: ${r.meeting_link}` : null,
+          })}
+        >
+          <CalendarPlus className="h-4 w-4" />
+        </Button>
+        <Button
+          size="sm" variant="ghost" className="h-7 px-2 text-muted-foreground"
+          title="Notify class"
+          onClick={async () => {
+            try {
+              const count = await notifySchedule(r);
+              toast.success(`Notified ${count} student${count !== 1 ? 's' : ''}`);
+            } catch (e: any) {
+              toast.error(e.message);
+            }
+          }}
+        >
+          <Bell className="h-4 w-4" />
+        </Button>
         <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => handleOpenScheduleEdit(r)} title="Edit">
           <Pencil className="h-4 w-4" />
         </Button>
@@ -975,7 +1047,7 @@ export default function ClassroomWorkspacePage() {
         <TabsContent value="attendance">
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-semibold">Attendance Sessions</h3>
-            {can.can_start_attendance && !activeSession && (
+            {(can.can_start_attendance || classroomData.staff_type === 'teaching') && !activeSession && (
               <Dialog open={sessionOpen} onOpenChange={setSessionOpen}>
                 <DialogTrigger asChild><Button size="sm"><Radio className="h-4 w-4 mr-1" />Start Session</Button></DialogTrigger>
                 <DialogContent>
@@ -991,9 +1063,9 @@ export default function ClassroomWorkspacePage() {
                       </div>
                     )}
                     <div>
-                      <Label>Cohort (optional)</Label>
+                      <Label>Cohort <span className="text-destructive">*</span></Label>
                       <Select value={sessionForm.cohort_id} onValueChange={v => setSessionForm({ ...sessionForm, cohort_id: v })}>
-                        <SelectTrigger className="mt-1.5"><SelectValue placeholder="All students" /></SelectTrigger>
+                        <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select cohort" /></SelectTrigger>
                         <SelectContent>{cohorts.map(c => <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
@@ -1004,7 +1076,7 @@ export default function ClassroomWorkspacePage() {
                         <SelectContent>{['10', '15', '20', '30', '45', '60'].map(d => <SelectItem key={d} value={d}>{d} minutes</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
-                    <Button onClick={handleStartAttendance} disabled={generatingSession} className="w-full">
+                    <Button onClick={handleStartAttendance} disabled={generatingSession || !sessionForm.cohort_id} className="w-full">
                       {generatingSession ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Radio className="h-4 w-4 mr-2" />}
                       {generatingSession ? 'Generating...' : 'Generate Code & Start'}
                     </Button>
@@ -1177,7 +1249,7 @@ export default function ClassroomWorkspacePage() {
               )}
             </DialogTitle>
           </DialogHeader>
-          {drillSession && <AttendanceDrillDown session={drillSession} />}
+          {drillSession && <AttendanceDrillDown session={drillSession} canMark={Boolean(can.can_start_attendance) || classroomData.staff_type === 'teaching'} />}
         </DialogContent>
       </Dialog>
 

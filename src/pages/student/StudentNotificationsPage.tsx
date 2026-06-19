@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Bell, CheckCheck, Clock, Mail, MailOpen } from 'lucide-react';
+import { Bell, CheckCheck, Clock, Mail, MailOpen, CalendarPlus } from 'lucide-react';
 
 const TYPE_COLOURS: Record<string, string> = {
   payment: 'border-success/30 text-success bg-success/10',
@@ -15,7 +15,19 @@ const TYPE_COLOURS: Record<string, string> = {
   overdue: 'border-destructive/30 text-destructive bg-destructive/10',
 };
 
+function parseScheduleMessage(message: string): { display: string; gcalUrl: string | null } {
+  const marker = '\n\n||GCAL||:';
+  const idx = message.indexOf(marker);
+  if (idx === -1) return { display: message, gcalUrl: null };
+  return { display: message.slice(0, idx), gcalUrl: message.slice(idx + marker.length) };
+}
+
 function NotificationCard({ notification, onMarkRead }: { notification: any; onMarkRead: (id: string) => void }) {
+  const isSchedule = notification.type === 'schedule';
+  const { display, gcalUrl } = isSchedule
+    ? parseScheduleMessage(notification.message)
+    : { display: notification.message, gcalUrl: null };
+
   return (
     <div className={`rounded-xl border p-4 ${notification.read ? 'border-border bg-card' : 'border-primary/30 bg-primary/5'}`}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -26,7 +38,15 @@ function NotificationCard({ notification, onMarkRead }: { notification: any; onM
             {!notification.read && <Badge>New</Badge>}
           </div>
           <h3 className="font-semibold">{notification.title}</h3>
-          <p className="mt-1 text-sm text-muted-foreground">{notification.message}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{display}</p>
+          {gcalUrl && (
+            <a href={gcalUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex">
+              <Button size="sm" variant="outline" className="text-primary border-primary/40 hover:bg-primary/10" type="button">
+                <CalendarPlus className="h-3.5 w-3.5 mr-1.5" />
+                Add to Google Calendar
+              </Button>
+            </a>
+          )}
           <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
             <Clock className="h-3.5 w-3.5" />
             {new Date(notification.created_at).toLocaleString()}

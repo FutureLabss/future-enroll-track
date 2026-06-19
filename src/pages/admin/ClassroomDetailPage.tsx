@@ -29,6 +29,7 @@ import {
   GraduationCap, LayoutList, Layers, Plus, Pencil, Ban, CheckCircle, PlayCircle,
   XCircle, ChevronDown, ChevronRight, Eye, Mail, ArrowLeftRight, ArrowLeft,
   Archive, RotateCcw, ClipboardCheck, CalendarDays, Trash2,
+  Radio, Clock, RefreshCw, Bell,
 } from 'lucide-react';
 
 const COHORT_STATUSES = ['upcoming', 'active', 'completed', 'archived'] as const;
@@ -575,9 +576,9 @@ export default function ClassroomDetailPage() {
   const { isSuperadmin } = useAuth();
   const { classroom, loading, updateClassroom } = useClassroom(id!);
   const { cohorts, refetch: refetchCohorts } = useClassroomCohorts(id!);
-  const { sessions } = useAttendance(id!);
+  const { sessions, generateSession, closeSession, regenerateCode } = useAttendance(id!);
   const { assignments, publishAssignment, createAssignment, updateAssignment, deleteAssignment } = useAssignments(id!);
-  const { schedules, refetch: refetchSchedules, updateSchedule, deleteSchedule } = useSchedules(id!);
+  const { schedules, refetch: refetchSchedules, updateSchedule, deleteSchedule, notifySchedule } = useSchedules(id!);
 
   const [staff, setStaff] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
@@ -607,8 +608,16 @@ export default function ClassroomDetailPage() {
   const [savingSchedule, setSavingSchedule] = useState(false);
 
   const [sessionModal, setSessionModal] = useState<{ open: boolean; session?: any }>({ open: false });
+  const [activeSession, setActiveSession] = useState<any>(null);
+  const [sessionForm, setSessionForm] = useState({ cohort_id: '', duration: '30', schedule_id: '' });
+  const [sessionOpen, setSessionOpen] = useState(false);
+  const [generatingSession, setGeneratingSession] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
   const [switchModal, setSwitchModal] = useState<{ open: boolean; student?: any }>({ open: false });
   const [sendingReminders, setSendingReminders] = useState(false);
+  const [remindersDialogOpen, setRemindersDialogOpen] = useState(false);
+  const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [autoScheduleOpen, setAutoScheduleOpen] = useState(false);
   const [assignmentModal, setAssignmentModal] = useState(false);
   const [pendingDeleteAssignment, setPendingDeleteAssignment] = useState<any>(null);
@@ -621,6 +630,56 @@ export default function ClassroomDetailPage() {
   useEffect(() => {
     if (id) supabase.rpc('get_classroom_students', { p_classroom_id: id }).then(({ data }) => setStudents(data || []));
   }, [id]);
+
+  useEffect(() => {
+    const open = sessions.find((s: any) => s.status === 'open');
+    setActiveSession(open || null);
+    if (open) {
+      const expiry = new Date(open.code_expires_at).getTime();
+      const timer = setInterval(() => {
+        const remaining = Math.max(0, Math.floor((expiry - Date.now()) / 1000));
+        setCountdown(remaining);
+        if (remaining === 0) clearInterval(timer);
+      }, 1000);
+      return () => clearInterval(timer);
+    } else {
+      setCountdown(null);
+    }
+  }, [sessions]);
+
+  const formatCountdown = (secs: number) => `${Math.floor(secs / 60)}:${(secs % 60).toString().padStart(2, '0')}`;
+
+  const handleStartAttendance = async () => {
+    setGeneratingSession(true);
+    try {
+      await generateSession(null, sessionForm.cohort_id || null, parseInt(sessionForm.duration), sessionForm.schedule_id || null);
+      setSessionOpen(false);
+      toast.success('Attendance session started');
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setGeneratingSession(false);
+    }
+  };
+
+  const handleCloseSession = async () => {
+    if (!activeSession) return;
+    await closeSession(activeSession.id);
+    toast.success('Session closed');
+  };
+
+  const handleRegenerateCode = async () => {
+    if (!activeSession) return;
+    setRegenerating(true);
+    try {
+      const code = await regenerateCode(activeSession.id, parseInt(sessionForm.duration || '30'));
+      toast.success(`New code: ${code}`);
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setRegenerating(false);
+    }
+  };
 
   const openCreateAssignment = () => {
     setAssignmentEditing(null);
@@ -691,15 +750,19 @@ export default function ClassroomDetailPage() {
     }
   };
 
-  const handleSendReminders = async () => {
+  const handleSendReminders = () => {
     if (!classroom?.program_id) return;
     const needsReminder = students.filter(s => !s.user_id || !s.full_name?.trim());
     if (needsReminder.length === 0) { toast.info('All students have accounts and complete profiles.'); return; }
-    if (!confirm(`Send reminder emails to ${needsReminder.length} student(s) who need to set up their account or complete their profile?`)) return;
+    setRemindersDialogOpen(true);
+  };
+
+  const doSendReminders = async () => {
     setSendingReminders(true);
+    setRemindersDialogOpen(false);
     try {
       const { data, error } = await supabase.functions.invoke('send-account-reminders', {
-        body: { program_id: classroom.program_id },
+        body: { program_id: classroom!.program_id },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -784,8 +847,13 @@ export default function ClassroomDetailPage() {
     loadAll();
   };
 
-  const handleClassroomStatus = async (status: 'active' | 'archived') => {
-    if (status === 'archived' && !confirm(`Archive "${classroom?.name}"? Staff and students can still be reviewed, but it will be treated as inactive.`)) return;
+  const handleClassroomStatus = (status: 'active' | 'archived') => {
+    if (status === 'archived') { setArchiveDialogOpen(true); return; }
+    doArchiveClassroom('active');
+  };
+
+  const doArchiveClassroom = async (status: 'active' | 'archived') => {
+    setArchiveDialogOpen(false);
     setUpdatingStatus(true);
     try {
       await updateClassroom({ status });
@@ -1000,6 +1068,20 @@ export default function ClassroomDetailPage() {
     { key: 'status', header: 'Status', render: (r: any) => <Badge variant="outline" className={`capitalize ${STATUS_COLOURS[r.status] || ''}`}>{r.status}</Badge> },
     { key: 'actions', header: '', render: (r: any) => (
       <div className="flex gap-1">
+        <Button
+          size="sm" variant="ghost" className="h-7 px-2 text-muted-foreground"
+          title="Notify class"
+          onClick={async () => {
+            try {
+              const count = await notifySchedule(r);
+              toast.success(`Notified ${count} student${count !== 1 ? 's' : ''}`);
+            } catch (e: any) {
+              toast.error(e.message);
+            }
+          }}
+        >
+          <Bell className="h-4 w-4" />
+        </Button>
         <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => openScheduleEdit(r)} title="Edit"><Pencil className="h-4 w-4" /></Button>
         <Button size="sm" variant="ghost" className="text-destructive h-7 px-2" onClick={() => handleDeleteSchedule(r.id)} title="Delete"><Trash2 className="h-4 w-4" /></Button>
       </div>
@@ -1300,6 +1382,62 @@ export default function ClassroomDetailPage() {
 
         {/* ATTENDANCE */}
         <TabsContent value="attendance">
+          {activeSession && (
+            <div className="mb-6 rounded-2xl bg-gradient-to-r from-primary/20 to-primary/5 border border-primary/30 p-6">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <div className="text-xs text-primary font-semibold mb-1 flex items-center gap-1"><Radio className="h-3 w-3" />LIVE SESSION</div>
+                  <div className="font-mono text-5xl font-black tracking-[0.2em] text-primary">{activeSession.code}</div>
+                  <div className="text-sm text-muted-foreground mt-1 flex items-center gap-1">
+                    <Clock className="h-3.5 w-3.5" />
+                    {countdown !== null ? (countdown > 0 ? `Expires in ${formatCountdown(countdown)}` : 'Expired') : '—'}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Button variant="outline" size="sm" onClick={handleRegenerateCode} disabled={regenerating}>
+                    <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${regenerating ? 'animate-spin' : ''}`} />
+                    New Code
+                  </Button>
+                  <Button variant="destructive" size="sm" onClick={handleCloseSession}>Close Session</Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-semibold">Attendance Sessions</h3>
+            {!activeSession && (
+              <Dialog open={sessionOpen} onOpenChange={setSessionOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm"><Radio className="h-4 w-4 mr-1" />Start Session</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader><DialogTitle>Start Attendance Session</DialogTitle></DialogHeader>
+                  <div className="space-y-3 mt-2">
+                    <div>
+                      <Label>Cohort <span className="text-destructive">*</span></Label>
+                      <Select value={sessionForm.cohort_id} onValueChange={v => setSessionForm(f => ({ ...f, cohort_id: v }))}>
+                        <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select cohort" /></SelectTrigger>
+                        <SelectContent>{cohorts.map(c => <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Duration (minutes)</Label>
+                      <Select value={sessionForm.duration} onValueChange={v => setSessionForm(f => ({ ...f, duration: v }))}>
+                        <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+                        <SelectContent>{['10', '15', '20', '30', '45', '60'].map(d => <SelectItem key={d} value={d}>{d} minutes</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <Button onClick={handleStartAttendance} disabled={generatingSession || !sessionForm.cohort_id} className="w-full">
+                      {generatingSession ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Radio className="h-4 w-4 mr-2" />}
+                      {generatingSession ? 'Generating...' : 'Generate Code & Start'}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
+
           <AttendanceTab sessions={sessions} cohorts={cohorts} onView={s => setSessionModal({ open: true, session: s })} />
         </TabsContent>
       </Tabs>
@@ -1515,6 +1653,36 @@ export default function ClassroomDetailPage() {
             <AlertDialogAction onClick={doDeleteAssignment} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Delete
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={remindersDialogOpen} onOpenChange={setRemindersDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Send Account Reminders?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will email students who still need to set up their account or complete their profile. Continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={doSendReminders}>Send Reminders</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive &quot;{classroom?.name}&quot;?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Staff and students can still be reviewed, but this classroom will be treated as inactive.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => doArchiveClassroom('archived')}>Archive</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

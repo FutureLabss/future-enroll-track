@@ -61,6 +61,13 @@ export default function StaffInvitationsAdminPage() {
 
   const handleResend = async (invitation: any) => {
     try {
+      const newExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { error: updateError } = await supabase
+        .from('staff_invitations')
+        .update({ expires_at: newExpiry, status: 'pending' })
+        .eq('id', invitation.id);
+      if (updateError) throw updateError;
+
       const { error } = await supabase.functions.invoke('send-staff-invitation', {
         body: {
           email: invitation.staff?.email,
@@ -71,7 +78,8 @@ export default function StaffInvitationsAdminPage() {
         }
       });
       if (error) throw error;
-      toast.success('Invitation email resent!');
+      toast.success('Invitation email resent — valid for 7 days');
+      fetchInvitations();
     } catch (e: any) {
       toast.error(e.message);
     }
@@ -104,10 +112,10 @@ export default function StaffInvitationsAdminPage() {
     )},
     { key: 'actions', header: '', render: (r: any) => (
       <div className="flex gap-2 justify-end">
-        {r.status === 'pending' && (
+        {(r.status === 'pending' || r.status === 'expired') && (
           <>
-            <Button size="sm" variant="outline" onClick={() => handleResend(r)}><Mail className="h-4 w-4" /></Button>
-            <Button size="sm" variant="destructive" onClick={() => handleRevoke(r.id)}>Revoke</Button>
+            <Button size="sm" variant="outline" onClick={() => handleResend(r)}><Mail className="h-4 w-4 mr-1" />Resend</Button>
+            {r.status === 'pending' && <Button size="sm" variant="destructive" onClick={() => handleRevoke(r.id)}>Revoke</Button>}
           </>
         )}
         {r.status === 'accepted' && (

@@ -18,10 +18,11 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { StudentCurriculumView } from '@/components/classroom/StudentCurriculumView';
 import {
-  Calendar, ClipboardList, BookOpen, BarChart2, Loader2,
+  Calendar, CalendarPlus, ClipboardList, BookOpen, BarChart2, Loader2,
   CheckCircle2, Clock, AlertCircle, MapPin, ChevronDown, ChevronUp, LayoutList,
   Users, Video, ExternalLink, Send, ShieldCheck,
 } from 'lucide-react';
+import { downloadICS } from '@/lib/ics';
 
 const ATTENDANCE_STATUS_COLOURS: Record<string, string> = {
   present: 'bg-success/15 text-success border-success/30',
@@ -54,12 +55,25 @@ function LessonCard({ lesson, today }: { lesson: any; today: string }) {
 }
 
 function ScheduleCard({ s, today }: { s: any; today: string }) {
+  const title = s.lessons?.title || s.title || s.modules?.title || 'Session';
+
+  const handleAddToCalendar = () => {
+    downloadICS({
+      title,
+      date: s.scheduled_date,
+      startTime: s.start_time,
+      endTime: s.end_time,
+      location: s.location,
+      description: s.meeting_link ? `Join online: ${s.meeting_link}` : null,
+    });
+  };
+
   return (
     <div className={`rounded-xl p-4 flex items-center justify-between border ${s.scheduled_date === today ? 'border-primary/40 bg-primary/5' : 'border-border'}`}>
       <div>
         <div className="flex items-center gap-2">
           {s.scheduled_date === today && <span className="text-xs font-semibold text-primary uppercase tracking-wide">Today</span>}
-          <p className="font-semibold">{s.lessons?.title || s.title || s.modules?.title || 'Session'}</p>
+          <p className="font-semibold">{title}</p>
           {s.status && <Badge variant="outline" className="text-xs capitalize">{s.status}</Badge>}
         </div>
         {s.lessons?.units?.title && <p className="text-xs text-muted-foreground mt-1">Unit: {s.lessons.units.title}</p>}
@@ -68,14 +82,20 @@ function ScheduleCard({ s, today }: { s: any; today: string }) {
           {' · '}{s.start_time} – {s.end_time}
         </p>
         {s.location && <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1"><MapPin className="h-3 w-3" />{s.location}</p>}
-        {s.meeting_link && (
-          <Button asChild size="sm" variant="outline" className="mt-3 h-8">
-            <a href={s.meeting_link} target="_blank" rel="noreferrer">
-              <Video className="mr-1.5 h-3.5 w-3.5" />
-              Join online
-            </a>
+        <div className="mt-3 flex items-center gap-2">
+          {s.meeting_link && (
+            <Button asChild size="sm" variant="outline" className="h-8">
+              <a href={s.meeting_link} target="_blank" rel="noreferrer">
+                <Video className="mr-1.5 h-3.5 w-3.5" />
+                Join online
+              </a>
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" className="h-8 text-muted-foreground" onClick={handleAddToCalendar}>
+            <CalendarPlus className="mr-1.5 h-3.5 w-3.5" />
+            Add to Calendar
           </Button>
-        )}
+        </div>
       </div>
       <div className="flex flex-col items-end gap-1">
         {s.cohorts && <Badge variant="outline" className="text-xs">{s.cohorts.cohort_label}</Badge>}

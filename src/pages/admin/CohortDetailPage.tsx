@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useAttendanceSession } from '@/hooks/useAttendance';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -20,6 +21,7 @@ import {
   CalendarDays,
   ClipboardCheck,
   ClipboardList,
+  Eye,
   GraduationCap,
   Loader2,
   Pencil,
@@ -33,7 +35,6 @@ import {
 import { toast } from 'sonner';
 
 const COHORT_STATUSES = ['upcoming', 'active', 'completed', 'archived'] as const;
-
 const STATUS_COLOURS: Record<string, string> = {
   upcoming: 'bg-blue-500/15 text-blue-600 border-blue-500/30',
   active: 'bg-success/15 text-success border-success/30',
@@ -183,6 +184,65 @@ function ManageStudentsDialog({ cohort, classroomId, onChanged }: { cohort: any;
   );
 }
 
+function AttendanceDrillDown({ session }: { session: any }) {
+  const { records, absentStudents, loading } = useAttendanceSession(session.id);
+  if (loading) return <div className="flex justify-center py-8"><Loader2 className="animate-spin h-6 w-6 text-primary" /></div>;
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-3 gap-3 text-center">
+        <div className="rounded-xl border border-border p-3">
+          <div className="text-2xl font-bold text-success">{records.filter(r => r.attendance_status === 'present').length}</div>
+          <div className="text-xs text-muted-foreground">Present</div>
+        </div>
+        <div className="rounded-xl border border-border p-3">
+          <div className="text-2xl font-bold text-warning">{records.filter(r => r.attendance_status === 'late').length}</div>
+          <div className="text-xs text-muted-foreground">Late</div>
+        </div>
+        <div className="rounded-xl border border-border p-3">
+          <div className="text-2xl font-bold text-destructive">{absentStudents.length}</div>
+          <div className="text-xs text-muted-foreground">Absent</div>
+        </div>
+      </div>
+      {records.length > 0 && (
+        <div>
+          <p className="text-sm font-medium mb-2">Attended</p>
+          <div className="space-y-1.5">
+            {records.map((r: any) => (
+              <div key={r.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
+                <div>
+                  <span className="font-medium">{r.profiles?.full_name || '—'}</span>
+                  <span className="text-muted-foreground ml-2 text-xs">{r.profiles?.email}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {r.lat && <span className="text-xs text-muted-foreground">GPS</span>}
+                  <Badge variant="outline" className={`${STATUS_COLOURS[r.attendance_status] || ''} capitalize`}>{r.attendance_status}</Badge>
+                  <span className="text-xs text-muted-foreground">{new Date(r.marked_at).toLocaleTimeString()}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {absentStudents.length > 0 && (
+        <div>
+          <p className="text-sm font-medium mb-2 text-destructive">Absent</p>
+          <div className="space-y-1.5">
+            {absentStudents.map((s: any) => (
+              <div key={s.student_id} className="flex items-center justify-between rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm">
+                <span className="font-medium">{s.profiles?.full_name || '—'}</span>
+                <span className="text-xs text-muted-foreground">{s.profiles?.email}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {records.length === 0 && absentStudents.length === 0 && (
+        <p className="text-center text-muted-foreground py-4">No records yet</p>
+      )}
+    </div>
+  );
+}
+
 export default function CohortDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -192,6 +252,7 @@ export default function CohortDetailPage() {
   const [assignments, setAssignments] = useState<any[]>([]);
   const [editOpen, setEditOpen] = useState(false);
   const [studentsOpen, setStudentsOpen] = useState(false);
+  const [drillSession, setDrillSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [statusBusy, setStatusBusy] = useState(false);
 
@@ -323,6 +384,11 @@ export default function CohortDetailPage() {
     { key: 'lesson', header: 'Lesson', render: (r: any) => r.schedules?.lessons?.title || r.schedules?.title || r.old_lessons?.title || '—' },
     { key: 'status', header: 'Status', render: (r: any) => <Badge variant="outline" className={STATUS_COLOURS[r.status] || ''}>{r.status}</Badge> },
     { key: 'created_at', header: 'Created', render: (r: any) => new Date(r.created_at).toLocaleString() },
+    { key: 'actions', header: '', render: (r: any) => (
+      <Button size="sm" variant="ghost" onClick={() => setDrillSession(r)}>
+        <Eye className="h-4 w-4 mr-1" />View
+      </Button>
+    )},
   ];
 
   const assignmentColumns = [
@@ -456,6 +522,21 @@ export default function CohortDetailPage() {
           </TabsContent>
         )}
       </Tabs>
+
+      <Dialog open={!!drillSession} onOpenChange={o => { if (!o) setDrillSession(null); }}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Attendance — <span className="font-mono">{drillSession?.code}</span>
+              {(drillSession?.schedules?.lessons?.title || drillSession?.schedules?.title || drillSession?.old_lessons?.title) && (
+                <span className="font-normal text-muted-foreground ml-2">— {drillSession?.schedules?.lessons?.title || drillSession?.schedules?.title || drillSession?.old_lessons?.title}</span>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          {drillSession && <AttendanceDrillDown session={drillSession} />}
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }

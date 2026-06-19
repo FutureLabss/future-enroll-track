@@ -809,25 +809,16 @@ export default function ClassroomDetailPage() {
 
       if (inv?.token) {
         const staffMember = staffRoster.find(s => s.id === inviteForm.staff_id);
-        const { data: { session } } = await supabase.auth.getSession();
-        await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-staff-invitation`,
-          {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${session?.access_token}`,
-              apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              email: staffMember?.email,
-              name: staffMember?.full_name,
-              classroom: classroom?.name,
-              token: inv.token,
-              staffType: inviteForm.staff_type,
-            }),
+        const { error: emailError } = await supabase.functions.invoke('send-staff-invitation', {
+          body: {
+            email: staffMember?.email,
+            name: staffMember?.full_name,
+            classroom: classroom?.name,
+            token: inv.token,
+            staffType: inviteForm.staff_type,
           }
-        );
+        });
+        if (emailError) throw emailError;
       }
 
       toast.success('Staff assigned and invitation email sent');

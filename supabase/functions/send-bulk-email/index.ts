@@ -6,15 +6,29 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+interface ImportedContact {
+  email: string;
+  name: string;
+}
+
 interface Payload {
   subject: string;
-  message: string; // plain text or simple html
+  message: string;
+  audience_type?: "students" | "staff" | "students_and_staff";
+  imported_contacts?: ImportedContact[];
   filters?: {
     program_id?: string;
     cohort_id?: string;
     enrollment_status?: string;
     audience?: "all" | "outstanding" | "paid";
   };
+}
+
+interface Recipient {
+  email: string;
+  name: string;
+  outstanding?: number;
+  enrollment_id?: string | null;
 }
 
 async function sendEmail(to: string, subject: string, html: string) {
@@ -48,7 +62,6 @@ function escapeHtml(str: string) {
 }
 
 function buildHtml(subject: string, message: string) {
-  // Allow simple {{name}} substitution; keep paragraphs.
   const safe = escapeHtml(message).replace(/\\n/g, "<br/>");
   return `<!DOCTYPE html><html><body style="font-family:Inter,Arial,sans-serif;background:#f7f7fb;padding:24px;color:#0f172a;">
     <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:14px;padding:28px;box-shadow:0 4px 16px rgba(15,23,42,0.06);">
@@ -101,43 +114,86 @@ Deno.serve(async (req) => {
       });
     }
 
-    let q = admin.from("enrollments").select("id, full_name, email, total_amount, amount_paid, outstanding_balance, program_id, cohort_id, enrollment_status");
+    const audienceType = body.audience_type ?? "students";
     const f = body.filters || {};
-    if (f.program_id) q = q.eq("program_id", f.program_id);
-    if (f.cohort_id) q = q.eq("cohort_id", f.cohort_id);
-    if (f.enrollment_status) q = q.eq("enrollment_status", f.enrollment_status);
+    const recipients: Recipient[] = [];
 
-    const { data: enrollments, error } = await q;
-    if (error) throw error;
+    // Students from enrollments
+    if (audienceType === "students" || audienceType === "students_and_staff") {
+      let q = admin
+        .from("enrollments")
+        .select("id, full_name, email, total_amount, amount_paid, outstanding_balance");
+      if (f.program_id) q = q.eq("program_id", f.program_id);
+      if (f.cohort_id) q = q.eq("cohort_id", f.cohort_id);
+      if (f.enrollment_status) q = q.eq("enrollment_status", f.enrollment_status);
 
-    let recipients = (enrollments || []).filter((e: any) => e.email);
-    if (f.audience === "outstanding") {
-      recipients = recipients.filter((e: any) => Number(e.outstanding_balance ?? (e.total_amount - e.amount_paid)) > 0);
-    } else if (f.audience === "paid") {
-      recipients = recipients.filter((e: any) => Number(e.outstanding_balance ?? (e.total_amount - e.amount_paid)) <= 0);
+      const { data: enrollments, error: enrollErr } = await q;
+      if (enrollErr) throw enrollErr;
+
+      let list = (enrollments || []).filter((e: any) => e.email);
+      if (f.audience === "outstanding") {
+        list = list.filter((e: any) => Number(e.outstanding_balance ?? (e.total_amount - e.amount_paid)) > 0);
+      } else if (f.audience === "paid") {
+        list = list.filter((e: any) => Number(e.outstanding_balance ?? (e.total_amount - e.amount_paid)) <= 0);
+      }
+
+      for (const e of list) {
+        recipients.push({
+          email: e.email.toLowerCase(),
+          name: e.full_name || "",
+          outstanding: Number(e.outstanding_balance ?? (e.total_amount - e.amount_paid)),
+          enrollment_id: e.id,
+        });
+      }
     }
 
-    // Dedupe by email
-    const seen = new Set<string>();
-    recipients = recipients.filter((e: any) => {
-      const k = e.email.toLowerCase();
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
+    // Staff
+    if (audienceType === "staff" || audienceType === "students_and_staff") {
+      const { data: staffRows, error: staffErr } = await admin
+        .from("staff")
+        .select("id, full_name, email")
+        .eq("active", true);
+      if (staffErr) throw staffErr;
+
+      for (const s of staffRows || []) {
+        if (s.email) {
+          recipients.push({
+            email: s.email.toLowerCase(),
+            name: s.full_name || "",
+          });
+        }
+      }
+    }
+
+    // Imported contacts
+    for (const c of body.imported_contacts || []) {
+      if (c.email) {
+        recipients.push({ email: c.email.toLowerCase(), name: c.name || "" });
+      }
+    }
+
+    // Dedupe by email (first occurrence wins for name/outstanding)
+    const seen = new Map<string, Recipient>();
+    for (const r of recipients) {
+      if (!seen.has(r.email)) seen.set(r.email, r);
+    }
+    const deduped = Array.from(seen.values());
 
     let sent = 0, failed = 0;
     const errors: string[] = [];
-    for (const r of recipients) {
+
+    for (const r of deduped) {
       try {
         const personalized = body.message
-          .replace(/\{\{\s*name\s*\}\}/gi, r.full_name || "")
-          .replace(/\{\{\s*outstanding\s*\}\}/gi, `₦${Number(r.outstanding_balance ?? (r.total_amount - r.amount_paid)).toLocaleString("en-NG")}`);
+          .replace(/\{\{\s*name\s*\}\}/gi, r.name || "")
+          .replace(/\{\{\s*outstanding\s*\}\}/gi, r.outstanding != null
+            ? `₦${Number(r.outstanding).toLocaleString("en-NG")}`
+            : "");
         await sendEmail(r.email, body.subject, buildHtml(body.subject, personalized));
         sent++;
         await admin.from("notifications").insert({
           user_id: null,
-          enrollment_id: r.id,
+          enrollment_id: r.enrollment_id ?? null,
           type: "bulk_announcement",
           title: body.subject,
           message: personalized.slice(0, 500),
@@ -155,10 +211,18 @@ Deno.serve(async (req) => {
       action: "bulk_email",
       entity_type: "notification",
       entity_id: null,
-      details: { subject: body.subject, sent, failed, total: recipients.length, filters: f },
+      details: {
+        subject: body.subject,
+        sent,
+        failed,
+        total: deduped.length,
+        audience_type: audienceType,
+        imported: (body.imported_contacts || []).length,
+        filters: f,
+      },
     });
 
-    return new Response(JSON.stringify({ sent, failed, total: recipients.length, errors: errors.slice(0, 10) }), {
+    return new Response(JSON.stringify({ sent, failed, total: deduped.length, errors: errors.slice(0, 10) }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {

@@ -34,32 +34,43 @@ export default function AcceptInvitationPage() {
       return;
     }
 
-    // Listen for auth events — Supabase processes hash tokens async
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        if (session && !handledRef.current) {
-          handledRef.current = true;
-          // Already authenticated — go straight to the RPC (SECURITY DEFINER, bypasses RLS)
-          await doAccept(session.user.id);
-        }
-      }
-    );
+    let cleanup: (() => void) | undefined;
 
-    // Also check synchronously in case session is already set
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    const init = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+
       if (session && !handledRef.current) {
+        // Already logged in — go straight to the RPC, no subscription needed
         handledRef.current = true;
         await doAccept(session.user.id);
-      } else if (!session && !isInviteRef.current) {
-        // No session, no invite hash — fetch invitation details to show sign-in form
+        return;
+      }
+
+      if (!session && !isInviteRef.current) {
+        // Existing user, not logged in — show sign-in form
         const inv = await fetchInvitation();
         if (!inv) return;
         setStep('sign-in');
+        return;
       }
-      // If isInviteRef.current is true, wait for onAuthStateChange
-    });
 
-    return () => subscription.unsubscribe();
+      // New user arriving via Supabase invite hash — Supabase processes the
+      // hash async, so we wait for the resulting session via onAuthStateChange.
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(
+        async (_event, sess) => {
+          if (sess && !handledRef.current) {
+            handledRef.current = true;
+            const inv = await fetchInvitation();
+            if (!inv) return;
+            await doAccept(sess.user.id, inv);
+          }
+        }
+      );
+      cleanup = () => subscription.unsubscribe();
+    };
+
+    init();
+    return () => cleanup?.();
   }, [token]);
 
   const fetchInvitation = async () => {

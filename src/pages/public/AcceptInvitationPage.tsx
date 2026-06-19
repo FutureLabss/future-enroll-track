@@ -89,7 +89,6 @@ export default function AcceptInvitationPage() {
     }
 
     setInvitation(data);
-    if (data.staff?.full_name) setFullName(data.staff.full_name);
     return data;
   };
 

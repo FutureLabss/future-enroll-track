@@ -42,8 +42,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const apiKey = Deno.env.get('LOVABLE_API_KEY');
-    if (!apiKey) throw new Error('LOVABLE_API_KEY not configured');
+    const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
+    if (!apiKey) throw new Error('ANTHROPIC_API_KEY not configured');
 
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
@@ -57,8 +57,6 @@ Deno.serve(async (req) => {
 
     const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 
-    // Build user content. Lovable AI Gateway (OpenAI-compatible) accepts
-    // text + file blocks for PDFs and plain text for other formats.
     let userContent: unknown;
 
     if (isPdf) {
@@ -73,10 +71,11 @@ Deno.serve(async (req) => {
 
       userContent = [
         {
-          type: 'file',
-          file: {
-            filename: file.name || 'document.pdf',
-            file_data: `data:application/pdf;base64,${base64}`,
+          type: 'document',
+          source: {
+            type: 'base64',
+            media_type: 'application/pdf',
+            data: base64,
           },
         },
         {
@@ -90,19 +89,18 @@ Deno.serve(async (req) => {
       userContent = `Document content:\n\n${text}\n\nConvert this into a structured curriculum JSON.${suffix}`;
     }
 
-    const aiRes = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-3-flash-preview',
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: userContent },
-        ],
-        response_format: { type: 'json_object' },
+        model: 'claude-sonnet-4-6',
+        max_tokens: 8192,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: userContent }],
       }),
     });
 
@@ -114,17 +112,11 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      if (aiRes.status === 402) {
-        return new Response(JSON.stringify({ error: 'AI credits exhausted. Add credits to continue.' }), {
-          status: 402,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      throw new Error(`AI gateway error ${aiRes.status}: ${err}`);
+      throw new Error(`AI error ${aiRes.status}: ${err}`);
     }
 
     const aiData = await aiRes.json();
-    const rawText: string = aiData.choices?.[0]?.message?.content || '';
+    const rawText: string = aiData.content?.[0]?.text || '';
     const cleaned = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
 
     let structure: unknown;

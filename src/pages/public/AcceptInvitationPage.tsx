@@ -39,9 +39,8 @@ export default function AcceptInvitationPage() {
       async (_event, session) => {
         if (session && !handledRef.current) {
           handledRef.current = true;
-          const inv = await fetchInvitation();
-          if (!inv) return;
-          await doAccept(session.user.id, inv);
+          // Already authenticated — go straight to the RPC (SECURITY DEFINER, bypasses RLS)
+          await doAccept(session.user.id);
         }
       }
     );
@@ -50,11 +49,9 @@ export default function AcceptInvitationPage() {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session && !handledRef.current) {
         handledRef.current = true;
-        const inv = await fetchInvitation();
-        if (!inv) return;
-        await doAccept(session.user.id, inv);
+        await doAccept(session.user.id);
       } else if (!session && !isInviteRef.current) {
-        // No session, no invite hash — they need to sign in
+        // No session, no invite hash — fetch invitation details to show sign-in form
         const inv = await fetchInvitation();
         if (!inv) return;
         setStep('sign-in');
@@ -92,21 +89,19 @@ export default function AcceptInvitationPage() {
     return data;
   };
 
-  const doAccept = async (userId: string, inv: any) => {
+  const doAccept = async (userId: string, inv?: any) => {
     setStep('accepting');
     const { error } = await supabase.rpc('accept_staff_invitation', {
       p_token: token,
       p_user_id: userId,
     });
     if (error) { setStep('error'); setErrorMsg(error.message); return; }
-    setInvitation(inv);
-    if (isInviteRef.current) {
-      // Raw invite hash flow (shouldn't normally happen now that we go via /set-password first,
-      // but kept as a safety net). Prompt to set password, then auto-navigate.
+    if (isInviteRef.current && inv) {
+      setInvitation(inv);
       setStep('set-password');
     } else {
-      // Already has a session (came from /set-password or signed in) — go straight to classrooms.
-      toast.success(`Welcome! You've joined ${inv?.classrooms?.name}.`);
+      const name = inv?.classrooms?.name;
+      toast.success(name ? `Welcome! You've joined ${name}.` : 'Classroom access confirmed!');
       navigate('/staff/classrooms', { replace: true });
     }
   };

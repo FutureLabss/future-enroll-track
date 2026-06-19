@@ -5,11 +5,12 @@ import { DataTable } from '@/components/shared/DataTable';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { Mail, CheckCircle2, XCircle, Clock, ShieldCheck } from 'lucide-react';
+import { Mail, CheckCircle2, XCircle, Clock, ShieldCheck, Loader2 } from 'lucide-react';
 
 export default function StaffInvitationsAdminPage() {
   const [invitations, setInvitations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [resending, setResending] = useState<string | null>(null);
 
   const fetchInvitations = async () => {
     setLoading(true);
@@ -60,6 +61,7 @@ export default function StaffInvitationsAdminPage() {
   };
 
   const handleResend = async (invitation: any) => {
+    setResending(invitation.id);
     try {
       const newExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
       const { error: updateError } = await supabase
@@ -82,6 +84,8 @@ export default function StaffInvitationsAdminPage() {
       fetchInvitations();
     } catch (e: any) {
       toast.error(e.message);
+    } finally {
+      setResending(null);
     }
   };
 
@@ -114,7 +118,10 @@ export default function StaffInvitationsAdminPage() {
       <div className="flex gap-2 justify-end">
         {(r.status === 'pending' || r.status === 'expired') && (
           <>
-            <Button size="sm" variant="outline" onClick={() => handleResend(r)}><Mail className="h-4 w-4 mr-1" />Resend</Button>
+            <Button size="sm" variant="outline" disabled={resending === r.id} onClick={() => handleResend(r)}>
+              {resending === r.id ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Mail className="h-4 w-4 mr-1" />}
+              {resending === r.id ? 'Sending...' : 'Resend'}
+            </Button>
             {r.status === 'pending' && <Button size="sm" variant="destructive" onClick={() => handleRevoke(r.id)}>Revoke</Button>}
           </>
         )}

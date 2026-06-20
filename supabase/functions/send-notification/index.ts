@@ -76,10 +76,13 @@ async function sendWhatsApp(to: string, body: string) {
 }
 
 function buildEmailContent(type: string, data: Record<string, any>): { subject: string; html: string } {
-  const { full_name, invoice_number, total_amount, currency, due_date, amount_paid, payment_reference, payment_method, program_name, enrollment_id, invoice_id, FRONTEND_URL } = data;
+  const { full_name, invoice_number, total_amount, currency, due_date, amount_paid, outstanding_balance, payment_reference, payment_method, program_name, enrollment_id, invoice_id, FRONTEND_URL } = data;
   const currencySymbol = currency === "USD" ? "$" : "₦";
-  const formattedAmount = `${currencySymbol}${Number(total_amount).toLocaleString()}`;
-  const formattedPaid = amount_paid ? `${currencySymbol}${Number(amount_paid).toLocaleString()}` : "";
+  const fmt = (n: number) => `${currencySymbol}${Number(n).toLocaleString()}`;
+  const formattedAmount = fmt(total_amount);
+  const formattedPaid = amount_paid ? fmt(amount_paid) : "";
+  const formattedBalance = fmt(outstanding_balance ?? 0);
+  const fmtDate = (d: string) => d ? new Date(`${d}T00:00:00`).toLocaleDateString("en-NG", { year: "numeric", month: "long", day: "numeric" }) : "";
 
   const wrapper = (content: string) => `
     <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e5e7eb;">
@@ -149,33 +152,61 @@ function buildEmailContent(type: string, data: Record<string, any>): { subject: 
 
     case "payment_reminder":
       return {
-        subject: `Payment Reminder - ${invoice_number} (Due: ${due_date})`,
+        subject: `Payment Reminder – ${invoice_number} (Due: ${fmtDate(due_date)})`,
         html: wrapper(`
-          <h2 style="color: #1a1a2e;">Payment Reminder</h2>
-          <p>Hello ${full_name},</p>
-          <p>This is a friendly reminder about your upcoming payment:</p>
-          <div style="background: #fffbeb; border-radius: 8px; padding: 16px; margin: 16px 0; border-left: 4px solid #f59e0b;">
-            <p style="margin: 4px 0;"><strong>Invoice:</strong> ${invoice_number}</p>
-            <p style="margin: 4px 0;"><strong>Amount Due:</strong> ${formattedAmount}</p>
-            <p style="margin: 4px 0;"><strong>Due Date:</strong> ${due_date}</p>
+          <h2 style="color: #1a1a2e; margin-top: 0;">Payment Reminder</h2>
+          <p>Hi ${full_name},</p>
+          <p>This is a friendly reminder about your upcoming payment.</p>
+          <div style="background: #fffbeb; border-radius: 8px; padding: 20px; margin: 20px 0; border-left: 4px solid #f59e0b;">
+            <table style="width:100%; font-size:14px; border-collapse:collapse;">
+              <tr><td style="padding:5px 0; color:#6b7280;">Invoice</td><td style="padding:5px 0; text-align:right; font-weight:600;">${invoice_number}</td></tr>
+              ${program_name ? `<tr><td style="padding:5px 0; color:#6b7280;">Program</td><td style="padding:5px 0; text-align:right; font-weight:600;">${program_name}</td></tr>` : ""}
+              <tr><td style="padding:5px 0; color:#6b7280;">Total Amount</td><td style="padding:5px 0; text-align:right; font-weight:600;">${formattedAmount}</td></tr>
+              <tr><td style="padding:5px 0; color:#6b7280;">Amount Paid</td><td style="padding:5px 0; text-align:right; font-weight:600;">${formattedPaid}</td></tr>
+              <tr style="border-top:2px solid #f59e0b;"><td style="padding:8px 0; font-weight:700;">Balance Due</td><td style="padding:8px 0; text-align:right; font-weight:700; font-size:16px; color:#b45309;">${formattedBalance}</td></tr>
+              <tr><td style="padding:5px 0; color:#6b7280;">Due Date</td><td style="padding:5px 0; text-align:right; font-weight:600;">${fmtDate(due_date)}</td></tr>
+            </table>
           </div>
-          <p>Please make your payment before the due date.</p>
+          <a href="${FRONTEND_URL}/student/invoices/${invoice_id}?pay=1" style="display:inline-block; padding:12px 24px; background:#16a34a; color:#fff; text-decoration:none; border-radius:6px; font-weight:bold; margin-bottom:24px;">💳 Pay with Paystack</a>
+          <div style="background:#f9fafb; border-radius:8px; padding:16px; margin-top:8px; border:1px solid #e5e7eb;">
+            <p style="margin:0 0 8px; font-size:13px; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em;">Or pay by bank transfer</p>
+            <table style="width:100%; font-size:14px; border-collapse:collapse;">
+              <tr><td style="padding:4px 0; color:#6b7280;">Account Name</td><td style="padding:4px 0; text-align:right; font-weight:600;">FutureLabs Ltd</td></tr>
+              <tr><td style="padding:4px 0; color:#6b7280;">Account Number</td><td style="padding:4px 0; text-align:right; font-weight:700; font-size:16px; letter-spacing:0.05em;">8288339819</td></tr>
+              <tr><td style="padding:4px 0; color:#6b7280;">Bank</td><td style="padding:4px 0; text-align:right; font-weight:600;">Moniepoint MFB</td></tr>
+            </table>
+            <p style="margin:12px 0 0; font-size:12px; color:#9ca3af;">After transferring, log in and upload your receipt so we can confirm your payment.</p>
+          </div>
         `),
       };
 
     case "overdue":
       return {
-        subject: `⚠️ Overdue Payment - ${invoice_number}`,
+        subject: `⚠️ Overdue Payment – ${invoice_number}`,
         html: wrapper(`
-          <h2 style="color: #dc2626;">Payment Overdue</h2>
-          <p>Hello ${full_name},</p>
-          <p>Your payment is now overdue:</p>
-          <div style="background: #fef2f2; border-radius: 8px; padding: 16px; margin: 16px 0; border-left: 4px solid #dc2626;">
-            <p style="margin: 4px 0;"><strong>Invoice:</strong> ${invoice_number}</p>
-            <p style="margin: 4px 0;"><strong>Amount Due:</strong> ${formattedAmount}</p>
-            <p style="margin: 4px 0;"><strong>Due Date:</strong> ${due_date}</p>
+          <h2 style="color: #dc2626; margin-top: 0;">Payment Overdue</h2>
+          <p>Hi ${full_name},</p>
+          <p>Your payment is now overdue. Please settle it immediately to avoid disruption to your enrollment.</p>
+          <div style="background: #fef2f2; border-radius: 8px; padding: 20px; margin: 20px 0; border-left: 4px solid #dc2626;">
+            <table style="width:100%; font-size:14px; border-collapse:collapse;">
+              <tr><td style="padding:5px 0; color:#6b7280;">Invoice</td><td style="padding:5px 0; text-align:right; font-weight:600;">${invoice_number}</td></tr>
+              ${program_name ? `<tr><td style="padding:5px 0; color:#6b7280;">Program</td><td style="padding:5px 0; text-align:right; font-weight:600;">${program_name}</td></tr>` : ""}
+              <tr><td style="padding:5px 0; color:#6b7280;">Total Amount</td><td style="padding:5px 0; text-align:right; font-weight:600;">${formattedAmount}</td></tr>
+              <tr><td style="padding:5px 0; color:#6b7280;">Amount Paid</td><td style="padding:5px 0; text-align:right; font-weight:600;">${formattedPaid}</td></tr>
+              <tr style="border-top:2px solid #dc2626;"><td style="padding:8px 0; font-weight:700;">Balance Due</td><td style="padding:8px 0; text-align:right; font-weight:700; font-size:16px; color:#dc2626;">${formattedBalance}</td></tr>
+              <tr><td style="padding:5px 0; color:#6b7280;">Due Date</td><td style="padding:5px 0; text-align:right; font-weight:600; color:#dc2626;">${fmtDate(due_date)} (OVERDUE)</td></tr>
+            </table>
           </div>
-          <p>Please make your payment as soon as possible.</p>
+          <a href="${FRONTEND_URL}/student/invoices/${invoice_id}?pay=1" style="display:inline-block; padding:12px 24px; background:#dc2626; color:#fff; text-decoration:none; border-radius:6px; font-weight:bold; margin-bottom:24px;">💳 Pay Now</a>
+          <div style="background:#f9fafb; border-radius:8px; padding:16px; margin-top:8px; border:1px solid #e5e7eb;">
+            <p style="margin:0 0 8px; font-size:13px; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em;">Or pay by bank transfer</p>
+            <table style="width:100%; font-size:14px; border-collapse:collapse;">
+              <tr><td style="padding:4px 0; color:#6b7280;">Account Name</td><td style="padding:4px 0; text-align:right; font-weight:600;">FutureLabs Ltd</td></tr>
+              <tr><td style="padding:4px 0; color:#6b7280;">Account Number</td><td style="padding:4px 0; text-align:right; font-weight:700; font-size:16px; letter-spacing:0.05em;">8288339819</td></tr>
+              <tr><td style="padding:4px 0; color:#6b7280;">Bank</td><td style="padding:4px 0; text-align:right; font-weight:600;">Moniepoint MFB</td></tr>
+            </table>
+            <p style="margin:12px 0 0; font-size:12px; color:#9ca3af;">After transferring, log in and upload your receipt so we can confirm your payment.</p>
+          </div>
         `),
       };
 
@@ -197,10 +228,13 @@ function buildEmailContent(type: string, data: Record<string, any>): { subject: 
 }
 
 function buildWhatsAppMessage(type: string, data: Record<string, any>): string {
-  const { full_name, invoice_number, total_amount, currency, due_date, amount_paid, enrollment_id, FRONTEND_URL } = data;
+  const { full_name, invoice_number, total_amount, currency, due_date, amount_paid, outstanding_balance, program_name, enrollment_id, invoice_id, FRONTEND_URL } = data;
   const sym = currency === "USD" ? "$" : "₦";
-  const amt = `${sym}${Number(total_amount).toLocaleString()}`;
-  const paid = amount_paid ? `${sym}${Number(amount_paid).toLocaleString()}` : "";
+  const fmt = (n: number) => `${sym}${Number(n).toLocaleString()}`;
+  const amt = fmt(total_amount);
+  const paid = amount_paid ? fmt(amount_paid) : "";
+  const balance = fmt(outstanding_balance ?? 0);
+  const bankLine = `\n\nBank transfer:\nFutureLabs Ltd · 8288339819 · Moniepoint MFB\n(Upload receipt after paying)`;
 
   switch (type) {
     case "invoice_created":
@@ -208,9 +242,9 @@ function buildWhatsAppMessage(type: string, data: Record<string, any>): string {
     case "payment_received":
       return `✅ *Payment Received*\n\nHi ${full_name},\nInvoice: ${invoice_number}\nAmount Paid: ${paid}\n\nThank you!`;
     case "payment_reminder":
-      return `⏰ *Payment Reminder*\n\nHi ${full_name},\nInvoice: ${invoice_number}\nAmount Due: ${amt}\nDue Date: ${due_date}\n\nPlease pay before the due date.`;
+      return `⏰ *Payment Reminder*\n\nHi ${full_name},\nInvoice: ${invoice_number}${program_name ? ` · ${program_name}` : ""}\nTotal: ${amt} | Paid: ${paid} | Balance: ${balance}\nDue: ${due_date}\n\nPay online: ${FRONTEND_URL}/student/invoices/${invoice_id}?pay=1${bankLine}`;
     case "overdue":
-      return `⚠️ *Payment Overdue*\n\nHi ${full_name},\nInvoice: ${invoice_number}\nAmount Due: ${amt}\nDue Date: ${due_date}\n\nPlease pay immediately.`;
+      return `⚠️ *Payment Overdue*\n\nHi ${full_name},\nInvoice: ${invoice_number}${program_name ? ` · ${program_name}` : ""}\nTotal: ${amt} | Paid: ${paid} | Balance: ${balance}\nDue: ${due_date} (OVERDUE)\n\nPay immediately: ${FRONTEND_URL}/student/invoices/${invoice_id}?pay=1${bankLine}`;
     case "invoice_settled":
       return `🎉 *Invoice Fully Paid*\n\nHi ${full_name},\nInvoice: ${invoice_number}\nTotal: ${amt}\n\nThank you for completing payment!`;
     default:
@@ -268,15 +302,20 @@ Deno.serve(async (req) => {
       if (data && data.length > 0) nextDue = data[0];
     }
 
+    const totalAmount = Number(invoice?.total_amount || enrollment.total_amount || 0);
+    const amountPaid = Number(extra?.amount_paid ?? enrollment.amount_paid ?? 0);
+
     const templateData = {
       full_name: enrollment.full_name,
       email: enrollment.email,
       phone: enrollment.phone,
+      program_name: enrollment.programs?.program_name || null,
       invoice_number: invoice?.invoice_number || "N/A",
-      total_amount: invoice?.total_amount || enrollment.total_amount,
+      total_amount: totalAmount,
       currency: invoice?.currency || "NGN",
       due_date: nextDue?.due_date || extra?.due_date || "",
-      amount_paid: extra?.amount_paid || enrollment.amount_paid,
+      amount_paid: amountPaid,
+      outstanding_balance: Math.max(totalAmount - amountPaid, 0),
       enrollment_id: enrollment_id,
       invoice_id: invoice_id || null,
       FRONTEND_URL: "https://admin.futurelabs.ng",

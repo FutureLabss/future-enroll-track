@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -22,11 +23,8 @@ export default function StudentInvoiceDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const autoPayTriggered = useRef(false);
   const { user } = useAuth();
-  const [invoice, setInvoice] = useState<any>(null);
-  const [installments, setInstallments] = useState<any[]>([]);
-  const [pending, setPending] = useState<any[]>([]);
-  const [payments, setPayments] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+
   const [paying, setPaying] = useState(false);
   const [bankOpen, setBankOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -35,27 +33,34 @@ export default function StudentInvoiceDetailPage() {
     amount: '', reference: '', notes: '', file: null, installment_id: '',
   });
 
-  const fetchData = async () => {
-    if (!id || !user) return;
-    const [invRes, instRes, pendRes, payRes] = await Promise.all([
-      supabase.from('invoices').select('*, enrollments!inner(user_id, full_name, programs(program_name))').eq('id', id).single(),
-      supabase.from('installments').select('*').eq('invoice_id', id).order('due_date'),
-      supabase.from('pending_payments').select('*').eq('invoice_id', id).order('created_at', { ascending: false }),
-      supabase.from('payments').select('*').eq('invoice_id', id).order('created_at', { ascending: false }),
-    ]);
-    if (invRes.data && (invRes.data.enrollments as any)?.user_id !== user.id) {
-      toast.error('Invoice not found');
-      navigate('/student/invoices');
-      return;
-    }
-    setInvoice(invRes.data);
-    setInstallments(instRes.data || []);
-    setPending(pendRes.data || []);
-    setPayments(payRes.data || []);
-    setLoading(false);
-  };
+  const { data: invoiceData, isLoading: loading } = useQuery({
+    queryKey: ['student-invoice', id, user?.id],
+    queryFn: async () => {
+      if (!id || !user) return null;
+      const [invRes, instRes, pendRes, payRes] = await Promise.all([
+        supabase.from('invoices').select('*, enrollments!inner(user_id, full_name, programs(program_name))').eq('id', id).single(),
+        supabase.from('installments').select('*').eq('invoice_id', id).order('due_date'),
+        supabase.from('pending_payments').select('*').eq('invoice_id', id).order('created_at', { ascending: false }),
+        supabase.from('payments').select('*').eq('invoice_id', id).order('created_at', { ascending: false }),
+      ]);
+      if (invRes.data && (invRes.data.enrollments as any)?.user_id !== user.id) {
+        throw new Error('not-found');
+      }
+      return {
+        invoice: invRes.data,
+        installments: instRes.data || [],
+        pending: pendRes.data || [],
+        payments: payRes.data || [],
+      };
+    },
+    enabled: !!id && !!user,
+  });
 
-  useEffect(() => { fetchData(); }, [id, user]);
+  const invoice = invoiceData?.invoice ?? null;
+  const installments = invoiceData?.installments ?? [];
+  const pending = invoiceData?.pending ?? [];
+  const payments = invoiceData?.payments ?? [];
+  const fetchData = () => queryClient.invalidateQueries({ queryKey: ['student-invoice', id, user?.id] });
 
   // Auto-trigger Paystack when ?pay=1 (from email link)
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
@@ -72,185 +72,180 @@ export async function enrichStudentAssignments(rows: any[], studentId: string) {
 
 export function useAssignments(classroomId: string, options: UseAssignmentsOptions = {}) {
   const { user } = useAuth();
-  const [assignments, setAssignments] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const enabled = options.enabled ?? Boolean(classroomId);
+  const queryClient = useQueryClient();
+  const enabled = (options.enabled ?? Boolean(classroomId)) && Boolean(classroomId);
 
-  const fetchAssignments = async () => {
-    if (!classroomId || !enabled) {
-      setAssignments([]);
-      setLoading(false);
-      return;
-    }
+  const { data: assignments = [], isLoading: loading } = useQuery({
+    queryKey: ['assignments', classroomId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('assignments')
+        .select(ASSIGNMENT_COLUMNS)
+        .eq('classroom_id', classroomId)
+        .order('created_at', { ascending: false });
 
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('assignments')
-      .select(ASSIGNMENT_COLUMNS)
-      .eq('classroom_id', classroomId)
-      .order('created_at', { ascending: false });
+      if (error) {
+        toast.error(`Could not load assignments: ${error.message}`);
+        return [];
+      }
 
-    if (error) {
-      toast.error(`Could not load assignments: ${error.message}`);
-      setAssignments([]);
-      setLoading(false);
-      return;
-    }
+      const rows = data || [];
+      const cohortIds = Array.from(new Set(rows.map((row: any) => row.cohort_id).filter(Boolean)));
+      const unitIds = Array.from(new Set(rows.map((row: any) => row.unit_id).filter(Boolean)));
 
-    const rows = data || [];
-    const cohortIds = Array.from(new Set(rows.map((row: any) => row.cohort_id).filter(Boolean)));
-    const unitIds = Array.from(new Set(rows.map((row: any) => row.unit_id).filter(Boolean)));
+      const [cohortRes, unitRes] = await Promise.all([
+        cohortIds.length
+          ? supabase.from('cohorts').select('id, cohort_label').in('id', cohortIds)
+          : Promise.resolve({ data: [], error: null }),
+        unitIds.length
+          ? supabase.from('units').select('id, title').in('id', unitIds)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
 
-    const [cohortRes, unitRes] = await Promise.all([
-      cohortIds.length
-        ? supabase.from('cohorts').select('id, cohort_label').in('id', cohortIds)
-        : Promise.resolve({ data: [], error: null }),
-      unitIds.length
-        ? supabase.from('units').select('id, title').in('id', unitIds)
-        : Promise.resolve({ data: [], error: null }),
-    ]);
+      if (cohortRes.error) toast.error(`Could not load assignment cohorts: ${cohortRes.error.message}`);
+      if (unitRes.error) toast.error(`Could not load assignment units: ${unitRes.error.message}`);
 
-    if (cohortRes.error) toast.error(`Could not load assignment cohorts: ${cohortRes.error.message}`);
-    if (unitRes.error) toast.error(`Could not load assignment units: ${unitRes.error.message}`);
+      const cohortsById = new Map(((cohortRes.data || []) as any[]).map((cohort) => [cohort.id, cohort]));
+      const unitsById = new Map(((unitRes.data || []) as any[]).map((unit) => [unit.id, unit]));
 
-    const cohortsById = new Map(((cohortRes.data || []) as any[]).map((cohort) => [cohort.id, cohort]));
-    const unitsById = new Map(((unitRes.data || []) as any[]).map((unit) => [unit.id, unit]));
+      return rows.map((row: any) => ({
+        ...row,
+        cohorts: row.cohort_id ? cohortsById.get(row.cohort_id) || null : null,
+        units: row.unit_id ? unitsById.get(row.unit_id) || null : null,
+      }));
+    },
+    enabled,
+  });
 
-    setAssignments(rows.map((row: any) => ({
-      ...row,
-      cohorts: row.cohort_id ? cohortsById.get(row.cohort_id) || null : null,
-      units: row.unit_id ? unitsById.get(row.unit_id) || null : null,
-    })));
-    setLoading(false);
-  };
+  const refetch = () => queryClient.invalidateQueries({ queryKey: ['assignments', classroomId] });
 
-  useEffect(() => {
-    fetchAssignments();
-  }, [classroomId, enabled]);
+  const createMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      const { data, error } = await supabase
+        .from('assignments')
+        .insert({ ...payload, classroom_id: classroomId, created_by: user?.id })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['assignments', classroomId] }),
+  });
 
-  const createAssignment = async (payload: any) => {
-    const { data, error } = await supabase
-      .from('assignments')
-      .insert({ ...payload, classroom_id: classroomId, created_by: user?.id })
-      .select()
-      .single();
-    if (error) throw error;
-    await fetchAssignments();
-    return data;
-  };
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, payload }: { id: string; payload: any }) => {
+      const { error } = await supabase.from('assignments').update(payload).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['assignments', classroomId] }),
+  });
 
-  const updateAssignment = async (id: string, payload: any) => {
-    const { error } = await supabase.from('assignments').update(payload).eq('id', id);
-    if (error) throw error;
-    await fetchAssignments();
-  };
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('assignments').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['assignments', classroomId] }),
+  });
 
-  const publishAssignment = async (id: string) => {
-    await updateAssignment(id, { status: 'published' });
-  };
+  const createAssignment = (payload: any) => createMutation.mutateAsync(payload);
+  const updateAssignment = (id: string, payload: any) => updateMutation.mutateAsync({ id, payload });
+  const publishAssignment = (id: string) => updateAssignment(id, { status: 'published' });
+  const deleteAssignment = (id: string) => deleteMutation.mutateAsync(id);
 
-  const deleteAssignment = async (id: string) => {
-    const { error } = await supabase.from('assignments').delete().eq('id', id);
-    if (error) throw error;
-    await fetchAssignments();
-  };
-
-  return { assignments, loading, refetch: fetchAssignments, createAssignment, updateAssignment, publishAssignment, deleteAssignment };
+  return { assignments, loading, refetch, createAssignment, updateAssignment, publishAssignment, deleteAssignment };
 }
 
 export function useStudentAssignments(classroomId: string, cohortId?: string) {
   const { user } = useAuth();
-  const [assignments, setAssignments] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  const fetchAssignments = async () => {
-    if (!classroomId || !user) {
-      setAssignments([]);
-      setLoading(false);
-      return;
-    }
+  const { data: assignments = [], isLoading: loading } = useQuery({
+    queryKey: ['student-assignments', classroomId, cohortId, user?.id],
+    queryFn: async () => {
+      let query = supabase
+        .from('assignments')
+        .select(ASSIGNMENT_COLUMNS)
+        .eq('classroom_id', classroomId)
+        .eq('status', 'published')
+        .order('due_date', { ascending: true });
 
-    setLoading(true);
-    let query = supabase
-      .from('assignments')
-      .select(ASSIGNMENT_COLUMNS)
-      .eq('classroom_id', classroomId)
-      .eq('status', 'published')
-      .order('due_date', { ascending: true });
+      query = cohortId
+        ? query.or(`cohort_id.is.null,cohort_id.eq.${cohortId}`)
+        : query.is('cohort_id', null);
 
-    query = cohortId
-      ? query.or(`cohort_id.is.null,cohort_id.eq.${cohortId}`)
-      : query.is('cohort_id', null);
+      const { data, error } = await query;
+      if (error) {
+        toast.error(`Could not load assignments: ${error.message}`);
+        return [];
+      }
+      return enrichStudentAssignments(data || [], user!.id);
+    },
+    enabled: Boolean(classroomId && user),
+  });
 
-    const { data, error } = await query;
-    if (error) {
-      toast.error(`Could not load assignments: ${error.message}`);
-      setAssignments([]);
-      setLoading(false);
-      return;
-    }
+  const queryClient = useQueryClient();
+  const refetch = () => queryClient.invalidateQueries({ queryKey: ['student-assignments', classroomId, cohortId, user?.id] });
 
-    setAssignments(await enrichStudentAssignments(data || [], user.id));
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    fetchAssignments();
-  }, [classroomId, cohortId, user]);
-
-  return { assignments, loading, refetch: fetchAssignments };
+  return { assignments, loading, refetch };
 }
 
 export function useSubmissions(assignmentId: string) {
-  const [submissions, setSubmissions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
-  const fetchSubmissions = async () => {
-    const { data } = await supabase
-      .from('assignment_submissions')
-      .select('*')
-      .eq('assignment_id', assignmentId)
-      .order('submitted_at', { ascending: false });
-    const rows = data || [];
-    const studentIds = [...new Set(rows.map((r: any) => r.student_id).filter(Boolean))];
-    const { data: profileRows } = studentIds.length
-      ? await supabase.from('profiles').select('user_id, full_name, email').in('user_id', studentIds)
-      : { data: [] };
-    const profilesById = new Map((profileRows || []).map((p: any) => [p.user_id, p]));
-    setSubmissions(rows.map((r: any) => ({ ...r, profiles: profilesById.get(r.student_id) || null })));
-    setLoading(false);
-  };
+  const { data: submissions = [], isLoading: loading } = useQuery({
+    queryKey: ['submissions', assignmentId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('assignment_submissions')
+        .select('*')
+        .eq('assignment_id', assignmentId)
+        .order('submitted_at', { ascending: false });
+      const rows = data || [];
+      const studentIds = [...new Set(rows.map((r: any) => r.student_id).filter(Boolean))];
+      const { data: profileRows } = studentIds.length
+        ? await supabase.from('profiles').select('user_id, full_name, email').in('user_id', studentIds)
+        : { data: [] };
+      const profilesById = new Map((profileRows || []).map((p: any) => [p.user_id, p]));
+      return rows.map((r: any) => ({ ...r, profiles: profilesById.get(r.student_id) || null }));
+    },
+    enabled: Boolean(assignmentId),
+  });
 
-  useEffect(() => {
-    if (!assignmentId) return;
-    fetchSubmissions();
-  }, [assignmentId]);
+  const refetch = () => queryClient.invalidateQueries({ queryKey: ['submissions', assignmentId] });
 
-  const submitAssignment = async ({ text, imageUrl, linkUrl, dueDate }: AssignmentSubmissionPayload) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    const isLate = Boolean(dueDate && new Date(dueDate) < new Date());
-    const { error } = await supabase.from('assignment_submissions').upsert({
-      assignment_id: assignmentId,
-      student_id: user?.id,
-      submission_text: text?.trim() || null,
-      image_url: imageUrl || null,
-      link_url: linkUrl?.trim() || null,
-      file_url: linkUrl?.trim() || imageUrl || null,
-      status: isLate ? 'late' : 'submitted',
-      submitted_at: new Date().toISOString(),
-    }, { onConflict: 'assignment_id,student_id' });
-    if (error) throw error;
-    await fetchSubmissions();
-  };
+  const submitMutation = useMutation({
+    mutationFn: async ({ text, imageUrl, linkUrl, dueDate }: AssignmentSubmissionPayload) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const isLate = Boolean(dueDate && new Date(dueDate) < new Date());
+      const { error } = await supabase.from('assignment_submissions').upsert({
+        assignment_id: assignmentId,
+        student_id: user?.id,
+        submission_text: text?.trim() || null,
+        image_url: imageUrl || null,
+        link_url: linkUrl?.trim() || null,
+        file_url: linkUrl?.trim() || imageUrl || null,
+        status: isLate ? 'late' : 'submitted',
+        submitted_at: new Date().toISOString(),
+      }, { onConflict: 'assignment_id,student_id' });
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['submissions', assignmentId] }),
+  });
 
-  const gradeSubmission = async (submissionId: string, grade: string, feedback: string, score?: number | null) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    const { error } = await supabase.from('assignment_submissions')
-      .update({ grade, feedback, score: score ?? null, status: 'graded', graded_by: user?.id, graded_at: new Date().toISOString() })
-      .eq('id', submissionId);
-    if (error) throw error;
-    await fetchSubmissions();
-  };
+  const gradeMutation = useMutation({
+    mutationFn: async ({ submissionId, grade, feedback, score }: { submissionId: string; grade: string; feedback: string; score?: number | null }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase.from('assignment_submissions')
+        .update({ grade, feedback, score: score ?? null, status: 'graded', graded_by: user?.id, graded_at: new Date().toISOString() })
+        .eq('id', submissionId);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['submissions', assignmentId] }),
+  });
 
-  return { submissions, loading, refetch: fetchSubmissions, submitAssignment, gradeSubmission };
+  const submitAssignment = (payload: AssignmentSubmissionPayload) => submitMutation.mutateAsync(payload);
+  const gradeSubmission = (submissionId: string, grade: string, feedback: string, score?: number | null) =>
+    gradeMutation.mutateAsync({ submissionId, grade, feedback, score });
+
+  return { submissions, loading, refetch, submitAssignment, gradeSubmission };
 }

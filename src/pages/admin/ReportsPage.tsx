@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -21,13 +22,59 @@ const CHART_COLORS = [
 ];
 
 export default function ReportsPage() {
-  const [programs, setPrograms] = useState<any[]>([]);
-  const [cohorts, setCohorts] = useState<any[]>([]);
-  const [organizations, setOrganizations] = useState<any[]>([]);
-  const [enrollments, setEnrollments] = useState<any[]>([]);
-  const [customFields, setCustomFields] = useState<any[]>([]);
-  const [valueMap, setValueMap] = useState<Map<string, Record<string, string>>>(new Map());
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ['reports'],
+    queryFn: async () => {
+      const [p, c, o, e, cf] = await Promise.all([
+        supabase.from('programs').select('id, program_name'),
+        supabase.from('cohorts').select('id, cohort_label'),
+        supabase.from('organizations').select('id, organization_name'),
+        supabase.from('enrollments').select('*, programs(program_name), cohorts(cohort_label), organizations(organization_name)').order('first_payment_date', { ascending: false, nullsFirst: false }),
+        supabase.from('custom_fields').select('id, key, label, sort_order').eq('active', true).order('sort_order'),
+      ]);
+
+      const enrollmentRows = e.data || [];
+      const fields = cf.data || [];
+
+      let valueMap = new Map<string, Record<string, string>>();
+      if (enrollmentRows.length > 0 && fields.length > 0) {
+        const fieldKeyById = new Map<string, string>(fields.map((f: any) => [f.id, f.key]));
+        const ids = enrollmentRows.map((r: any) => r.id);
+        const CHUNK = 100;
+        let allFv: any[] = [];
+        for (let i = 0; i < ids.length; i += CHUNK) {
+          const { data: fv } = await supabase
+            .from('field_values')
+            .select('enrollment_id, field_id, value')
+            .in('enrollment_id', ids.slice(i, i + CHUNK));
+          allFv = allFv.concat(fv || []);
+        }
+        for (const fv of allFv) {
+          const key = fieldKeyById.get(fv.field_id);
+          if (!key) continue;
+          if (!valueMap.has(fv.enrollment_id)) valueMap.set(fv.enrollment_id, {});
+          valueMap.get(fv.enrollment_id)![key] = fv.value ?? '';
+        }
+      }
+
+      return {
+        programs: p.data || [],
+        cohorts: c.data || [],
+        organizations: o.data || [],
+        enrollments: enrollmentRows,
+        customFields: fields,
+        valueMap,
+      };
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const programs = data?.programs ?? [];
+  const cohorts = data?.cohorts ?? [];
+  const organizations = data?.organizations ?? [];
+  const enrollments = data?.enrollments ?? [];
+  const customFields = data?.customFields ?? [];
+  const valueMap = data?.valueMap ?? new Map<string, Record<string, string>>();
 
   const [filters, setFilters] = useState({
     dateFrom: '',
@@ -41,52 +88,6 @@ export default function ReportsPage() {
   const [exportOpen, setExportOpen] = useState(false);
   const [exportForm, setExportForm] = useState({ dateFrom: '', dateTo: '', format: 'csv' });
 
-  useEffect(() => {
-    const load = async () => {
-      const [p, c, o, e, cf] = await Promise.all([
-        supabase.from('programs').select('id, program_name'),
-        supabase.from('cohorts').select('id, cohort_label'),
-        supabase.from('organizations').select('id, organization_name'),
-        supabase.from('enrollments').select('*, programs(program_name), cohorts(cohort_label), organizations(organization_name)').order('first_payment_date', { ascending: false, nullsFirst: false }),
-        supabase.from('custom_fields').select('id, key, label, sort_order').eq('active', true).order('sort_order'),
-      ]);
-
-      setPrograms(p.data || []);
-      setCohorts(c.data || []);
-      setOrganizations(o.data || []);
-      setEnrollments(e.data || []);
-
-      const fields = cf.data || [];
-      setCustomFields(fields);
-
-      // Fetch all field values for all enrollments and build the lookup map
-      const enrollmentRows = e.data || [];
-      if (enrollmentRows.length > 0 && fields.length > 0) {
-        const fieldKeyById = new Map<string, string>(fields.map((f: any) => [f.id, f.key]));
-        const ids = enrollmentRows.map((r: any) => r.id);
-        const CHUNK = 100;
-        let allFv: any[] = [];
-        for (let i = 0; i < ids.length; i += CHUNK) {
-          const { data: fv } = await supabase
-            .from('field_values')
-            .select('enrollment_id, field_id, value')
-            .in('enrollment_id', ids.slice(i, i + CHUNK));
-          allFv = allFv.concat(fv || []);
-        }
-        const map = new Map<string, Record<string, string>>();
-        for (const fv of allFv) {
-          const key = fieldKeyById.get(fv.field_id);
-          if (!key) continue;
-          if (!map.has(fv.enrollment_id)) map.set(fv.enrollment_id, {});
-          map.get(fv.enrollment_id)![key] = fv.value ?? '';
-        }
-        setValueMap(map);
-      }
-
-      setLoading(false);
-    };
-    load();
-  }, []);
 
   const filtered = enrollments.filter(e => {
     if (filters.program_id !== 'all' && e.program_id !== filters.program_id) return false;

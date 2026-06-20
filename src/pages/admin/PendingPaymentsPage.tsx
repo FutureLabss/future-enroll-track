@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -7,20 +8,21 @@ import { CheckCircle, XCircle, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function PendingPaymentsPage() {
-  const [items, setItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const fetchData = async () => {
-    setLoading(true);
-    const { data } = await supabase
-      .from('pending_payments')
-      .select('*, invoices(invoice_number, enrollments(full_name, programs(program_name)))')
-      .order('created_at', { ascending: false });
-    setItems(data || []);
-    setLoading(false);
-  };
-  useEffect(() => { fetchData(); }, []);
+  const { data: items = [], isLoading: loading } = useQuery({
+    queryKey: ['pending-payments'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('pending_payments')
+        .select('*, invoices(invoice_number, enrollments(full_name, programs(program_name)))')
+        .order('created_at', { ascending: false });
+      return data || [];
+    },
+  });
+
+  const refetchItems = () => queryClient.invalidateQueries({ queryKey: ['pending-payments'] });
 
   const formatCurrency = (val: number) => `₦${Number(val).toLocaleString('en-NG')}`;
 
@@ -92,7 +94,7 @@ export default function PendingPaymentsPage() {
       } catch (_e) { }
 
       toast.success('Payment approved & recorded');
-      fetchData();
+      refetchItems();
     } catch (err: any) {
       toast.error(err.message || 'Approve failed');
     } finally {
@@ -109,7 +111,7 @@ export default function PendingPaymentsPage() {
         reviewed_by: (await supabase.auth.getUser()).data.user?.id,
       }).eq('id', p.id);
       toast.success('Marked as rejected');
-      fetchData();
+      refetchItems();
     } catch (err: any) {
       toast.error(err.message);
     } finally {

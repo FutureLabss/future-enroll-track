@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { StatCard } from '@/components/shared/StatCard';
@@ -12,19 +12,9 @@ import { useNavigate } from 'react-router-dom';
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const { isAdmin, loading: authLoading } = useAuth();
-  const [stats, setStats] = useState({
-    totalInvoiced: 0,
-    totalCollected: 0,
-    outstanding: 0,
-    overdueCount: 0,
-    totalEnrollments: 0,
-  });
-  const [recentEnrollments, setRecentEnrollments] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (authLoading || !isAdmin) return;
-    const fetchData = async () => {
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ['dashboard'],
+    queryFn: async () => {
       const [allEnrollRes, recentEnrollRes, invoiceRes, otherIncomeRes] = await Promise.all([
         supabase.from('enrollments').select('total_amount, amount_paid, enrollment_status'),
         supabase.from('enrollments').select('*').order('first_payment_date', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }).limit(5),
@@ -43,12 +33,17 @@ export default function AdminDashboard() {
       const outstanding = allEnrollments.reduce((s, e) => s + (Number(e.total_amount) - Number(e.amount_paid)), 0);
       const overdueCount = allEnrollments.filter(e => e.enrollment_status === 'overdue').length;
 
-      setStats({ totalInvoiced, totalCollected, outstanding, overdueCount, totalEnrollments: allEnrollments.length });
-      setRecentEnrollments(recentEnrollRes.data || []);
-      setLoading(false);
-    };
-    fetchData();
-  }, [authLoading, isAdmin]);
+      return {
+        stats: { totalInvoiced, totalCollected, outstanding, overdueCount, totalEnrollments: allEnrollments.length },
+        recentEnrollments: recentEnrollRes.data || [],
+      };
+    },
+    enabled: !authLoading && isAdmin,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const stats = data?.stats ?? { totalInvoiced: 0, totalCollected: 0, outstanding: 0, overdueCount: 0, totalEnrollments: 0 };
+  const recentEnrollments = data?.recentEnrollments ?? [];
 
   const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG', { minimumFractionDigits: 0 })}`;
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable } from '@/components/shared/DataTable';
@@ -35,12 +36,8 @@ const monthOptions = () => {
 };
 
 export default function PayrollPage() {
-  const [staff, setStaff] = useState<any[]>([]);
-  const [runs, setRuns] = useState<any[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(() => toMonthValue(new Date()));
-  const [loading, setLoading] = useState(true);
-
-  const [programs, setPrograms] = useState<any[]>([]);
+  const queryClient = useQueryClient();
 
   // Staff dialog
   const [staffOpen, setStaffOpen] = useState(false);
@@ -66,20 +63,23 @@ export default function PayrollPage() {
       });
   }, []);
 
-  const fetchAll = async () => {
-    const [s, r, p] = await Promise.all([
-      supabase.from('staff').select('*, programs(program_name)').order('full_name'),
-      supabase.from('payroll_runs').select('*, staff(full_name, role_title)').eq('pay_month', selectedMonth).order('created_at', { ascending: false }),
-      supabase.from('programs').select('id, program_name').eq('active', true),
-    ]);
-    setStaff(s.data || []);
-    if (r.error) toast.error('Failed to load payroll: ' + r.error.message);
-    setRuns(r.data || []);
-    setPrograms(p.data || []);
-    setLoading(false);
-  };
+  const { data: payrollData, isLoading: loading } = useQuery({
+    queryKey: ['payroll', selectedMonth],
+    queryFn: async () => {
+      const [s, r, p] = await Promise.all([
+        supabase.from('staff').select('*, programs(program_name)').order('full_name'),
+        supabase.from('payroll_runs').select('*, staff(full_name, role_title)').eq('pay_month', selectedMonth).order('created_at', { ascending: false }),
+        supabase.from('programs').select('id, program_name').eq('active', true),
+      ]);
+      if (r.error) throw new Error('Failed to load payroll: ' + r.error.message);
+      return { staff: s.data || [], runs: r.data || [], programs: p.data || [] };
+    },
+  });
 
-  useEffect(() => { fetchAll(); }, [selectedMonth]);
+  const staff = payrollData?.staff ?? [];
+  const runs = payrollData?.runs ?? [];
+  const programs = payrollData?.programs ?? [];
+  const fetchAll = () => queryClient.invalidateQueries({ queryKey: ['payroll', selectedMonth] });
 
   const resetStaffForm = () => {
     setEditingStaffId(null);

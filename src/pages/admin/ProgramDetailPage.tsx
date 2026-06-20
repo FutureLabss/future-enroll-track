@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -38,34 +39,26 @@ const statusClass: Record<string, string> = {
 export default function ProgramDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [program, setProgram] = useState<any>(null);
-  const [classrooms, setClassrooms] = useState<any[]>([]);
-  const [cohorts, setCohorts] = useState<any[]>([]);
-  const [enrollments, setEnrollments] = useState<any[]>([]);
-  const [curricula, setCurricula] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!id) return;
-
-    const load = async () => {
-      setLoading(true);
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ['program-detail', id],
+    queryFn: async () => {
       const [programRes, classroomRes, cohortRes, enrollmentRes] = await Promise.all([
-        supabase.from('programs').select('*').eq('id', id).single(),
+        supabase.from('programs').select('*').eq('id', id!).single(),
         supabase
           .from('classrooms')
           .select('*, cohorts(id, cohort_label, status), classroom_staff(id, status), classroom_students(id)')
-          .eq('program_id', id)
+          .eq('program_id', id!)
           .order('created_at', { ascending: false }),
         supabase
           .from('cohorts')
           .select('*, classrooms(id, name), cohort_students(count)')
-          .eq('program_id', id)
+          .eq('program_id', id!)
           .order('created_at', { ascending: false }),
         supabase
           .from('enrollments')
           .select('id, full_name, email, enrollment_status, total_amount, amount_paid, outstanding_balance, created_at')
-          .eq('program_id', id)
+          .eq('program_id', id!)
           .order('created_at', { ascending: false }),
       ]);
 
@@ -79,16 +72,22 @@ export default function ProgramDetailPage() {
             .order('created_at', { ascending: false })
         : { data: [] };
 
-      setProgram(programRes.data);
-      setClassrooms(classroomRows);
-      setCohorts(cohortRes.data || []);
-      setEnrollments(enrollmentRes.data || []);
-      setCurricula(curriculumRes.data || []);
-      setLoading(false);
-    };
+      return {
+        program: programRes.data,
+        classrooms: classroomRows,
+        cohorts: cohortRes.data || [],
+        enrollments: enrollmentRes.data || [],
+        curricula: curriculumRes.data || [],
+      };
+    },
+    enabled: !!id,
+  });
 
-    load();
-  }, [id]);
+  const program = data?.program ?? null;
+  const classrooms = data?.classrooms ?? [];
+  const cohorts = data?.cohorts ?? [];
+  const enrollments = data?.enrollments ?? [];
+  const curricula = data?.curricula ?? [];
 
   const stats = useMemo(() => {
     const activeCohorts = cohorts.filter(c => cohortStatus(c) === 'active').length;

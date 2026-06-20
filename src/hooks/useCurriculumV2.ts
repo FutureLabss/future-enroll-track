@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 
@@ -51,95 +51,103 @@ export interface CurriculumV2 {
   tracks: TrackV2[];
 }
 
+async function fetchCurriculumTree(curriculumId: string): Promise<TrackV2[]> {
+  const { data, error } = await supabase.rpc('get_curriculum_tree', { p_curriculum_id: curriculumId });
+  if (error || !data || typeof data !== 'object') return [];
+  const { tracks = [], modules = [], units = [] } = data as any;
+  return (tracks as any[]).map((t: any) => ({
+    ...t,
+    modules: (modules as any[])
+      .filter((m: any) => m.track_id === t.id)
+      .map((m: any) => ({
+        ...m,
+        units: (units as any[])
+          .filter((u: any) => u.module_id === m.id)
+          .map((u: any) => ({ ...u, lessons: [] })),
+      })),
+  }));
+}
+
 export function useCurriculumV2(classroomId: string) {
-  const [curricula, setCurricula] = useState<CurriculumV2[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const queryKey = ['curricula', classroomId];
 
-  const fetchTree = useCallback(async (curriculumId: string) => {
-    const { data, error } = await supabase
-      .rpc('get_curriculum_tree', { p_curriculum_id: curriculumId });
-    if (error) { setFetchError(error.message); return []; }
-    if (!data || typeof data !== 'object') return [];
-
-    const { tracks = [], modules = [], units = [] } = data as any;
-    setFetchError(null);
-    return (tracks as any[]).map((t: any) => ({
-      ...t,
-      modules: (modules as any[])
-        .filter((m: any) => m.track_id === t.id)
-        .map((m: any) => ({
-          ...m,
-          units: (units as any[])
-            .filter((u: any) => u.module_id === m.id)
-            .map((u: any) => ({ ...u, lessons: [] })),
-        })),
-    }));
-  }, []);
-
-  const fetchAll = useCallback(async () => {
-    if (!classroomId) { setLoading(false); return; }
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .rpc('get_classroom_curricula', { p_classroom_id: classroomId });
-
+  const { data: curricula = [], isLoading: loading, error: fetchErr } = useQuery({
+    queryKey,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_classroom_curricula', { p_classroom_id: classroomId });
       if (error) {
         toast.error(`Could not load curriculum: ${error.message}`);
-        setFetchError(error.message);
-        return;
+        throw new Error(error.message);
       }
-      setFetchError(null);
       const list = data || [];
-      // Fetch all trees in parallel so the view renders fully populated on first paint
-      const trees = await Promise.all(list.map((c: any) => fetchTree(c.id)));
-      setCurricula(list.map((c: any, i: number) => ({ ...c, tracks: trees[i] || [] })));
-    } finally {
-      setLoading(false);
-    }
-  }, [classroomId, fetchTree]);
+      const trees = await Promise.all(list.map((c: any) => fetchCurriculumTree(c.id)));
+      return list.map((c: any, i: number) => ({ ...c, tracks: trees[i] || [] })) as CurriculumV2[];
+    },
+    enabled: Boolean(classroomId),
+  });
 
-  useEffect(() => { fetchAll().catch(() => setLoading(false)); }, [fetchAll]);
+  const fetchError = fetchErr ? (fetchErr as Error).message : null;
+
+  const refetch = () => queryClient.invalidateQueries({ queryKey });
+
+  const refreshCurriculum = async (curriculumId: string) => {
+    const tracks = await fetchCurriculumTree(curriculumId);
+    queryClient.setQueryData(queryKey, (prev: CurriculumV2[] | undefined) =>
+      (prev || []).map(c => c.id === curriculumId ? { ...c, tracks } : c)
+    );
+  };
 
   // ── Curriculum CRUD ──────────────────────────────────────────────────────────
-  const createCurriculum = async (title: string, description?: string): Promise<string> => {
-    const { data, error } = await supabase
-      .from('curricula')
-      .insert({ classroom_id: classroomId, title, description: description || null })
-      .select('id')
-      .single();
-    if (error) throw error;
-    await fetchAll();
-    return data.id;
-  };
+  const createCurriculumMutation = useMutation({
+    mutationFn: async ({ title, description }: { title: string; description?: string }): Promise<string> => {
+      const { data, error } = await supabase
+        .from('curricula')
+        .insert({ classroom_id: classroomId, title, description: description || null })
+        .select('id')
+        .single();
+      if (error) throw error;
+      return data.id;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+  });
 
-  const refreshCurriculum = useCallback(async (curriculumId: string) => {
-    const tracks = await fetchTree(curriculumId);
-    setCurricula(prev => prev.map(c => c.id === curriculumId ? { ...c, tracks } : c));
-  }, [fetchTree]);
+  const updateCurriculumMutation = useMutation({
+    mutationFn: async ({ id, patch }: { id: string; patch: { title?: string; description?: string } }) => {
+      const { error } = await supabase.from('curricula').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+  });
 
-  const updateCurriculum = async (id: string, patch: { title?: string; description?: string }) => {
-    const { error } = await supabase.from('curricula').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id);
-    if (error) throw error;
-    await fetchAll();
-  };
+  const deleteCurriculumMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('curricula').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+  });
 
-  const deleteCurriculum = async (id: string) => {
-    const { error } = await supabase.from('curricula').delete().eq('id', id);
-    if (error) throw error;
-    await fetchAll();
-  };
+  const cloneCurriculumMutation = useMutation({
+    mutationFn: async ({ sourceCurriculumId, targetClassroomId, title }: { sourceCurriculumId: string; targetClassroomId: string; title?: string }): Promise<string> => {
+      const { data, error } = await supabase.rpc('clone_curriculum_v2' as any, {
+        p_source_curriculum_id: sourceCurriculumId,
+        p_target_classroom_id: targetClassroomId,
+        p_title: title?.trim() || null,
+      });
+      if (error) throw error;
+      return data as string;
+    },
+    onSuccess: (_data, vars) => {
+      if (vars.targetClassroomId === classroomId) queryClient.invalidateQueries({ queryKey });
+    },
+  });
 
-  const cloneCurriculum = async (sourceCurriculumId: string, targetClassroomId: string, title?: string): Promise<string> => {
-    const { data, error } = await supabase.rpc('clone_curriculum_v2' as any, {
-      p_source_curriculum_id: sourceCurriculumId,
-      p_target_classroom_id: targetClassroomId,
-      p_title: title?.trim() || null,
-    });
-    if (error) throw error;
-    if (targetClassroomId === classroomId) await fetchAll();
-    return data as string;
-  };
+  const createCurriculum = (title: string, description?: string) => createCurriculumMutation.mutateAsync({ title, description });
+  const updateCurriculum = (id: string, patch: { title?: string; description?: string }) => updateCurriculumMutation.mutateAsync({ id, patch });
+  const deleteCurriculum = (id: string) => deleteCurriculumMutation.mutateAsync(id);
+  const cloneCurriculum = (sourceCurriculumId: string, targetClassroomId: string, title?: string) =>
+    cloneCurriculumMutation.mutateAsync({ sourceCurriculumId, targetClassroomId, title });
 
   // ── Track CRUD ───────────────────────────────────────────────────────────────
   const addTrack = async (curriculumId: string, title: string, description?: string) => {
@@ -232,7 +240,7 @@ export function useCurriculumV2(classroomId: string) {
     curricula,
     loading,
     fetchError,
-    refetch: fetchAll,
+    refetch,
     refreshCurriculum,
     createCurriculum,
     updateCurriculum,

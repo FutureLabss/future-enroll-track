@@ -1,6 +1,16 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+
+function logAuthEvent(action: 'user_login' | 'user_logout', userId: string, email?: string) {
+  supabase.from('audit_logs').insert({
+    user_id: userId,
+    action,
+    entity_type: 'auth',
+    entity_id: userId,
+    details: { email: email ?? null },
+  }).then(() => {});
+}
 
 type AppRole = 'admin' | 'student' | 'organization' | 'staff';
 
@@ -29,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isSuperadmin, setIsSuperadmin] = useState(false);
   const [demoExpiresAt, setDemoExpiresAt] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
+  const currentUserRef = useRef<{ id: string; email?: string } | null>(null);
 
   const fetchRoles = async (userId: string) => {
     try {
@@ -54,6 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
+        currentUserRef.current = { id: session.user.id, email: session.user.email };
         await fetchRoles(session.user.id);
       }
       setLoading(false);
@@ -61,13 +73,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
         if (!initialised) return;
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
+          if (event === 'SIGNED_IN') {
+            logAuthEvent('user_login', session.user.id, session.user.email);
+          }
+          currentUserRef.current = { id: session.user.id, email: session.user.email };
           await fetchRoles(session.user.id);
         } else {
+          if (event === 'SIGNED_OUT' && currentUserRef.current) {
+            logAuthEvent('user_logout', currentUserRef.current.id, currentUserRef.current.email);
+          }
+          currentUserRef.current = null;
           setRoles([]);
           setIsSuperadmin(false);
         }

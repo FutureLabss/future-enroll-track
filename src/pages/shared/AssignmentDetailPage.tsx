@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -119,29 +120,17 @@ export default function AssignmentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user, isAdmin, isStaff } = useAuth();
-  const [assignment, setAssignment] = useState<any>(null);
-  const [permissions, setPermissions] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!id) return;
-    let active = true;
-
-    const load = async () => {
-      setLoading(true);
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ['assignment-detail', id, user?.id, isAdmin],
+    queryFn: async () => {
       const { data, error } = await supabase
         .from('assignments')
         .select('*')
-        .eq('id', id)
+        .eq('id', id!)
         .single();
 
-      if (!active) return;
-      if (error) {
-        toast.error(`Could not load assignment: ${error.message}`);
-        setAssignment(null);
-        setLoading(false);
-        return;
-      }
+      if (error) throw error;
 
       const [classroomRes, cohortRes, unitRes] = await Promise.all([
         data.classroom_id
@@ -155,8 +144,6 @@ export default function AssignmentDetailPage() {
           : Promise.resolve({ data: null, error: null }),
       ]);
 
-      if (!active) return;
-
       let programName: string | null = null;
       if (classroomRes.data?.program_id) {
         const { data: program } = await supabase
@@ -164,20 +151,19 @@ export default function AssignmentDetailPage() {
           .select('program_name')
           .eq('id', classroomRes.data.program_id)
           .maybeSingle();
-        if (active) programName = program?.program_name ?? null;
+        programName = program?.program_name ?? null;
       }
 
-      if (!active) return;
-
-      setAssignment({
+      const assignment = {
         ...data,
         classrooms: classroomRes.data
           ? { id: classroomRes.data.id, name: classroomRes.data.name, programs: programName ? { program_name: programName } : null }
           : null,
         cohorts: cohortRes.data || null,
         units: unitRes.data || null,
-      });
+      };
 
+      let permissions = null;
       if (user?.id && data?.classroom_id && !isAdmin) {
         const { data: staffRow } = await supabase
           .from('classroom_staff')
@@ -187,15 +173,16 @@ export default function AssignmentDetailPage() {
           .eq('status', 'active')
           .maybeSingle();
 
-        if (active) setPermissions(staffRow?.classroom_permissions || null);
+        permissions = staffRow?.classroom_permissions || null;
       }
 
-      if (active) setLoading(false);
-    };
+      return { assignment, permissions };
+    },
+    enabled: !!id,
+  });
 
-    load();
-    return () => { active = false; };
-  }, [id, isAdmin, user]);
+  const assignment = data?.assignment ?? null;
+  const permissions = data?.permissions ?? null;
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   if (!assignment) return <div className="text-center py-20 text-muted-foreground">Assignment not found or access denied.</div>;

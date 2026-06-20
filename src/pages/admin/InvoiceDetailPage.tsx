@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -15,12 +16,26 @@ import { useAuth } from '@/hooks/useAuth';
 export default function InvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [invoice, setInvoice] = useState<any>(null);
-  const [installments, setInstallments] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [toggling, setToggling] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const { isAdmin, isSuperadmin } = useAuth();
+
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ['invoice', id],
+    queryFn: async () => {
+      const [invRes, instRes] = await Promise.all([
+        supabase.from('invoices').select('*, enrollments(full_name, email, program_id, programs(program_name))').eq('id', id!).single(),
+        supabase.from('installments').select('*').eq('invoice_id', id!).order('due_date'),
+      ]);
+      return { invoice: invRes.data, installments: instRes.data || [] };
+    },
+    enabled: !!id,
+  });
+
+  const invoice = data?.invoice ?? null;
+  const installments = data?.installments ?? [];
+  const fetchData = () => queryClient.invalidateQueries({ queryKey: ['invoice', id] });
 
   const handleDelete = async () => {
     if (!id) return;
@@ -44,19 +59,6 @@ export default function InvoiceDetailPage() {
       setDeleting(false);
     }
   };
-
-  const fetchData = async () => {
-    if (!id) return;
-    const [invRes, instRes] = await Promise.all([
-      supabase.from('invoices').select('*, enrollments(full_name, email, program_id, programs(program_name))').eq('id', id).single(),
-      supabase.from('installments').select('*').eq('invoice_id', id).order('due_date'),
-    ]);
-    setInvoice(invRes.data);
-    setInstallments(instRes.data || []);
-    setLoading(false);
-  };
-
-  useEffect(() => { fetchData(); }, [id]);
 
   const formatCurrency = (val: number) => `₦${Number(val).toLocaleString('en-NG')}`;
 

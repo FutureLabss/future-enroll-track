@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useClassroom, useClassroomCohorts } from '@/hooks/useClassroom';
@@ -580,10 +581,7 @@ export default function ClassroomDetailPage() {
   const { assignments, publishAssignment, createAssignment, updateAssignment, deleteAssignment } = useAssignments(id!);
   const { schedules, refetch: refetchSchedules, updateSchedule, deleteSchedule, notifySchedule } = useSchedules(id!);
 
-  const [staff, setStaff] = useState<any[]>([]);
-  const [students, setStudents] = useState<any[]>([]);
-  const [lessons, setLessons] = useState<any[]>([]);
-  const [staffRoster, setStaffRoster] = useState<any[]>([]);
+  const queryClient = useQueryClient();
 
   // Modals
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -625,11 +623,44 @@ export default function ClassroomDetailPage() {
   const [assignmentForm, setAssignmentForm] = useState(emptyAssignmentForm);
   const [savingAssignment, setSavingAssignment] = useState(false);
 
-  useEffect(() => { if (id) loadAll(); }, [id]);
+  const { data: localData } = useQuery({
+    queryKey: ['classroom-local', id],
+    queryFn: async () => {
+      const [clsRes, staffRes, lessonsRes, rosterRes] = await Promise.all([
+        supabase.from('classrooms').select('hub_id').eq('id', id!).single(),
+        supabase.from('classroom_staff')
+          .select('*, staff(full_name, email, role_title), classroom_permissions(*)')
+          .eq('classroom_id', id!).eq('status', 'active'),
+        supabase.from('old_lessons')
+          .select('*, staff:tutor_id(full_name), cohorts(cohort_label)')
+          .eq('classroom_id', id!).order('lesson_date', { ascending: false }),
+        supabase.from('staff').select('id, full_name, role_title, email, program_id, hub_id').eq('active', true),
+      ]);
+      const hubId = (clsRes.data as any)?.hub_id;
+      return {
+        staff: staffRes.data || [],
+        lessons: lessonsRes.data || [],
+        staffRoster: hubId
+          ? (rosterRes.data || []).filter((s: any) => s.hub_id === hubId)
+          : (rosterRes.data || []),
+      };
+    },
+    enabled: !!id,
+  });
+  const staff = localData?.staff ?? [];
+  const lessons = localData?.lessons ?? [];
+  const staffRoster = localData?.staffRoster ?? [];
+  const loadAll = () => queryClient.invalidateQueries({ queryKey: ['classroom-local', id] });
 
-  useEffect(() => {
-    if (id) supabase.rpc('get_classroom_students', { p_classroom_id: id }).then(({ data }) => setStudents(data || []));
-  }, [id]);
+  const { data: studentsData } = useQuery({
+    queryKey: ['classroom-students', id],
+    queryFn: async () => {
+      const { data } = await supabase.rpc('get_classroom_students', { p_classroom_id: id! });
+      return data || [];
+    },
+    enabled: !!id,
+  });
+  const students = studentsData ?? [];
 
   useEffect(() => {
     const open = sessions.find((s: any) => s.status === 'open');
@@ -774,24 +805,6 @@ export default function ClassroomDetailPage() {
     }
   };
 
-  const loadAll = async () => {
-    const [clsRes, staffRes, lessonsRes, rosterRes] = await Promise.all([
-      supabase.from('classrooms').select('hub_id').eq('id', id!).single(),
-      supabase.from('classroom_staff')
-        .select('*, staff(full_name, email, role_title), classroom_permissions(*)')
-        .eq('classroom_id', id).eq('status', 'active'),
-      supabase.from('old_lessons')
-        .select('*, staff:tutor_id(full_name), cohorts(cohort_label)')
-        .eq('classroom_id', id).order('lesson_date', { ascending: false }),
-      supabase.from('staff').select('id, full_name, role_title, email, program_id, hub_id').eq('active', true),
-    ]);
-    const hubId = (clsRes.data as any)?.hub_id;
-    setStaff(staffRes.data || []);
-    setLessons(lessonsRes.data || []);
-    setStaffRoster(hubId
-      ? (rosterRes.data || []).filter((s: any) => s.hub_id === hubId)
-      : (rosterRes.data || []));
-  };
 
   const handleInvite = async () => {
     if (!inviteForm.staff_id) { toast.error('Select a staff member'); return; }
@@ -1325,7 +1338,7 @@ export default function ClassroomDetailPage() {
                   fromClassroomId={id!}
                   programId={programId}
                   onClose={() => setSwitchModal({ open: false })}
-                  onSwitched={() => supabase.rpc('get_classroom_students', { p_classroom_id: id }).then(({ data }) => setStudents(data || []))}
+                  onSwitched={() => queryClient.invalidateQueries({ queryKey: ['classroom-students', id] })}
                 />
               )}
             </DialogContent>

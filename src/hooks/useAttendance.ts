@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { enrichSchedules, SCHEDULE_COLUMNS } from '@/hooks/useSchedules';
@@ -37,133 +37,129 @@ async function enrichAttendanceSessions(rows: any[]) {
 }
 
 export function useAttendance(classroomId: string) {
-  const { user } = useAuth();
-  const [sessions, setSessions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
-  const fetchSessions = async () => {
-    const { data, error } = await supabase
-      .from('attendance_sessions')
-      .select(ATTENDANCE_SESSION_COLUMNS)
-      .eq('classroom_id', classroomId)
-      .order('created_at', { ascending: false });
-    if (error) {
-      setSessions([]);
-      setLoading(false);
-      return;
-    }
-    setSessions(await enrichAttendanceSessions(data || []));
-    setLoading(false);
-  };
+  const { data: sessions = [], isLoading: loading } = useQuery({
+    queryKey: ['attendance-sessions', classroomId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('attendance_sessions')
+        .select(ATTENDANCE_SESSION_COLUMNS)
+        .eq('classroom_id', classroomId)
+        .order('created_at', { ascending: false });
+      if (error) return [];
+      return enrichAttendanceSessions(data || []);
+    },
+    enabled: Boolean(classroomId),
+    staleTime: 1000 * 30,
+  });
 
-  useEffect(() => {
-    if (!classroomId) return;
-    fetchSessions();
-  }, [classroomId]);
+  const refetch = () => queryClient.invalidateQueries({ queryKey: ['attendance-sessions', classroomId] });
 
-  const generateSession = async (
-    lessonId: string | null,
-    cohortId: string | null,
-    durationMins: number,
-    scheduleId?: string | null
-  ) => {
-    const { data, error } = await supabase.rpc('generate_attendance_session', {
-      p_classroom_id: classroomId,
-      p_lesson_id: lessonId,
-      p_cohort_id: cohortId,
-      p_duration_mins: durationMins,
-      p_schedule_id: scheduleId ?? null,
-    });
-    if (error) throw error;
-    await fetchSessions();
-    return data;
-  };
+  const generateMutation = useMutation({
+    mutationFn: async ({ lessonId, cohortId, durationMins, scheduleId }: { lessonId: string | null; cohortId: string | null; durationMins: number; scheduleId?: string | null }) => {
+      const { data, error } = await supabase.rpc('generate_attendance_session', {
+        p_classroom_id: classroomId,
+        p_lesson_id: lessonId,
+        p_cohort_id: cohortId,
+        p_duration_mins: durationMins,
+        p_schedule_id: scheduleId ?? null,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['attendance-sessions', classroomId] }),
+  });
 
-  const closeSession = async (sessionId: string) => {
-    const { error } = await supabase
-      .from('attendance_sessions')
-      .update({ status: 'closed', closed_at: new Date().toISOString() })
-      .eq('id', sessionId);
-    if (error) throw error;
-    await fetchSessions();
-  };
+  const closeMutation = useMutation({
+    mutationFn: async (sessionId: string) => {
+      const { error } = await supabase
+        .from('attendance_sessions')
+        .update({ status: 'closed', closed_at: new Date().toISOString() })
+        .eq('id', sessionId);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['attendance-sessions', classroomId] }),
+  });
 
-  const regenerateCode = async (sessionId: string, durationMins: number) => {
-    const newCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const newExpiry = new Date(Date.now() + durationMins * 60 * 1000).toISOString();
-    const { error } = await supabase
-      .from('attendance_sessions')
-      .update({ code: newCode, code_expires_at: newExpiry })
-      .eq('id', sessionId);
-    if (error) throw error;
-    await fetchSessions();
-    return newCode;
-  };
+  const regenMutation = useMutation({
+    mutationFn: async ({ sessionId, durationMins }: { sessionId: string; durationMins: number }) => {
+      const newCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const newExpiry = new Date(Date.now() + durationMins * 60 * 1000).toISOString();
+      const { error } = await supabase
+        .from('attendance_sessions')
+        .update({ code: newCode, code_expires_at: newExpiry })
+        .eq('id', sessionId);
+      if (error) throw error;
+      return newCode;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['attendance-sessions', classroomId] }),
+  });
 
-  return { sessions, loading, generateSession, closeSession, regenerateCode, refetch: fetchSessions };
+  const generateSession = (lessonId: string | null, cohortId: string | null, durationMins: number, scheduleId?: string | null) =>
+    generateMutation.mutateAsync({ lessonId, cohortId, durationMins, scheduleId });
+  const closeSession = (sessionId: string) => closeMutation.mutateAsync(sessionId);
+  const regenerateCode = (sessionId: string, durationMins: number) => regenMutation.mutateAsync({ sessionId, durationMins });
+
+  return { sessions, loading, generateSession, closeSession, regenerateCode, refetch };
 }
 
 export function useAttendanceSession(sessionId: string) {
-  const [records, setRecords] = useState<any[]>([]);
-  const [absentStudents, setAbsentStudents] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ['attendance-session', sessionId],
+    queryFn: async () => {
+      const [recordsRes, sessionRes] = await Promise.all([
+        supabase.from('attendance_records').select('*').eq('session_id', sessionId).order('marked_at'),
+        supabase.from('attendance_sessions').select('cohort_id, classroom_id').eq('id', sessionId).single(),
+      ]);
 
-  const load = useCallback(async () => {
-    if (!sessionId) return;
-    const [recordsRes, sessionRes] = await Promise.all([
-      supabase
-        .from('attendance_records')
-        .select('*')
-        .eq('session_id', sessionId)
-        .order('marked_at'),
-      supabase
-        .from('attendance_sessions')
-        .select('cohort_id, classroom_id')
-        .eq('id', sessionId)
-        .single(),
-    ]);
-    const rows = recordsRes.data || [];
-    const recordStudentIds = [...new Set(rows.map((r: any) => r.student_id).filter(Boolean))];
-    const { data: recordProfiles } = recordStudentIds.length
-      ? await supabase.from('profiles').select('user_id, full_name, email').in('user_id', recordStudentIds)
-      : { data: [] };
-    const recordProfilesById = new Map((recordProfiles || []).map((p: any) => [p.user_id, p]));
-    const attended = rows.map((r: any) => ({ ...r, profiles: recordProfilesById.get(r.student_id) || null }));
-    setRecords(attended);
-
-    const session = sessionRes.data;
-    if (session) {
-      const attendedIds = new Set(attended.map((r: any) => r.student_id));
-      const enrolledQuery = session.cohort_id
-        ? supabase.from('cohort_students').select('student_id').eq('cohort_id', session.cohort_id)
-        : supabase.from('classroom_students').select('student_id').eq('classroom_id', session.classroom_id);
-      const { data: enrolled } = await enrolledQuery;
-      const enrolledRows = enrolled || [];
-      const enrolledIds = [...new Set(enrolledRows.map((s: any) => s.student_id).filter(Boolean))];
-      const { data: enrolledProfiles } = enrolledIds.length
-        ? await supabase.from('profiles').select('user_id, full_name, email').in('user_id', enrolledIds)
+      const rows = recordsRes.data || [];
+      const recordStudentIds = [...new Set(rows.map((r: any) => r.student_id).filter(Boolean))];
+      const { data: recordProfiles } = recordStudentIds.length
+        ? await supabase.from('profiles').select('user_id, full_name, email').in('user_id', recordStudentIds)
         : { data: [] };
-      const enrolledProfilesById = new Map((enrolledProfiles || []).map((p: any) => [p.user_id, p]));
-      setAbsentStudents(
-        enrolledRows
+      const recordProfilesById = new Map((recordProfiles || []).map((p: any) => [p.user_id, p]));
+      const attended = rows.map((r: any) => ({ ...r, profiles: recordProfilesById.get(r.student_id) || null }));
+
+      const session = sessionRes.data;
+      let absentStudents: any[] = [];
+
+      if (session) {
+        const attendedIds = new Set(attended.map((r: any) => r.student_id));
+        const enrolledQuery = session.cohort_id
+          ? supabase.from('cohort_students').select('student_id').eq('cohort_id', session.cohort_id)
+          : supabase.from('classroom_students').select('student_id').eq('classroom_id', session.classroom_id);
+        const { data: enrolled } = await enrolledQuery;
+        const enrolledRows = enrolled || [];
+        const enrolledIds = [...new Set(enrolledRows.map((s: any) => s.student_id).filter(Boolean))];
+        const { data: enrolledProfiles } = enrolledIds.length
+          ? await supabase.from('profiles').select('user_id, full_name, email').in('user_id', enrolledIds)
+          : { data: [] };
+        const enrolledProfilesById = new Map((enrolledProfiles || []).map((p: any) => [p.user_id, p]));
+        absentStudents = enrolledRows
           .filter((s: any) => !attendedIds.has(s.student_id))
-          .map((s: any) => ({ ...s, profiles: enrolledProfilesById.get(s.student_id) || null }))
-      );
-    }
-    setLoading(false);
-  }, [sessionId]);
+          .map((s: any) => ({ ...s, profiles: enrolledProfilesById.get(s.student_id) || null }));
+      }
 
-  useEffect(() => { load(); }, [load]);
+      return { records: attended, absentStudents };
+    },
+    enabled: Boolean(sessionId),
+    staleTime: 1000 * 30,
+  });
 
-  return { records, absentStudents, loading, refetch: load };
+  const queryClient = useQueryClient();
+  const refetch = () => queryClient.invalidateQueries({ queryKey: ['attendance-session', sessionId] });
+
+  return {
+    records: data?.records ?? [],
+    absentStudents: data?.absentStudents ?? [],
+    loading,
+    refetch,
+  };
 }
 
 export function useMarkAttendance() {
-  const markAttendance = async (
-    code: string,
-    lat?: number,
-    lng?: number
-  ) => {
+  const markAttendance = async (code: string, lat?: number, lng?: number) => {
     const { data, error } = await supabase.rpc('mark_attendance', {
       p_code: code.toUpperCase(),
       p_student_lat: lat ?? null,
@@ -177,47 +173,36 @@ export function useMarkAttendance() {
 }
 
 export function useAttendanceReport(sessionId: string) {
-  const [records, setRecords] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!sessionId) return;
-    const load = async () => {
-      const { data } = await supabase
-        .from('attendance_records')
-        .select('*')
-        .eq('session_id', sessionId);
+  const { data: records = [], isLoading: loading } = useQuery({
+    queryKey: ['attendance-report', sessionId],
+    queryFn: async () => {
+      const { data } = await supabase.from('attendance_records').select('*').eq('session_id', sessionId);
       const rows = data || [];
       const studentIds = [...new Set(rows.map((r: any) => r.student_id).filter(Boolean))];
       const { data: profileRows } = studentIds.length
         ? await supabase.from('profiles').select('user_id, full_name, email').in('user_id', studentIds)
         : { data: [] };
       const profilesById = new Map((profileRows || []).map((p: any) => [p.user_id, p]));
-      setRecords(rows.map((r: any) => ({ ...r, profiles: profilesById.get(r.student_id) || null })));
-      setLoading(false);
-    };
-    load();
-  }, [sessionId]);
+      return rows.map((r: any) => ({ ...r, profiles: profilesById.get(r.student_id) || null }));
+    },
+    enabled: Boolean(sessionId),
+  });
 
   return { records, loading };
 }
 
 export function useStudentProgress(studentId: string, cohortId: string) {
-  const [progress, setProgress] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!studentId || !cohortId) return;
-    supabase
-      .rpc('get_student_progress', {
+  const { data: progress = null, isLoading: loading } = useQuery({
+    queryKey: ['student-progress', studentId, cohortId],
+    queryFn: async () => {
+      const { data } = await supabase.rpc('get_student_progress', {
         p_student_id: studentId,
         p_cohort_id: cohortId,
-      })
-      .then(({ data }) => {
-        setProgress(data);
-        setLoading(false);
       });
-  }, [studentId, cohortId]);
+      return data;
+    },
+    enabled: Boolean(studentId && cohortId),
+  });
 
   return { progress, loading };
 }

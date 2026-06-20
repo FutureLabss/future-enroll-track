@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
@@ -75,58 +75,66 @@ export async function enrichSchedules(rows: any[]): Promise<Schedule[]> {
 }
 
 export function useSchedules(classroomId: string) {
-  const [schedules, setSchedules] = useState<Schedule[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
-  const fetchAll = useCallback(async () => {
-    if (!classroomId) { setLoading(false); return; }
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('schedules')
-      .select(SCHEDULE_COLUMNS)
-      .eq('classroom_id', classroomId)
-      .order('scheduled_date', { ascending: true })
-      .order('start_time', { ascending: true });
-    if (error) {
-      toast.error(`Could not load schedule: ${error.message}`);
-      setSchedules([]);
-      setLoading(false);
-      return;
-    }
-    setSchedules(await enrichSchedules(data || []));
-    setLoading(false);
-  }, [classroomId]);
+  const { data: schedules = [], isLoading: loading } = useQuery({
+    queryKey: ['schedules', classroomId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('schedules')
+        .select(SCHEDULE_COLUMNS)
+        .eq('classroom_id', classroomId)
+        .order('scheduled_date', { ascending: true })
+        .order('start_time', { ascending: true });
+      if (error) {
+        toast.error(`Could not load schedule: ${error.message}`);
+        return [];
+      }
+      return enrichSchedules(data || []);
+    },
+    enabled: Boolean(classroomId),
+  });
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  const refetch = () => queryClient.invalidateQueries({ queryKey: ['schedules', classroomId] });
 
-  const createSchedule = async (payload: {
-    title?: string | null;
-    lesson_id?: string | null;
-    module_id?: string | null;
-    cohort_id?: string | null;
-    instructor_id?: string | null;
-    scheduled_date: string;
-    start_time: string;
-    end_time: string;
-    location?: string;
-    meeting_link?: string;
-  }) => {
-    const { error } = await supabase.from('schedules').insert({ ...payload, classroom_id: classroomId, status: 'scheduled' });
-    if (error) throw error;
-    await fetchAll();
-  };
+  const createMutation = useMutation({
+    mutationFn: async (payload: {
+      title?: string | null;
+      lesson_id?: string | null;
+      module_id?: string | null;
+      cohort_id?: string | null;
+      instructor_id?: string | null;
+      scheduled_date: string;
+      start_time: string;
+      end_time: string;
+      location?: string;
+      meeting_link?: string;
+    }) => {
+      const { error } = await supabase.from('schedules').insert({ ...payload, classroom_id: classroomId, status: 'scheduled' });
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['schedules', classroomId] }),
+  });
 
-  const updateSchedule = async (id: string, patch: Partial<Omit<Schedule, 'id' | 'classroom_id' | 'created_at'>>) => {
-    const { error } = await supabase.from('schedules').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id);
-    if (error) throw error;
-    await fetchAll();
-  };
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, patch }: { id: string; patch: Partial<Omit<Schedule, 'id' | 'classroom_id' | 'created_at'>> }) => {
+      const { error } = await supabase.from('schedules').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['schedules', classroomId] }),
+  });
 
-  const deleteSchedule = async (id: string) => {
-    const { error } = await supabase.from('schedules').delete().eq('id', id);
-    if (error) throw error;
-    await fetchAll();
-  };
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('schedules').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['schedules', classroomId] }),
+  });
+
+  const createSchedule = (payload: Parameters<typeof createMutation.mutateAsync>[0]) => createMutation.mutateAsync(payload);
+  const updateSchedule = (id: string, patch: Partial<Omit<Schedule, 'id' | 'classroom_id' | 'created_at'>>) => updateMutation.mutateAsync({ id, patch });
+  const deleteSchedule = (id: string) => deleteMutation.mutateAsync(id);
 
   const notifySchedule = async (schedule: Schedule) => {
     const studentQuery = schedule.cohort_id
@@ -155,7 +163,6 @@ export function useSchedules(classroomId: string) {
       ...(schedule.meeting_link ? { details: `Join online: ${schedule.meeting_link}` } : {}),
     });
     const gcalUrl = `https://calendar.google.com/calendar/render?${gcalParams.toString()}`;
-
     const message = `${humanMessage}\n\n||GCAL||:${gcalUrl}`;
 
     const { error: notifError } = await supabase.from('notifications').insert(
@@ -165,5 +172,5 @@ export function useSchedules(classroomId: string) {
     return userIds.length;
   };
 
-  return { schedules, loading, refetch: fetchAll, createSchedule, updateSchedule, deleteSchedule, notifySchedule };
+  return { schedules, loading, refetch, createSchedule, updateSchedule, deleteSchedule, notifySchedule };
 }

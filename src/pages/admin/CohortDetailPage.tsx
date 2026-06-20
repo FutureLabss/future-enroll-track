@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAttendanceSession } from '@/hooks/useAttendance';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
@@ -246,83 +247,88 @@ function AttendanceDrillDown({ session }: { session: any }) {
 export default function CohortDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [cohort, setCohort] = useState<any>(null);
-  const [members, setMembers] = useState<any[]>([]);
-  const [attendanceSessions, setAttendanceSessions] = useState<any[]>([]);
-  const [assignments, setAssignments] = useState<any[]>([]);
+  const queryClient = useQueryClient();
+  const queryKey = ['cohort-detail', id];
+
   const [editOpen, setEditOpen] = useState(false);
   const [studentsOpen, setStudentsOpen] = useState(false);
   const [drillSession, setDrillSession] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
   const [statusBusy, setStatusBusy] = useState(false);
 
-  const load = async () => {
-    if (!id) return;
-    setLoading(true);
-    const [cRes, mRes] = await Promise.all([
-      supabase.from('cohorts').select('*, programs(program_name), classrooms(id, name, location)').eq('id', id).single(),
-      supabase.from('cohort_students').select('id, student_id, enrollment_id, enrollments(enrollment_status, total_amount, amount_paid, outstanding_balance)').eq('cohort_id', id),
-    ]);
-    const cohortRow = cRes.data;
-    const rows = mRes.data || [];
+  const { data: pageData, isLoading: loading } = useQuery({
+    queryKey,
+    queryFn: async () => {
+      const [cRes, mRes] = await Promise.all([
+        supabase.from('cohorts').select('*, programs(program_name), classrooms(id, name, location)').eq('id', id!).single(),
+        supabase.from('cohort_students').select('id, student_id, enrollment_id, enrollments(enrollment_status, total_amount, amount_paid, outstanding_balance)').eq('cohort_id', id!),
+      ]);
+      const cohortRow = cRes.data;
+      const rows = mRes.data || [];
 
-    const [sessionsRes, assignmentsRes] = cohortRow?.classroom_id ? await Promise.all([
-      supabase.from('attendance_sessions').select('id, code, status, created_at, lesson_id, schedule_id').eq('cohort_id', id).order('created_at', { ascending: false }),
-      supabase.from('assignments').select('id, title, unit_id, lesson_id, due_date, status, cohort_id, classroom_id, created_at').eq('cohort_id', id).order('created_at', { ascending: false }),
-    ]) : [{ data: [] }, { data: [] }];
+      const [sessionsRes, assignmentsRes] = cohortRow?.classroom_id ? await Promise.all([
+        supabase.from('attendance_sessions').select('id, code, status, created_at, lesson_id, schedule_id').eq('cohort_id', id!).order('created_at', { ascending: false }),
+        supabase.from('assignments').select('id, title, unit_id, lesson_id, due_date, status, cohort_id, classroom_id, created_at').eq('cohort_id', id!).order('created_at', { ascending: false }),
+      ]) : [{ data: [] }, { data: [] }];
 
-    const sessionRows = (sessionsRes.data || []) as any[];
-    const assignmentRows = (assignmentsRes.data || []) as any[];
+      const sessionRows = (sessionsRes.data || []) as any[];
+      const assignmentRows = (assignmentsRes.data || []) as any[];
 
-    const sessionLessonIds = [...new Set(sessionRows.map((r) => r.lesson_id).filter(Boolean))];
-    const sessionScheduleIds = [...new Set(sessionRows.map((r) => r.schedule_id).filter(Boolean))];
-    const assignmentUnitIds = [...new Set(assignmentRows.map((r) => r.unit_id).filter(Boolean))];
-    const assignmentLessonIds = [...new Set(assignmentRows.map((r) => r.lesson_id).filter(Boolean))];
-    const studentIds = [...new Set(rows.map((r: any) => r.student_id).filter(Boolean))];
+      const sessionLessonIds = [...new Set(sessionRows.map((r) => r.lesson_id).filter(Boolean))];
+      const sessionScheduleIds = [...new Set(sessionRows.map((r) => r.schedule_id).filter(Boolean))];
+      const assignmentUnitIds = [...new Set(assignmentRows.map((r) => r.unit_id).filter(Boolean))];
+      const assignmentLessonIds = [...new Set(assignmentRows.map((r) => r.lesson_id).filter(Boolean))];
+      const studentIds = [...new Set(rows.map((r: any) => r.student_id).filter(Boolean))];
 
-    const [oldLessonsForSessions, schedulesData, unitsData, oldLessonsForAssignments, profilesData] = await Promise.all([
-      sessionLessonIds.length ? supabase.from('old_lessons').select('id, title, lesson_date').in('id', sessionLessonIds) : { data: [] as any[] },
-      sessionScheduleIds.length ? supabase.from('schedules').select('id, title, scheduled_date, lesson_id').in('id', sessionScheduleIds) : { data: [] as any[] },
-      assignmentUnitIds.length ? supabase.from('units').select('id, title').in('id', assignmentUnitIds) : { data: [] as any[] },
-      assignmentLessonIds.length ? supabase.from('old_lessons').select('id, title, lesson_date').in('id', assignmentLessonIds) : { data: [] as any[] },
-      studentIds.length ? supabase.from('profiles').select('user_id, full_name, email').in('user_id', studentIds) : { data: [] as any[] },
-    ]);
+      const [oldLessonsForSessions, schedulesData, unitsData, oldLessonsForAssignments, profilesData] = await Promise.all([
+        sessionLessonIds.length ? supabase.from('old_lessons').select('id, title, lesson_date').in('id', sessionLessonIds) : { data: [] as any[] },
+        sessionScheduleIds.length ? supabase.from('schedules').select('id, title, scheduled_date, lesson_id').in('id', sessionScheduleIds) : { data: [] as any[] },
+        assignmentUnitIds.length ? supabase.from('units').select('id, title').in('id', assignmentUnitIds) : { data: [] as any[] },
+        assignmentLessonIds.length ? supabase.from('old_lessons').select('id, title, lesson_date').in('id', assignmentLessonIds) : { data: [] as any[] },
+        studentIds.length ? supabase.from('profiles').select('user_id, full_name, email').in('user_id', studentIds) : { data: [] as any[] },
+      ]);
 
-    const scheduleRows = (schedulesData.data || []) as any[];
-    const scheduleLessonIds = [...new Set(scheduleRows.map((r) => r.lesson_id).filter(Boolean))];
-    const { data: lessonsForSchedules } = scheduleLessonIds.length
-      ? await supabase.from('lessons').select('id, title').in('id', scheduleLessonIds)
-      : { data: [] as any[] };
+      const scheduleRows = (schedulesData.data || []) as any[];
+      const scheduleLessonIds = [...new Set(scheduleRows.map((r) => r.lesson_id).filter(Boolean))];
+      const { data: lessonsForSchedules } = scheduleLessonIds.length
+        ? await supabase.from('lessons').select('id, title').in('id', scheduleLessonIds)
+        : { data: [] as any[] };
 
-    const sessionOldLessonsById = new Map((oldLessonsForSessions.data || []).map((r: any) => [r.id, r]));
-    const schedulesById = new Map(scheduleRows.map((r) => [r.id, r]));
-    const scheduleLessonsById = new Map((lessonsForSchedules || []).map((r: any) => [r.id, r]));
-    const unitsById = new Map((unitsData.data || []).map((r: any) => [r.id, r]));
-    const assignmentOldLessonsById = new Map((oldLessonsForAssignments.data || []).map((r: any) => [r.id, r]));
-    const profileMap = new Map((profilesData.data || []).map((p: any) => [p.user_id, p]));
+      const sessionOldLessonsById = new Map((oldLessonsForSessions.data || []).map((r: any) => [r.id, r]));
+      const schedulesById = new Map(scheduleRows.map((r) => [r.id, r]));
+      const scheduleLessonsById = new Map((lessonsForSchedules || []).map((r: any) => [r.id, r]));
+      const unitsById = new Map((unitsData.data || []).map((r: any) => [r.id, r]));
+      const assignmentOldLessonsById = new Map((oldLessonsForAssignments.data || []).map((r: any) => [r.id, r]));
+      const profileMap = new Map((profilesData.data || []).map((p: any) => [p.user_id, p]));
 
-    const enrichedSessions = sessionRows.map((r) => {
-      const schedule = r.schedule_id ? schedulesById.get(r.schedule_id) : null;
-      return {
+      const enrichedSessions = sessionRows.map((r) => {
+        const schedule = r.schedule_id ? schedulesById.get(r.schedule_id) : null;
+        return {
+          ...r,
+          old_lessons: r.lesson_id ? sessionOldLessonsById.get(r.lesson_id) || null : null,
+          schedules: schedule ? { ...schedule, lessons: schedule.lesson_id ? scheduleLessonsById.get(schedule.lesson_id) || null : null } : null,
+        };
+      });
+      const enrichedAssignments = assignmentRows.map((r) => ({
         ...r,
-        old_lessons: r.lesson_id ? sessionOldLessonsById.get(r.lesson_id) || null : null,
-        schedules: schedule ? { ...schedule, lessons: schedule.lesson_id ? scheduleLessonsById.get(schedule.lesson_id) || null : null } : null,
+        units: r.unit_id ? unitsById.get(r.unit_id) || null : null,
+        old_lessons: r.lesson_id ? assignmentOldLessonsById.get(r.lesson_id) || null : null,
+      }));
+
+      return {
+        cohort: cohortRow,
+        members: rows.map((r: any) => ({ ...r, profile: profileMap.get(r.student_id) || null })),
+        attendanceSessions: enrichedSessions,
+        assignments: enrichedAssignments,
       };
-    });
-    const enrichedAssignments = assignmentRows.map((r) => ({
-      ...r,
-      units: r.unit_id ? unitsById.get(r.unit_id) || null : null,
-      old_lessons: r.lesson_id ? assignmentOldLessonsById.get(r.lesson_id) || null : null,
-    }));
+    },
+    enabled: !!id,
+  });
 
-    setCohort(cohortRow);
-    setMembers(rows.map((r: any) => ({ ...r, profile: profileMap.get(r.student_id) || null })));
-    setAttendanceSessions(enrichedSessions);
-    setAssignments(enrichedAssignments);
-    setLoading(false);
-  };
-
-  useEffect(() => { load(); }, [id]);
+  const cohort = pageData?.cohort ?? null;
+  const members = pageData?.members ?? [];
+  const attendanceSessions = pageData?.attendanceSessions ?? [];
+  const assignments = pageData?.assignments ?? [];
+  const load = () => queryClient.invalidateQueries({ queryKey });
 
   const updateStatus = async (status: string) => {
     setStatusBusy(true);

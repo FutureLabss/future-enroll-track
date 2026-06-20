@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
+import { createQueryWrapper } from '@/test/testUtils';
 
 // ---------------------------------------------------------------------------
 // Supabase mock — every chain method returns `self` (thenable),
@@ -96,7 +97,7 @@ describe('useAttendanceSession', () => {
   it('starts in loading state', () => {
     // minimal stubs so the hook doesn't crash
     mockFrom.mockReturnValue(makeChain([]));
-    const { result } = renderHook(() => useAttendanceSession('session-1'));
+    const { result } = renderHook(() => useAttendanceSession('session-1'), { wrapper: createQueryWrapper() });
     expect(result.current.loading).toBe(true);
   });
 
@@ -111,7 +112,7 @@ describe('useAttendanceSession', () => {
       .mockReturnValueOnce(makeChain([{ student_id: 'stu-a' }]))
       .mockReturnValueOnce(makeChain([{ user_id: 'stu-a', full_name: 'Alice', email: 'alice@test.com' }]));
 
-    const { result } = renderHook(() => useAttendanceSession('session-1'));
+    const { result } = renderHook(() => useAttendanceSession('session-1'), { wrapper: createQueryWrapper() });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -134,7 +135,7 @@ describe('useAttendanceSession', () => {
         { user_id: 'stu-b', full_name: 'Bob',   email: 'bob@test.com'   },
       ]));
 
-    const { result } = renderHook(() => useAttendanceSession('session-1'));
+    const { result } = renderHook(() => useAttendanceSession('session-1'), { wrapper: createQueryWrapper() });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -151,7 +152,7 @@ describe('useAttendanceSession', () => {
       .mockReturnValueOnce(makeChain([{ student_id: 'stu-a' }]))
       .mockReturnValueOnce(makeChain([]));
 
-    const { result } = renderHook(() => useAttendanceSession('session-1'));
+    const { result } = renderHook(() => useAttendanceSession('session-1'), { wrapper: createQueryWrapper() });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     const fromCalls = mockFrom.mock.calls.map(([table]: [string]) => table);
@@ -166,7 +167,7 @@ describe('useAttendanceSession', () => {
       .mockReturnValueOnce(makeChain([{ student_id: 'stu-a' }]))
       .mockReturnValueOnce(makeChain([]));
 
-    const { result } = renderHook(() => useAttendanceSession('session-1'));
+    const { result } = renderHook(() => useAttendanceSession('session-1'), { wrapper: createQueryWrapper() });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     const fromCalls = mockFrom.mock.calls.map(([table]: [string]) => table);
@@ -179,7 +180,7 @@ describe('useAttendanceSession', () => {
       .mockReturnValueOnce(makeChain([]))
       .mockReturnValueOnce(makeChain(null));  // session not found
 
-    const { result } = renderHook(() => useAttendanceSession('session-1'));
+    const { result } = renderHook(() => useAttendanceSession('session-1'), { wrapper: createQueryWrapper() });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(result.current.records).toHaveLength(0);
@@ -187,16 +188,16 @@ describe('useAttendanceSession', () => {
   });
 
   it('does nothing when sessionId is empty', () => {
-    const { result } = renderHook(() => useAttendanceSession(''));
+    const { result } = renderHook(() => useAttendanceSession(''), { wrapper: createQueryWrapper() });
     // Should not call from() at all
     expect(mockFrom).not.toHaveBeenCalled();
-    // loading stays true (never resolved) — that is correct behaviour per the hook
-    expect(result.current.loading).toBe(true);
+    // React Query v5: disabled queries resolve immediately with isLoading=false
+    expect(result.current.loading).toBe(false);
   });
 
   it('exposes a refetch function', async () => {
     mockFrom.mockReturnValue(makeChain([]));
-    const { result } = renderHook(() => useAttendanceSession('session-1'));
+    const { result } = renderHook(() => useAttendanceSession('session-1'), { wrapper: createQueryWrapper() });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(typeof result.current.refetch).toBe('function');

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 
@@ -21,42 +21,34 @@ interface Params {
 }
 
 export function useFinanceSummary({ mode, months, startDate, endDate }: Params) {
-  const [rows, setRows] = useState<FinanceRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryKey = mode === 'custom' && startDate && endDate
+    ? ['finance-summary', 'custom', format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd')]
+    : ['finance-summary', 'preset', months];
 
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setError(null);
-
-    const args =
-      mode === 'custom' && startDate && endDate
+  const { data, isLoading: loading, error: queryError } = useQuery({
+    queryKey,
+    queryFn: async () => {
+      const args = mode === 'custom' && startDate && endDate
         ? { p_months: 12, p_start_date: format(startDate, 'yyyy-MM-dd'), p_end_date: format(endDate, 'yyyy-MM-dd') }
         : { p_months: months };
 
-    supabase.rpc('get_finance_summary', args).then(({ data, error: err }) => {
-      if (!active) return;
-      if (err) {
-        setError(err.message);
-        setRows([]);
-      } else {
-        setRows(
-          (data || []).map((r: any) => ({
-            month: r.month,
-            revenue: Number(r.revenue) || 0,
-            other_income_total: Number(r.other_income_total) || 0,
-            payroll_total: Number(r.payroll_total) || 0,
-            expenses_total: Number(r.expenses_total) || 0,
-            profit: Number(r.profit) || 0,
-          }))
-        );
-      }
-      setLoading(false);
-    });
+      const { data, error } = await supabase.rpc('get_finance_summary', args);
+      if (error) throw new Error(error.message);
 
-    return () => { active = false; };
-  }, [mode, months, startDate, endDate]);
+      return (data || []).map((r: any) => ({
+        month: r.month,
+        revenue: Number(r.revenue) || 0,
+        other_income_total: Number(r.other_income_total) || 0,
+        payroll_total: Number(r.payroll_total) || 0,
+        expenses_total: Number(r.expenses_total) || 0,
+        profit: Number(r.profit) || 0,
+      })) as FinanceRow[];
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const rows = data || [];
+  const error = queryError ? (queryError as Error).message : null;
 
   const totals = rows.reduce(
     (acc, r) => {

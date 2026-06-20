@@ -42,8 +42,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
-    if (!apiKey) throw new Error('ANTHROPIC_API_KEY not configured');
+    const apiKey = Deno.env.get('GOOGLE_AI_KEY');
+    if (!apiKey) throw new Error('GOOGLE_AI_KEY not configured');
 
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
 
     const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 
-    let userContent: unknown;
+    let parts: unknown[];
 
     if (isPdf) {
       const buffer = await file.arrayBuffer();
@@ -69,54 +69,49 @@ Deno.serve(async (req) => {
       }
       const base64 = btoa(binary);
 
-      userContent = [
-        {
-          type: 'document',
-          source: {
-            type: 'base64',
-            media_type: 'application/pdf',
-            data: base64,
-          },
-        },
-        {
-          type: 'text',
-          text: `Convert this document into a structured curriculum JSON.${suffix}`,
-        },
+      parts = [
+        { inlineData: { mimeType: 'application/pdf', data: base64 } },
+        { text: `Convert this document into a structured curriculum JSON.${suffix}` },
       ];
     } else {
       const text = await file.text();
       if (!text.trim()) throw new Error('File appears to be empty');
-      userContent = `Document content:\n\n${text}\n\nConvert this into a structured curriculum JSON.${suffix}`;
+      parts = [{ text: `Document content:\n\n${text}\n\nConvert this into a structured curriculum JSON.${suffix}` }];
     }
 
-    const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 8192,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: userContent }],
-      }),
-    });
+    const aiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          contents: [{ role: 'user', parts }],
+          generationConfig: { responseMimeType: 'application/json' },
+        }),
+      }
+    );
 
     if (!aiRes.ok) {
-      const err = await aiRes.text();
+      const errText = await aiRes.text();
+      console.error(`Gemini API error ${aiRes.status}:`, errText);
       if (aiRes.status === 429) {
-        return new Response(JSON.stringify({ error: 'Rate limit reached. Try again in a moment.' }), {
+        return new Response(JSON.stringify({ error: 'Too many requests. Please try again in a moment.' }), {
           status: 429,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      throw new Error(`AI error ${aiRes.status}: ${err}`);
+      if (aiRes.status === 402 || aiRes.status === 403) {
+        return new Response(JSON.stringify({ error: 'AI service is temporarily unavailable. Please contact your administrator.' }), {
+          status: 503,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      throw new Error('AI service returned an error. Please try again or refine your instructions.');
     }
 
     const aiData = await aiRes.json();
-    const rawText: string = aiData.content?.[0]?.text || '';
+    const rawText: string = aiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const cleaned = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
 
     let structure: unknown;

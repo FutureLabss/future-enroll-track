@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable } from '@/components/shared/DataTable';
@@ -11,26 +12,23 @@ import { useNavigate } from 'react-router-dom';
 
 export default function InvoicesPage() {
   const navigate = useNavigate();
-  const [invoices, setInvoices] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  useEffect(() => {
-    const fetch = async () => {
+  const { data: invoices = [], isLoading: loading } = useQuery({
+    queryKey: ['invoices', statusFilter],
+    queryFn: async () => {
       let query = supabase
         .from('invoices')
         .select('*, enrollments(full_name, email)')
         .order('created_at', { ascending: false });
       if (statusFilter !== 'all') query = query.eq('status', statusFilter);
       const { data } = await query;
-      setInvoices(data || []);
-      setLoading(false);
-    };
-    fetch();
-  }, [statusFilter]);
+      return data || [];
+    },
+  });
 
-  const filtered = invoices.filter(i =>
+  const filtered = invoices.filter((i: any) =>
     i.invoice_number?.toLowerCase().includes(search.toLowerCase()) ||
     i.enrollments?.full_name?.toLowerCase().includes(search.toLowerCase())
   );

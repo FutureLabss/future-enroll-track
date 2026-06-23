@@ -70,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setLoading(false);
       initialised = true;
-    });
+    }).catch(() => setLoading(false));
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {

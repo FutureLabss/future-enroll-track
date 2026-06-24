@@ -107,7 +107,12 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      throw new Error('AI service returned an error. Please try again or refine your instructions.');
+      let geminiMessage = `Gemini ${aiRes.status}: ${errText.slice(0, 300)}`;
+      try {
+        const errJson = JSON.parse(errText);
+        if (errJson.error?.message) geminiMessage = errJson.error.message;
+      } catch { /* not JSON */ }
+      throw new Error(geminiMessage);
     }
 
     const aiData = await aiRes.json();

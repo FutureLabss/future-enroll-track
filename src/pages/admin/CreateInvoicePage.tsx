@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -7,7 +8,6 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
-import { Plus } from 'lucide-react';
 
 interface Installment {
   amount: string;
@@ -18,9 +18,6 @@ const INSTALLMENT_OPTIONS = [2, 3, 4, 6, 12];
 
 export default function CreateInvoicePage() {
   const navigate = useNavigate();
-  const [programs, setPrograms] = useState<any[]>([]);
-  const [cohorts, setCohorts] = useState<any[]>([]);
-  const [organizations, setOrganizations] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [form, setForm] = useState({
@@ -37,6 +34,39 @@ export default function CreateInvoicePage() {
 
   const [installments, setInstallments] = useState<Installment[]>([]);
   const [installmentCount, setInstallmentCount] = useState<number>(0);
+
+  // Reference data — cached for 5 minutes, fetched in parallel
+  const { data: programs = [] } = useQuery({
+    queryKey: ['programs-active'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('programs').select('*').eq('active', true);
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  const { data: cohorts = [] } = useQuery({
+    queryKey: ['cohorts-all'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('cohorts').select('*');
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 60_000,
+  });
+
+  const { data: organizations = [] } = useQuery({
+    queryKey: ['organizations-active'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('organizations').select('*').eq('active', true);
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  const filteredCohorts = cohorts.filter((c: any) => c.program_id === form.program_id);
 
   const generateInstallments = (count: number, total: string) => {
     const totalAmount = parseFloat(total);
@@ -59,22 +89,6 @@ export default function CreateInvoicePage() {
     setInstallments(newInstallments);
   };
 
-  useEffect(() => {
-    Promise.all([
-      supabase.from('programs').select('*').eq('active', true),
-      supabase.from('cohorts').select('*'),
-      supabase.from('organizations').select('*').eq('active', true),
-    ]).then(([p, c, o]) => {
-      setPrograms(p.data || []);
-      setCohorts(c.data || []);
-      setOrganizations(o.data || []);
-    });
-  }, []);
-
-  const filteredCohorts = cohorts.filter(c => c.program_id === form.program_id);
-
-
-
   const updateInstallment = (i: number, field: keyof Installment, value: string) => {
     const updated = [...installments];
     updated[i] = { ...updated[i], [field]: value };
@@ -96,7 +110,6 @@ export default function CreateInvoicePage() {
         }
       }
 
-      // Create enrollment
       const { data: enrollment, error: enrollError } = await supabase
         .from('enrollments')
         .insert({
@@ -113,7 +126,6 @@ export default function CreateInvoicePage() {
 
       if (enrollError) throw enrollError;
 
-      // Create invoice
       const { data: invoice, error: invError } = await supabase
         .from('invoices')
         .insert({
@@ -129,7 +141,6 @@ export default function CreateInvoicePage() {
 
       if (invError) throw invError;
 
-      // Create installments
       if (form.payment_plan_type === 'installment' && installments.length > 0) {
         const { error: instError } = await supabase.from('installments').insert(
           installments.map(inst => ({
@@ -140,7 +151,6 @@ export default function CreateInvoicePage() {
         );
         if (instError) throw instError;
       } else {
-        // Single payment - create one installment
         const { error: instError } = await supabase.from('installments').insert({
           invoice_id: invoice.id,
           amount: totalAmount,
@@ -149,7 +159,6 @@ export default function CreateInvoicePage() {
         if (instError) throw instError;
       }
 
-      // Send invoice created notification
       try {
         await supabase.functions.invoke('send-notification', {
           body: {
@@ -159,8 +168,7 @@ export default function CreateInvoicePage() {
             invoice_id: invoice.id,
           },
         });
-      } catch (_notifErr) {
-      }
+      } catch (_notifErr) { }
 
       toast.success(`Invoice ${invoice.invoice_number} created!`);
       navigate('/admin/invoices');
@@ -209,7 +217,7 @@ export default function CreateInvoicePage() {
             <Select value={form.program_id} onValueChange={v => setForm({ ...form, program_id: v, cohort_id: '' })}>
               <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select program" /></SelectTrigger>
               <SelectContent>
-                {programs.map(p => <SelectItem key={p.id} value={p.id}>{p.program_name}</SelectItem>)}
+                {programs.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.program_name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -218,7 +226,7 @@ export default function CreateInvoicePage() {
             <Select value={form.cohort_id} onValueChange={v => setForm({ ...form, cohort_id: v })}>
               <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select cohort" /></SelectTrigger>
               <SelectContent>
-                {filteredCohorts.map(c => <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>)}
+                {filteredCohorts.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -227,7 +235,7 @@ export default function CreateInvoicePage() {
             <Select value={form.organization_id} onValueChange={v => setForm({ ...form, organization_id: v })}>
               <SelectTrigger className="mt-1.5"><SelectValue placeholder="None" /></SelectTrigger>
               <SelectContent>
-                {organizations.map(o => <SelectItem key={o.id} value={o.id}>{o.organization_name}</SelectItem>)}
+                {organizations.map((o: any) => <SelectItem key={o.id} value={o.id}>{o.organization_name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -238,7 +246,12 @@ export default function CreateInvoicePage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <Label>Total Amount *</Label>
-              <Input required type="number" step="0.01" min="0" value={form.total_amount} onChange={e => { setForm({ ...form, total_amount: e.target.value }); if (installmentCount) generateInstallments(installmentCount, e.target.value); }} className="mt-1.5" />
+              <Input
+                required type="number" step="0.01" min="0"
+                value={form.total_amount}
+                onChange={e => { setForm({ ...form, total_amount: e.target.value }); if (installmentCount) generateInstallments(installmentCount, e.target.value); }}
+                className="mt-1.5"
+              />
             </div>
             <div>
               <Label>Currency</Label>
@@ -252,7 +265,13 @@ export default function CreateInvoicePage() {
             </div>
             <div>
               <Label>Payment Plan</Label>
-              <Select value={form.payment_plan_type} onValueChange={(v: 'single' | 'installment') => { setForm({ ...form, payment_plan_type: v }); if (v === 'single') { setInstallments([]); setInstallmentCount(0); } }}>
+              <Select
+                value={form.payment_plan_type}
+                onValueChange={(v: 'single' | 'installment') => {
+                  setForm({ ...form, payment_plan_type: v });
+                  if (v === 'single') { setInstallments([]); setInstallmentCount(0); }
+                }}
+              >
                 <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="single">Single Payment</SelectItem>
@@ -269,7 +288,10 @@ export default function CreateInvoicePage() {
               <h3 className="font-heading font-semibold">Installments</h3>
               <div className="flex items-center gap-2">
                 <Label className="text-sm">Split into</Label>
-                <Select value={installmentCount ? String(installmentCount) : ''} onValueChange={v => { const count = parseInt(v); setInstallmentCount(count); generateInstallments(count, form.total_amount); }}>
+                <Select
+                  value={installmentCount ? String(installmentCount) : ''}
+                  onValueChange={v => { const count = parseInt(v); setInstallmentCount(count); generateInstallments(count, form.total_amount); }}
+                >
                   <SelectTrigger className="w-24"><SelectValue placeholder="Select" /></SelectTrigger>
                   <SelectContent>
                     {INSTALLMENT_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>{n} parts</SelectItem>)}

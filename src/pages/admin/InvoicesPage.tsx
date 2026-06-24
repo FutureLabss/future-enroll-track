@@ -23,9 +23,11 @@ export default function InvoicesPage() {
         .select('*, enrollments(full_name, email)')
         .order('created_at', { ascending: false });
       if (statusFilter !== 'all') query = query.eq('status', statusFilter);
-      const { data } = await query;
+      const { data, error } = await query;
+      if (error) throw error;
       return data || [];
     },
+    staleTime: 30_000,
   });
 
   const filtered = invoices.filter((i: any) =>

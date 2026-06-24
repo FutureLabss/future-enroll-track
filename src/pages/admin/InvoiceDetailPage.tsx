@@ -28,9 +28,11 @@ export default function InvoiceDetailPage() {
         supabase.from('invoices').select('*, enrollments(full_name, email, program_id, programs(program_name))').eq('id', id!).single(),
         supabase.from('installments').select('*').eq('invoice_id', id!).order('due_date'),
       ]);
+      if (invRes.error) throw invRes.error;
       return { invoice: invRes.data, installments: instRes.data || [] };
     },
     enabled: !!id,
+    staleTime: 30_000,
   });
 
   const invoice = data?.invoice ?? null;

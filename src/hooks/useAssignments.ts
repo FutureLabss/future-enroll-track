@@ -115,6 +115,7 @@ export function useAssignments(classroomId: string, options: UseAssignmentsOptio
       }));
     },
     enabled,
+    staleTime: 30_000,
   });
 
   const refetch = () => queryClient.invalidateQueries({ queryKey: ['assignments', classroomId] });

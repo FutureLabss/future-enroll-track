@@ -72,6 +72,7 @@ export function useClassroom(id: string) {
       return data as any;
     },
     enabled: Boolean(id),
+    staleTime: 30_000,
   });
 
   const refetch = () => queryClient.invalidateQueries({ queryKey: ['classroom', id] });
@@ -126,6 +127,7 @@ export function useClassroomCohorts(classroomId: string) {
       return data || [];
     },
     enabled: Boolean(classroomId),
+    staleTime: 30_000,
   });
 
   const refetch = () => queryClient.invalidateQueries({ queryKey: ['classroom-cohorts', classroomId] });

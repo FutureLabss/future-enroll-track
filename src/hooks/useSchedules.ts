@@ -93,6 +93,7 @@ export function useSchedules(classroomId: string) {
       return enrichSchedules(data || []);
     },
     enabled: Boolean(classroomId),
+    staleTime: 30_000,
   });
 
   const refetch = () => queryClient.invalidateQueries({ queryKey: ['schedules', classroomId] });

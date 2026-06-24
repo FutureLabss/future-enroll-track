@@ -646,6 +646,7 @@ export default function ClassroomDetailPage() {
       };
     },
     enabled: !!id,
+    staleTime: 30_000,
   });
   const staff = localData?.staff ?? [];
   const lessons = localData?.lessons ?? [];
@@ -659,6 +660,7 @@ export default function ClassroomDetailPage() {
       return data || [];
     },
     enabled: !!id,
+    staleTime: 30_000,
   });
   const students = studentsData ?? [];
 

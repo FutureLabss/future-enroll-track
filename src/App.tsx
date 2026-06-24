@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useParams } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { AppLayout } from "@/components/layout/AppLayout";
 
@@ -85,6 +85,13 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function AdminGuard() {
+  const { isAdmin, isStaff, loading } = useAuth();
+  if (loading) return <PageSpinner />;
+  if (!isAdmin) return <Navigate to={isStaff ? '/staff/classrooms' : '/student'} replace />;
+  return <Outlet />;
+}
+
 function RoleRedirect() {
   const { isAdmin, isOrganization, isStaff, loading } = useAuth();
   if (loading) return <PageSpinner />;
@@ -120,38 +127,40 @@ const App = () => (
 
               {/* Admin routes */}
               <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-                <Route path="/admin" element={<AdminDashboard />} />
-                <Route path="/admin/enrollments" element={<EnrollmentsPage />} />
-                <Route path="/admin/enrollments/:id" element={<EnrollmentDetailPage />} />
-                <Route path="/admin/invoices" element={<InvoicesPage />} />
-                <Route path="/admin/invoices/:id" element={<InvoiceDetailPage />} />
-                <Route path="/admin/invoices/:id/edit" element={<EditInvoicePage />} />
-                <Route path="/admin/invoices/new" element={<CreateInvoicePage />} />
-                <Route path="/admin/bulk-email" element={<BulkEmailPage />} />
-                <Route path="/admin/payments" element={<PaymentsPage />} />
-                <Route path="/admin/pending-payments" element={<PendingPaymentsPage />} />
-                <Route path="/admin/programs" element={<ProgramsPage />} />
-                <Route path="/admin/programs/:id" element={<ProgramDetailPage />} />
-                <Route path="/admin/organizations" element={<OrganizationsPage />} />
-                <Route path="/admin/custom-fields" element={<CustomFieldsPage />} />
-                <Route path="/admin/notifications" element={<NotificationsPage />} />
-                <Route path="/admin/reports" element={<ReportsPage />} />
-                <Route path="/admin/audit-logs" element={<AuditLogPage />} />
-                <Route path="/admin/manage-admins" element={<ManageAdminsPage />} />
-                <Route path="/admin/payroll" element={<PayrollPage />} />
-                <Route path="/admin/other-income" element={<OtherIncomePage />} />
-                <Route path="/admin/expenses" element={<ExpensesPage />} />
-                <Route path="/admin/finance" element={<FinanceDashboardPage />} />
-                <Route path="/admin/outstanding" element={<OutstandingInvoicesPage />} />
-                <Route path="/admin/invoice-approvals" element={<InvoiceApprovalsPage />} />
-                <Route path="/admin/staff-invoices" element={<StaffInvoicesAdminPage />} />
-                <Route path="/admin/hubs" element={<HubsPage />} />
-                <Route path="/admin/classrooms" element={<ClassroomsPage />} />
-                <Route path="/admin/classrooms/:id" element={<ClassroomDetailPage />} />
-                <Route path="/admin/assignments/:id" element={<AssignmentDetailPage />} />
-                <Route path="/admin/cohorts" element={<CohortsPage />} />
-                <Route path="/admin/cohorts/:id" element={<CohortDetailPage />} />
-                <Route path="/admin/staff-invitations" element={<StaffInvitationsAdminPage />} />
+                <Route element={<AdminGuard />}>
+                  <Route path="/admin" element={<AdminDashboard />} />
+                  <Route path="/admin/enrollments" element={<EnrollmentsPage />} />
+                  <Route path="/admin/enrollments/:id" element={<EnrollmentDetailPage />} />
+                  <Route path="/admin/invoices" element={<InvoicesPage />} />
+                  <Route path="/admin/invoices/:id" element={<InvoiceDetailPage />} />
+                  <Route path="/admin/invoices/:id/edit" element={<EditInvoicePage />} />
+                  <Route path="/admin/invoices/new" element={<CreateInvoicePage />} />
+                  <Route path="/admin/bulk-email" element={<BulkEmailPage />} />
+                  <Route path="/admin/payments" element={<PaymentsPage />} />
+                  <Route path="/admin/pending-payments" element={<PendingPaymentsPage />} />
+                  <Route path="/admin/programs" element={<ProgramsPage />} />
+                  <Route path="/admin/programs/:id" element={<ProgramDetailPage />} />
+                  <Route path="/admin/organizations" element={<OrganizationsPage />} />
+                  <Route path="/admin/custom-fields" element={<CustomFieldsPage />} />
+                  <Route path="/admin/notifications" element={<NotificationsPage />} />
+                  <Route path="/admin/reports" element={<ReportsPage />} />
+                  <Route path="/admin/audit-logs" element={<AuditLogPage />} />
+                  <Route path="/admin/manage-admins" element={<ManageAdminsPage />} />
+                  <Route path="/admin/payroll" element={<PayrollPage />} />
+                  <Route path="/admin/other-income" element={<OtherIncomePage />} />
+                  <Route path="/admin/expenses" element={<ExpensesPage />} />
+                  <Route path="/admin/finance" element={<FinanceDashboardPage />} />
+                  <Route path="/admin/outstanding" element={<OutstandingInvoicesPage />} />
+                  <Route path="/admin/invoice-approvals" element={<InvoiceApprovalsPage />} />
+                  <Route path="/admin/staff-invoices" element={<StaffInvoicesAdminPage />} />
+                  <Route path="/admin/hubs" element={<HubsPage />} />
+                  <Route path="/admin/classrooms" element={<ClassroomsPage />} />
+                  <Route path="/admin/classrooms/:id" element={<ClassroomDetailPage />} />
+                  <Route path="/admin/assignments/:id" element={<AssignmentDetailPage />} />
+                  <Route path="/admin/cohorts" element={<CohortsPage />} />
+                  <Route path="/admin/cohorts/:id" element={<CohortDetailPage />} />
+                  <Route path="/admin/staff-invitations" element={<StaffInvitationsAdminPage />} />
+                </Route>
 
                 {/* Staff routes */}
                 <Route path="/staff/invoices" element={<StaffInvoicesPage />} />

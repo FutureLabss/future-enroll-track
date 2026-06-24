@@ -9,20 +9,25 @@ import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, CreditCard, FileText, ReceiptText } from 'lucide-react';
 
 export default function StudentPaymentsPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [payments, setPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
 
   useEffect(() => {
-    if (!user) return;
+    if (authLoading) return;
+    if (!user) { setLoading(false); return; }
     supabase.from('payments')
       .select('*, invoices!inner(invoice_number, enrollments!inner(user_id, full_name, programs(program_name)))')
       .eq('invoices.enrollments.user_id', user.id)
       .order('created_at', { ascending: false })
-      .then(({ data }) => { setPayments(data || []); setLoading(false); });
-  }, [user]);
+      .then(({ data, error }) => {
+        if (!error) setPayments(data || []);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [user, authLoading]);
 
   const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
   const totalPaid = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);

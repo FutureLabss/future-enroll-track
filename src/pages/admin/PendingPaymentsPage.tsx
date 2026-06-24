@@ -14,10 +14,11 @@ export default function PendingPaymentsPage() {
   const { data: items = [], isLoading: loading } = useQuery({
     queryKey: ['pending-payments'],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('pending_payments')
         .select('*, invoices(invoice_number, enrollments(full_name, programs(program_name)))')
         .order('created_at', { ascending: false });
+      if (error) throw error;
       return data || [];
     },
   });

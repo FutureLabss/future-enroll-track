@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -9,25 +10,24 @@ import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, CreditCard, FileText, ReceiptText } from 'lucide-react';
 
 export default function StudentPaymentsPage() {
-  const { user, loading: authLoading } = useAuth();
-  const [payments, setPayments] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
 
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user) { setLoading(false); return; }
-    supabase.from('payments')
-      .select('*, invoices!inner(invoice_number, enrollments!inner(user_id, full_name, programs(program_name)))')
-      .eq('invoices.enrollments.user_id', user.id)
-      .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        if (!error) setPayments(data || []);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [user, authLoading]);
+  const { data: payments = [], isLoading: loading } = useQuery({
+    queryKey: ['student-payments', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('payments')
+        .select('*, invoices!inner(invoice_number, enrollments!inner(user_id, full_name, programs(program_name)))')
+        .eq('invoices.enrollments.user_id', user!.id)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user,
+    staleTime: 30_000,
+  });
 
   const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
   const totalPaid = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);

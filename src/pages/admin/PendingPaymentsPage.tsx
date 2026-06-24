@@ -21,6 +21,7 @@ export default function PendingPaymentsPage() {
       if (error) throw error;
       return data || [];
     },
+    staleTime: 30_000,
   });
 
   const refetchItems = () => queryClient.invalidateQueries({ queryKey: ['pending-payments'] });

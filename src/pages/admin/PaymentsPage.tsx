@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable } from '@/components/shared/DataTable';
@@ -12,17 +13,16 @@ import { Plus, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function PaymentsPage() {
-  const [payments, setPayments] = useState<any[]>([]);
-  const [invoices, setInvoices] = useState<any[]>([]);
+  const queryClient = useQueryClient();
   const [installments, setInstallments] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ invoice_id: '', installment_id: '', amount: '', payment_reference: '', payment_method: '' });
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
 
-  const fetchPayments = async () => {
-    try {
+  const { data: payments = [], isLoading: loading } = useQuery({
+    queryKey: ['payments-all'],
+    queryFn: async () => {
       const [payRes, oiRes, invRes] = await Promise.all([
         supabase.from('payments')
           .select('*, invoices(invoice_number, enrollments(full_name, programs(program_name)))')
@@ -32,7 +32,10 @@ export default function PaymentsPage() {
           .select('id, invoice_number, total_amount, status, created_at, enrollments(full_name, programs(program_name))')
           .order('created_at', { ascending: false }).limit(50),
       ]);
-      const merged = [
+      if (payRes.error) throw payRes.error;
+      if (oiRes.error) throw oiRes.error;
+      if (invRes.error) throw invRes.error;
+      return [
         ...(payRes.data || []).map((p: any) => ({ ...p, _kind: 'tuition', _date: p.created_at })),
         ...(oiRes.data || []).map((o: any) => ({
           ...o, _kind: 'other', _date: o.payment_date,
@@ -50,20 +53,23 @@ export default function PaymentsPage() {
           invoices: { invoice_number: inv.invoice_number, enrollments: inv.enrollments },
         })),
       ].sort((a: any, b: any) => new Date(b._date).getTime() - new Date(a._date).getTime());
-      setPayments(merged);
-    } catch (_e) {
-      toast.error('Failed to load payments');
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+    staleTime: 30_000,
+  });
 
-  useEffect(() => {
-    fetchPayments();
-    supabase.from('invoices').select('id, invoice_number, status').neq('status', 'paid').neq('status', 'cancelled')
-      .then(({ data }) => setInvoices(data || []))
-      .catch(() => {});
-  }, []);
+  // Only fetched when the dialog opens
+  const { data: invoices = [] } = useQuery({
+    queryKey: ['invoices-unpaid'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('invoices').select('id, invoice_number, status')
+        .neq('status', 'paid').neq('status', 'cancelled');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: open,
+    staleTime: 60_000,
+  });
 
   const onInvoiceChange = async (invoiceId: string) => {
     setForm({ ...form, invoice_id: invoiceId, installment_id: '' });
@@ -125,7 +131,6 @@ export default function PaymentsPage() {
       }
 
       if (invoice) {
-        // Fetch enrollment to get program name for receipt
         const { data: enrollmentData } = await supabase
           .from('enrollments')
           .select('programs(program_name)')
@@ -147,14 +152,14 @@ export default function PaymentsPage() {
               },
             },
           });
-        } catch (_notifErr) {
-        }
+        } catch (_notifErr) { }
       }
 
       toast.success('Payment recorded');
       setOpen(false);
       setForm({ invoice_id: '', installment_id: '', amount: '', payment_reference: '', payment_method: '' });
-      fetchPayments();
+      queryClient.invalidateQueries({ queryKey: ['payments-all'] });
+      queryClient.invalidateQueries({ queryKey: ['invoices-unpaid'] });
     } catch (err: any) {
       toast.error(err.message);
     }

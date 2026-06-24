@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAttendanceSession } from '@/hooks/useAttendance';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -346,6 +346,13 @@ export default function CohortDetailPage() {
     navigate(cohort.classrooms?.id ? `/admin/classrooms/${cohort.classrooms.id}` : '/admin/cohorts');
   };
 
+  const deleteAttendanceSession = async (sessionId: string) => {
+    const { error } = await supabase.from('attendance_sessions').delete().eq('id', sessionId);
+    if (error) { toast.error(error.message); return; }
+    toast.success('Attendance session deleted');
+    load();
+  };
+
   const publishAssignment = async (assignmentId: string) => {
     const { error } = await supabase.from('assignments').update({ status: 'published' }).eq('id', assignmentId);
     if (error) { toast.error(error.message); return; }
@@ -391,9 +398,32 @@ export default function CohortDetailPage() {
     { key: 'status', header: 'Status', render: (r: any) => <Badge variant="outline" className={STATUS_COLOURS[r.status] || ''}>{r.status}</Badge> },
     { key: 'created_at', header: 'Created', render: (r: any) => new Date(r.created_at).toLocaleString() },
     { key: 'actions', header: '', render: (r: any) => (
-      <Button size="sm" variant="ghost" onClick={() => setDrillSession(r)}>
-        <Eye className="h-4 w-4 mr-1" />View
-      </Button>
+      <div className="flex items-center gap-1">
+        <Button size="sm" variant="ghost" onClick={() => setDrillSession(r)}>
+          <Eye className="h-4 w-4 mr-1" />View
+        </Button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive">
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Attendance Session?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete session <span className="font-mono font-semibold">{r.code}</span> and all its attendance records. This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={() => deleteAttendanceSession(r.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
     )},
   ];
 

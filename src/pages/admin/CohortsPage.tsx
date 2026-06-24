@@ -34,6 +34,7 @@ export default function CohortsPage() {
   const [programs, setPrograms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ cohort_label: '', program_id: '', start_date: '', end_date: '', scope_type: '' });
 
   const fetchCohorts = async () => {
@@ -52,6 +53,7 @@ export default function CohortsPage() {
 
   const handleCreate = async () => {
     if (!form.cohort_label.trim() || !form.program_id) { toast.error('Fill required fields'); return; }
+    setSaving(true);
     const { error } = await supabase.from('cohorts').insert({
       cohort_label: form.cohort_label,
       program_id: form.program_id,
@@ -59,7 +61,8 @@ export default function CohortsPage() {
       end_date: form.end_date || null,
       scope_type: form.scope_type || null,
     });
-    if (error) { toast.error(error.message); return; }
+    setSaving(false);
+    if (error) { toast.error(error.message || 'Failed to create cohort'); return; }
     toast.success('Cohort created');
     setOpen(false);
     setForm({ cohort_label: '', program_id: '', start_date: '', end_date: '', scope_type: '' });
@@ -132,7 +135,7 @@ export default function CohortsPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button onClick={handleCreate} className="w-full">Create Cohort</Button>
+                <Button onClick={handleCreate} disabled={saving} className="w-full">{saving ? 'Creating...' : 'Create Cohort'}</Button>
               </div>
             </DialogContent>
           </Dialog>

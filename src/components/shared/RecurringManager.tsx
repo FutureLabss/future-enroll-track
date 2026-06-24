@@ -46,6 +46,7 @@ export function RecurringManager({ kind, categories, onPosted }: Props) {
     payment_method: '',
     notes: '',
     active: true,
+    post_now: false,
   };
   const [form, setForm] = useState<any>(blank);
 
@@ -94,11 +95,20 @@ export function RecurringManager({ kind, categories, onPosted }: Props) {
         active: form.active,
       };
       if (!editingId) payload.created_by = user?.id || null;
-      const { error } = editingId
-        ? await (supabase as any).from(table).update(payload).eq('id', editingId)
-        : await (supabase as any).from(table).insert(payload);
-      if (error) throw error;
-      toast.success(editingId ? 'Updated' : 'Recurring item created');
+      let newId: string | null = null;
+      if (editingId) {
+        const { error } = await (supabase as any).from(table).update(payload).eq('id', editingId);
+        if (error) throw error;
+      } else {
+        const { data: inserted, error } = await (supabase as any).from(table).insert(payload).select('id').single();
+        if (error) throw error;
+        newId = inserted.id;
+      }
+      if (!editingId && form.post_now && newId) {
+        const { error: postErr } = await (supabase as any).rpc(postFn, { p_id: newId });
+        if (postErr) throw postErr;
+      }
+      toast.success(editingId ? 'Updated' : form.post_now ? 'Created and first payment posted' : 'Recurring item created');
       setOpen(false);
       reset();
       fetchRows();
@@ -228,6 +238,15 @@ export function RecurringManager({ kind, categories, onPosted }: Props) {
                 <Label>Active</Label>
                 <Switch checked={form.active} onCheckedChange={v => setForm({ ...form, active: v })} />
               </div>
+              {!editingId && (
+                <div className="flex items-center justify-between rounded-md border px-3 py-2 bg-muted/40">
+                  <div>
+                    <Label className="cursor-pointer">{kind === 'income' ? 'First payment received today' : 'First payment made today'}</Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">Posts the first period immediately on save</p>
+                  </div>
+                  <Switch checked={form.post_now} onCheckedChange={v => setForm({ ...form, post_now: v })} />
+                </div>
+              )}
               <Button onClick={save} className="w-full">{editingId ? 'Save Changes' : 'Create'}</Button>
             </div>
           </DialogContent>

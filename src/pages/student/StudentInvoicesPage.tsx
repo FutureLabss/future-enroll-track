@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -12,17 +12,20 @@ import { AlertTriangle, ArrowRight, CheckCircle2, Clock, CreditCard, FileText } 
 export default function StudentInvoicesPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [invoices, setInvoices] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!user) return;
-    supabase.from('invoices')
-      .select('*, enrollments!inner(full_name, user_id, programs(program_name)), installments(*), payments(amount)')
-      .eq('enrollments.user_id', user.id)
-      .order('created_at', { ascending: false })
-      .then(({ data }) => { setInvoices(data || []); setLoading(false); });
-  }, [user]);
+  const { data: invoices = [], isLoading: loading } = useQuery({
+    queryKey: ['student-invoices', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('invoices')
+        .select('*, enrollments!inner(full_name, user_id, programs(program_name)), installments(*), payments(amount)')
+        .eq('enrollments.user_id', user!.id)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user,
+    staleTime: 30_000,
+  });
 
   const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
   const getPaid = (invoice: any) => {

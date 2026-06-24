@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -19,8 +20,7 @@ const CATEGORIES = ['rent', 'utilities', 'supplies', 'internet', 'maintenance', 
 
 export default function ExpensesPage() {
   const { user } = useAuth();
-  const [rows, setRows] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const blank = {
@@ -34,13 +34,17 @@ export default function ExpensesPage() {
   };
   const [form, setForm] = useState(blank);
 
-  const fetchRows = async () => {
-    const { data } = await supabase.from('expenses').select('*').order('payment_date', { ascending: false });
-    setRows(data || []);
-    setLoading(false);
-  };
+  const { data: rows = [], isLoading: loading } = useQuery({
+    queryKey: ['expenses'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('expenses').select('*').order('payment_date', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 30_000,
+  });
 
-  useEffect(() => { fetchRows(); }, []);
+  const refetch = () => queryClient.invalidateQueries({ queryKey: ['expenses'] });
 
   const reset = () => { setEditingId(null); setForm(blank); };
 
@@ -79,7 +83,7 @@ export default function ExpensesPage() {
       toast.success(editingId ? 'Expense updated' : 'Expense recorded');
       setOpen(false);
       reset();
-      fetchRows();
+      refetch();
     } catch (err: any) {
       toast.error(err.message);
     }
@@ -90,7 +94,7 @@ export default function ExpensesPage() {
     const { error } = await supabase.from('expenses').delete().eq('id', id);
     if (error) return toast.error(error.message);
     toast.success('Deleted');
-    fetchRows();
+    refetch();
   };
 
   const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
@@ -199,7 +203,7 @@ export default function ExpensesPage() {
           )}
         </TabsContent>
         <TabsContent value="recurring" className="mt-4">
-          <RecurringManager kind="expense" categories={CATEGORIES} onPosted={fetchRows} />
+          <RecurringManager kind="expense" categories={CATEGORIES} onPosted={refetch} />
         </TabsContent>
       </Tabs>
     </div>

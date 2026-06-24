@@ -27,9 +27,11 @@ export default function ProgramsPage() {
   const { data: programs = [], isLoading: loading } = useQuery({
     queryKey: ['programs'],
     queryFn: async () => {
-      const { data } = await supabase.from('programs').select('*').order('created_at', { ascending: false });
+      const { data, error } = await supabase.from('programs').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
       return data || [];
     },
+    staleTime: 5 * 60_000,
   });
 
   const load = () => queryClient.invalidateQueries({ queryKey: ['programs'] });

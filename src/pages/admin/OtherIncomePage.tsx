@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -41,11 +42,7 @@ const blankForm = {
 
 export default function OtherIncomePage() {
   const { user } = useAuth();
-
-  const [rows, setRows] = useState<any[]>([]);
-  const [loadingRows, setLoadingRows] = useState(true);
-  const [recurring, setRecurring] = useState<any[]>([]);
-  const [loadingRecurring, setLoadingRecurring] = useState(true);
+  const queryClient = useQueryClient();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<typeof blankForm>(blankForm);
@@ -55,21 +52,28 @@ export default function OtherIncomePage() {
   const [markingPaid, setMarkingPaid] = useState<string | null>(null);
   const [sendingReminder, setSendingReminder] = useState(false);
 
-  const fetchRows = async () => {
-    setLoadingRows(true);
-    const { data } = await supabase.from('other_income').select('*').order('payment_date', { ascending: false });
-    setRows(data || []);
-    setLoadingRows(false);
-  };
+  const { data: rows = [], isLoading: loadingRows } = useQuery({
+    queryKey: ['other-income'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('other_income').select('*').order('payment_date', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 30_000,
+  });
 
-  const fetchRecurring = async () => {
-    setLoadingRecurring(true);
-    const { data } = await (supabase as any).from('recurring_income').select('*').order('next_due_date', { ascending: true });
-    setRecurring(data || []);
-    setLoadingRecurring(false);
-  };
+  const { data: recurring = [], isLoading: loadingRecurring } = useQuery({
+    queryKey: ['recurring-income'],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from('recurring_income').select('*').order('next_due_date', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 30_000,
+  });
 
-  useEffect(() => { fetchRows(); fetchRecurring(); }, []);
+  const refetchRows = () => queryClient.invalidateQueries({ queryKey: ['other-income'] });
+  const refetchRecurring = () => queryClient.invalidateQueries({ queryKey: ['recurring-income'] });
 
   const openNew = () => {
     setEditingKey(null);
@@ -160,7 +164,7 @@ export default function OtherIncomePage() {
         }).eq('id', id);
         if (error) throw error;
         toast.success('Recurring payment updated');
-        fetchRecurring();
+        refetchRecurring();
       } else if (editingKey) {
         // Edit existing one-off income
         const { error } = await supabase.from('other_income').update({
@@ -174,7 +178,7 @@ export default function OtherIncomePage() {
         }).eq('id', editingKey);
         if (error) throw error;
         toast.success('Income updated');
-        fetchRows();
+        refetchRows();
       } else if (form.is_recurring) {
         // Create new recurring template
         const { error } = await (supabase as any).from('recurring_income').insert({
@@ -194,7 +198,7 @@ export default function OtherIncomePage() {
         });
         if (error) throw error;
         toast.success('Recurring payment set up');
-        fetchRecurring();
+        refetchRecurring();
       } else {
         // Create new one-off income
         const { error } = await supabase.from('other_income').insert({
@@ -209,7 +213,7 @@ export default function OtherIncomePage() {
         });
         if (error) throw error;
         toast.success('Income recorded');
-        fetchRows();
+        refetchRows();
       }
 
       setDialogOpen(false);
@@ -220,7 +224,7 @@ export default function OtherIncomePage() {
     const { error } = await supabase.from('other_income').delete().eq('id', id);
     if (error) return toast.error(error.message);
     toast.success('Deleted');
-    fetchRows();
+    refetchRows();
   };
 
   const markPaid = async (id: string) => {
@@ -229,8 +233,8 @@ export default function OtherIncomePage() {
       const { error } = await (supabase as any).rpc('post_recurring_income', { p_id: id });
       if (error) throw error;
       toast.success('Marked paid — income recorded');
-      fetchRows();
-      fetchRecurring();
+      refetchRows();
+      refetchRecurring();
     } catch (err: any) { toast.error(err.message); }
     finally { setMarkingPaid(null); }
   };
@@ -240,7 +244,7 @@ export default function OtherIncomePage() {
       const { error } = await (supabase as any).rpc('stop_recurring_income', { p_id: id });
       if (error) throw error;
       toast.success('Recurring payment stopped');
-      fetchRecurring();
+      refetchRecurring();
     } catch (err: any) { toast.error(err.message); }
   };
 
@@ -248,7 +252,7 @@ export default function OtherIncomePage() {
     const { error } = await (supabase as any).from('recurring_income').delete().eq('id', id);
     if (error) return toast.error(error.message);
     toast.success('Recurring payment deleted');
-    fetchRecurring();
+    refetchRecurring();
   };
 
   const sendReminders = async () => {

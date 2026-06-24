@@ -54,6 +54,7 @@ export default function StudentInvoiceDetailPage() {
       };
     },
     enabled: !!id && !!user,
+    staleTime: 30_000,
   });
 
   const invoice = invoiceData?.invoice ?? null;

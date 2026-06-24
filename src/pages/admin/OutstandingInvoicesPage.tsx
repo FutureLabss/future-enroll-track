@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatCard } from '@/components/shared/StatCard';
@@ -10,7 +11,6 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, Wallet, Clock } from 'lucide-react';
-import { toast } from 'sonner';
 
 type Row = {
   invoice_id: string;
@@ -34,20 +34,18 @@ type Row = {
 const fmt = (n: number) => `₦${Number(n || 0).toLocaleString('en-NG')}`;
 
 export default function OutstandingInvoicesPage() {
-  const [rows, setRows] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'all' | 'overdue'>('all');
   const [q, setQ] = useState('');
 
-  useEffect(() => {
-    setLoading(true);
-    supabase.rpc('list_outstanding_invoices' as any, { p_only_overdue: false })
-      .then(({ data, error }) => {
-        if (error) toast.error(error.message);
-        setRows((data as any) || []);
-        setLoading(false);
-      });
-  }, []);
+  const { data: rows = [], isLoading: loading } = useQuery({
+    queryKey: ['outstanding-invoices'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('list_outstanding_invoices' as any, { p_only_overdue: false });
+      if (error) throw error;
+      return (data as Row[]) || [];
+    },
+    staleTime: 30_000,
+  });
 
   const filtered = useMemo(() => {
     const base = tab === 'overdue' ? rows.filter(r => r.is_overdue) : rows;

@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -17,32 +18,41 @@ export default function EditInvoicePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isAdmin, isSuperadmin } = useAuth();
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [invoice, setInvoice] = useState<any>(null);
   const [total, setTotal] = useState('');
   const [installments, setInstallments] = useState<Inst[]>([]);
+  const seeded = useRef(false);
+
+  const { data: pageData, isLoading: loading } = useQuery({
+    queryKey: ['edit-invoice', id],
+    queryFn: async () => {
+      const [inv, ins] = await Promise.all([
+        supabase.from('invoices').select('*, enrollments(full_name)').eq('id', id!).single(),
+        supabase.from('installments').select('*').eq('invoice_id', id!).order('due_date'),
+      ]);
+      if (inv.error) throw inv.error;
+      return { invoice: inv.data, installments: ins.data || [] };
+    },
+    enabled: !!id,
+    staleTime: 30_000,
+  });
+
+  const invoice = pageData?.invoice ?? null;
 
   useEffect(() => {
-    if (!id) return;
-    Promise.all([
-      supabase.from('invoices').select('*, enrollments(full_name)').eq('id', id).single(),
-      supabase.from('installments').select('*').eq('invoice_id', id).order('due_date'),
-    ]).then(([inv, ins]) => {
-      setInvoice(inv.data);
-      setTotal(String(inv.data?.total_amount ?? ''));
-      setInstallments(
-        (ins.data || []).map(i => ({
-          id: i.id,
-          amount: String(i.amount),
-          due_date: i.due_date,
-          status: i.status as 'pending' | 'paid',
-          paid_at: i.paid_at,
-        })),
-      );
-      setLoading(false);
-    });
-  }, [id]);
+    if (!pageData || seeded.current) return;
+    seeded.current = true;
+    setTotal(String(pageData.invoice?.total_amount ?? ''));
+    setInstallments(
+      (pageData.installments || []).map((i: any) => ({
+        id: i.id,
+        amount: String(i.amount),
+        due_date: i.due_date,
+        status: i.status as 'pending' | 'paid',
+        paid_at: i.paid_at,
+      })),
+    );
+  }, [pageData]);
 
   const updateInst = (idx: number, patch: Partial<Inst>) => {
     setInstallments(prev => prev.map((p, i) => {

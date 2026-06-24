@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useAttendance, useAttendanceSession } from '@/hooks/useAttendance';
@@ -219,13 +220,47 @@ export default function ClassroomWorkspacePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const [classroomData, setClassroomData] = useState<any>(null);
-  const [permissions, setPermissions] = useState<any>(null);
-  const [students, setStudents] = useState<any[]>([]);
-  const [staffList, setStaffList] = useState<any[]>([]);
-  const [dataLoading, setDataLoading] = useState(true);
-  const [scopeOptions, setScopeOptions] = useState<{ curricula: any[]; tracks: any[]; modules: any[] }>({ curricula: [], tracks: [], modules: [] });
-  const [lessonOptions, setLessonOptions] = useState<any[]>([]);
+  const { data: pageData, isLoading: dataLoading } = useQuery({
+    queryKey: ['workspace-local', id, user?.id],
+    queryFn: async () => {
+      const [csRes, staffRes, studentsRes] = await Promise.all([
+        supabase.from('classroom_staff')
+          .select('*, classrooms(*, programs(program_name)), classroom_permissions(*)')
+          .eq('classroom_id', id!).eq('user_id', user!.id).single(),
+        supabase.from('staff').select('id, full_name'),
+        supabase.rpc('get_classroom_students', { p_classroom_id: id }),
+      ]);
+      return {
+        classroomData: csRes.data ?? null,
+        staffList: (staffRes.data || []) as any[],
+        students: (studentsRes.data || []) as any[],
+      };
+    },
+    enabled: !!id && !!user,
+    staleTime: 30_000,
+  });
+  const classroomData = pageData?.classroomData ?? null;
+  const permissions = classroomData?.classroom_permissions ?? null;
+  const staffList = pageData?.staffList ?? [];
+  const students = pageData?.students ?? [];
+
+  const { data: optionsData } = useQuery({
+    queryKey: ['workspace-options', id],
+    queryFn: async () => {
+      const [scopeRes, lessonRes] = await Promise.all([
+        supabase.rpc('get_classroom_scope_options', { p_classroom_id: id }),
+        supabase.rpc('get_classroom_lesson_options' as any, { p_classroom_id: id }),
+      ]);
+      return {
+        scopeOptions: (scopeRes.data as any) ?? { curricula: [], tracks: [], modules: [] },
+        lessonOptions: (lessonRes.data as any[]) ?? [],
+      };
+    },
+    enabled: !!id,
+    staleTime: 5 * 60_000,
+  });
+  const scopeOptions = optionsData?.scopeOptions ?? { curricula: [], tracks: [], modules: [] };
+  const lessonOptions = optionsData?.lessonOptions ?? [];
 
   const { sessions, generateSession, closeSession, regenerateCode } = useAttendance(id!);
   const { assignments, createAssignment, updateAssignment, publishAssignment, deleteAssignment } = useAssignments(id!);
@@ -268,18 +303,6 @@ export default function ClassroomWorkspacePage() {
   const [cohortStudentsLoading, setCohortStudentsLoading] = useState(false);
   const [cohortStudentSearch, setCohortStudentSearch] = useState('');
 
-  useEffect(() => { if (id && user) loadData(); }, [id, user]);
-
-  useEffect(() => {
-    if (!id) return;
-    Promise.all([
-      supabase.rpc('get_classroom_scope_options', { p_classroom_id: id }),
-      supabase.rpc('get_classroom_lesson_options' as any, { p_classroom_id: id }),
-    ]).then(([scopeRes, lessonRes]) => {
-      if (scopeRes.data) setScopeOptions(scopeRes.data as any);
-      if (lessonRes.data) setLessonOptions(lessonRes.data as any[]);
-    });
-  }, [id]);
 
   useEffect(() => {
     const open = sessions.find((s: any) => s.status === 'open');
@@ -296,21 +319,6 @@ export default function ClassroomWorkspacePage() {
       setCountdown(null);
     }
   }, [sessions]);
-
-  const loadData = async () => {
-    const [csRes, staffRes, studentsRes] = await Promise.all([
-      supabase.from('classroom_staff')
-        .select('*, classrooms(*, programs(program_name)), classroom_permissions(*)')
-        .eq('classroom_id', id).eq('user_id', user!.id).single(),
-      supabase.from('staff').select('id, full_name'),
-      supabase.rpc('get_classroom_students', { p_classroom_id: id }),
-    ]);
-    setClassroomData(csRes.data);
-    setPermissions(csRes.data?.classroom_permissions);
-    setStaffList(staffRes.data || []);
-    setStudents(studentsRes.data || []);
-    setDataLoading(false);
-  };
 
   const handleStartAttendance = async () => {
     setGeneratingSession(true);
@@ -546,8 +554,26 @@ export default function ClassroomWorkspacePage() {
     setCohortStudentsModal({ open: true, cohort });
     setCohortStudentSearch('');
     setCohortStudentsLoading(true);
-    const { data } = await supabase.rpc('get_cohort_members', { p_cohort_id: cohort.id });
-    setCohortMembers(data || []);
+    const { data: rows } = await supabase
+      .from('cohort_students')
+      .select('id, student_id')
+      .eq('cohort_id', cohort.id);
+    const members = rows || [];
+    const ids = members.map((r: any) => r.student_id).filter(Boolean);
+    const profilesById = new Map<string, any>();
+    if (ids.length) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('user_id, full_name, email')
+        .in('user_id', ids);
+      (profiles || []).forEach((p: any) => profilesById.set(p.user_id, p));
+    }
+    setCohortMembers(members.map((r: any) => ({
+      id: r.id,
+      student_id: r.student_id,
+      full_name: profilesById.get(r.student_id)?.full_name ?? null,
+      email: profilesById.get(r.student_id)?.email ?? null,
+    })));
     setCohortStudentsLoading(false);
   };
 

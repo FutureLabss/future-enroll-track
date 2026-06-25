@@ -30,6 +30,7 @@ export function useClassrooms() {
         .order('created_at', { ascending: false });
       return (data as any[]) || [];
     },
+    staleTime: 30_000,
   });
 
   const refetch = () => queryClient.invalidateQueries({ queryKey: ['classrooms'] });
@@ -108,6 +109,7 @@ export function useStaffClassrooms() {
       return (data as any[]) || [];
     },
     enabled: Boolean(user),
+    staleTime: 30_000,
   });
 
   return { classrooms, loading };
@@ -168,6 +170,7 @@ export function useStudentClassrooms() {
       return (data as any[]) || [];
     },
     enabled: Boolean(user),
+    staleTime: 30_000,
   });
 
   return { classrooms, loading };

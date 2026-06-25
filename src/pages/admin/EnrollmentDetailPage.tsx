@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -22,9 +23,7 @@ export default function EnrollmentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isSuperadmin } = useAuth();
-  const [enrollment, setEnrollment] = useState<any>(null);
-  const [fieldValues, setFieldValues] = useState<FieldValue[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [verifying, setVerifying] = useState(false);
   const [showEvidence, setShowEvidence] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -32,7 +31,6 @@ export default function EnrollmentDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState({ full_name: '', email: '', phone: '' });
   const [saving, setSaving] = useState(false);
-  const [switchHistory, setSwitchHistory] = useState<any[]>([]);
 
   const openEdit = () => {
     setEditForm({ full_name: enrollment.full_name || '', email: enrollment.email || '', phone: enrollment.phone || '' });
@@ -58,7 +56,7 @@ export default function EnrollmentDetailPage() {
         }).eq('user_id', enrollment.user_id);
       }
 
-      setEnrollment({ ...enrollment, full_name: editForm.full_name.trim(), email: editForm.email.trim(), phone: editForm.phone.trim() || null });
+      queryClient.invalidateQueries({ queryKey: ['enrollment-detail', id] });
       toast.success('Student details updated');
       setEditOpen(false);
     } catch (err: any) {
@@ -100,21 +98,20 @@ export default function EnrollmentDetailPage() {
     }
   };
 
-  useEffect(() => {
-    if (!id) return;
-    Promise.all([
-      supabase.from('enrollments')
-        .select('*, programs(program_name), cohorts(cohort_label), organizations(organization_name)')
-        .eq('id', id).single(),
-      supabase.from('field_values')
-        .select('id, value, custom_fields(label, key, sort_order, field_type)')
-        .eq('enrollment_id', id)
-        .order('field_id'),
-    ]).then(async ([eRes, fRes]) => {
-      setEnrollment(eRes.data);
-      setFieldValues((fRes.data as any[]) || []);
-      setLoading(false);
-
+  const { data: pageData, isLoading: loading } = useQuery({
+    queryKey: ['enrollment-detail', id],
+    queryFn: async () => {
+      const [eRes, fRes] = await Promise.all([
+        supabase.from('enrollments')
+          .select('*, programs(program_name), cohorts(cohort_label), organizations(organization_name)')
+          .eq('id', id!).single(),
+        supabase.from('field_values')
+          .select('id, value, custom_fields(label, key, sort_order, field_type)')
+          .eq('enrollment_id', id!)
+          .order('field_id'),
+      ]);
+      if (eRes.error) throw eRes.error;
+      let switchHistory: any[] = [];
       if (eRes.data?.user_id) {
         const { data: history } = await supabase
           .from('audit_logs')
@@ -126,11 +123,17 @@ export default function EnrollmentDetailPage() {
           const adminIds = [...new Set(history.map((h: any) => h.user_id).filter(Boolean))];
           const { data: admins } = await supabase.from('profiles').select('user_id, full_name, email').in('user_id', adminIds);
           const adminMap = new Map((admins || []).map((a: any) => [a.user_id, a]));
-          setSwitchHistory(history.map((h: any) => ({ ...h, admin: adminMap.get(h.user_id) })));
+          switchHistory = history.map((h: any) => ({ ...h, admin: adminMap.get(h.user_id) }));
         }
       }
-    });
-  }, [id]);
+      return { enrollment: eRes.data, fieldValues: (fRes.data as FieldValue[]) || [], switchHistory };
+    },
+    enabled: !!id,
+    staleTime: 30_000,
+  });
+  const enrollment = pageData?.enrollment ?? null;
+  const fieldValues = pageData?.fieldValues ?? [];
+  const switchHistory = pageData?.switchHistory ?? [];
 
   const getEnrollmentDate = async () => {
     const { data: invoice } = await supabase
@@ -174,7 +177,7 @@ export default function EnrollmentDetailPage() {
       } catch {}
 
       toast.success(`Enrollment ${action}`);
-      setEnrollment({ ...enrollment, ...updates });
+      queryClient.invalidateQueries({ queryKey: ['enrollment-detail', id] });
     } catch (err: any) {
       toast.error(err.message);
     } finally {

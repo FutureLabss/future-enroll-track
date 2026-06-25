@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { useStudentClassrooms } from '@/hooks/useClassroom';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -13,59 +13,53 @@ export default function StudentClassroomsPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { classrooms, loading } = useStudentClassrooms();
-  const [scheduleMap, setScheduleMap] = useState<Record<string, any[]>>({});
-  const [cohortMap, setCohortMap] = useState<Record<string, any>>({});
 
-  useEffect(() => {
-    const classroomIds = classrooms.map((row: any) => row.classroom_id).filter(Boolean);
-    if (classroomIds.length === 0 || !user) {
-      setCohortMap({});
-      setScheduleMap({});
-      return;
-    }
-
-    Promise.all([
-      supabase
-        .from('cohort_students')
-        .select('cohort_id, status, cohorts!inner(id, cohort_label, classroom_id, scope_type, status, start_date, end_date)')
-        .eq('student_id', user.id)
-        .eq('status', 'active')
-        .in('cohorts.classroom_id', classroomIds),
-      (async () => {
-        const { data, error } = await supabase
-          .from('schedules')
-          .select(SCHEDULE_COLUMNS)
-          .in('classroom_id', classroomIds)
-          .neq('status', 'cancelled')
-          .gte('scheduled_date', new Date().toISOString().split('T')[0])
-          .order('scheduled_date', { ascending: true })
-          .order('start_time', { ascending: true });
-        if (error) throw error;
-        return { data: await enrichSchedules(data || []) };
-      })(),
-    ]).then(([cohortRes, scheduleRes]) => {
-        const membershipsByClassroom: Record<string, any> = {};
-        (cohortRes.data || []).forEach((membership: any) => {
-          const classroomId = membership.cohorts?.classroom_id;
-          if (!classroomId) return;
-
-          const existing = membershipsByClassroom[classroomId];
-          if (!existing || membership.cohorts?.status === 'active') {
-            membershipsByClassroom[classroomId] = membership;
-          }
-        });
-
-        const grouped: Record<string, any[]> = {};
-        (scheduleRes.data || []).forEach((schedule: any) => {
-          const studentCohortId = membershipsByClassroom[schedule.classroom_id]?.cohort_id;
-          if (schedule.cohort_id && schedule.cohort_id !== studentCohortId) return;
-          grouped[schedule.classroom_id] = [...(grouped[schedule.classroom_id] || []), schedule];
-        });
-
-        setCohortMap(membershipsByClassroom);
-        setScheduleMap(grouped);
+  const classroomIds = classrooms.map((row: any) => row.classroom_id).filter(Boolean);
+  const { data: extraData } = useQuery({
+    queryKey: ['student-classrooms-extra', user?.id, classroomIds.join(',')],
+    queryFn: async () => {
+      const [cohortRes, scheduleData] = await Promise.all([
+        supabase
+          .from('cohort_students')
+          .select('cohort_id, status, cohorts!inner(id, cohort_label, classroom_id, scope_type, status, start_date, end_date)')
+          .eq('student_id', user!.id)
+          .eq('status', 'active')
+          .in('cohorts.classroom_id', classroomIds),
+        (async () => {
+          const { data, error } = await supabase
+            .from('schedules')
+            .select(SCHEDULE_COLUMNS)
+            .in('classroom_id', classroomIds)
+            .neq('status', 'cancelled')
+            .gte('scheduled_date', new Date().toISOString().split('T')[0])
+            .order('scheduled_date', { ascending: true })
+            .order('start_time', { ascending: true });
+          if (error) throw error;
+          return enrichSchedules(data || []);
+        })(),
+      ]);
+      const membershipsByClassroom: Record<string, any> = {};
+      (cohortRes.data || []).forEach((membership: any) => {
+        const classroomId = membership.cohorts?.classroom_id;
+        if (!classroomId) return;
+        const existing = membershipsByClassroom[classroomId];
+        if (!existing || membership.cohorts?.status === 'active') {
+          membershipsByClassroom[classroomId] = membership;
+        }
       });
-  }, [classrooms, user]);
+      const grouped: Record<string, any[]> = {};
+      (scheduleData || []).forEach((schedule: any) => {
+        const studentCohortId = membershipsByClassroom[schedule.classroom_id]?.cohort_id;
+        if (schedule.cohort_id && schedule.cohort_id !== studentCohortId) return;
+        grouped[schedule.classroom_id] = [...(grouped[schedule.classroom_id] || []), schedule];
+      });
+      return { cohortMap: membershipsByClassroom, scheduleMap: grouped };
+    },
+    enabled: !!user && classroomIds.length > 0,
+    staleTime: 30_000,
+  });
+  const cohortMap = extraData?.cohortMap ?? {};
+  const scheduleMap = extraData?.scheduleMap ?? {};
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
 

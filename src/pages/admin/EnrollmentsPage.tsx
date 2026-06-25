@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import { useNavigate } from 'react-router-dom';
 import { format, subMonths, startOfMonth } from 'date-fns';
@@ -19,11 +20,6 @@ import { toast } from 'sonner';
 
 export default function EnrollmentsPage() {
   const navigate = useNavigate();
-  const [enrollments, setEnrollments] = useState<any[]>([]);
-  const [programs, setPrograms] = useState<any[]>([]);
-  const [customFields, setCustomFields] = useState<any[]>([]);
-  const [valueMap, setValueMap] = useState<Map<string, Record<string, string>>>(new Map());
-  const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [programFilter, setProgramFilter] = useState('all');
@@ -34,17 +30,23 @@ export default function EnrollmentsPage() {
   const [exportOpen, setExportOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState('csv');
 
-  useEffect(() => {
-    supabase.from('programs').select('id, program_name').eq('active', true).order('program_name')
-      .then(({ data }) => setPrograms(data || []));
+  const { data: staticData } = useQuery({
+    queryKey: ['enrollments-static'],
+    queryFn: async () => {
+      const [programsRes, fieldsRes] = await Promise.all([
+        supabase.from('programs').select('id, program_name').eq('active', true).order('program_name'),
+        supabase.from('custom_fields').select('id, key, label, sort_order').eq('active', true).order('sort_order'),
+      ]);
+      return { programs: (programsRes.data || []) as any[], customFields: (fieldsRes.data || []) as any[] };
+    },
+    staleTime: 5 * 60_000,
+  });
+  const programs = staticData?.programs ?? [];
+  const customFields = staticData?.customFields ?? [];
 
-    supabase.from('custom_fields').select('id, key, label, sort_order').eq('active', true).order('sort_order')
-      .then(({ data }) => setCustomFields(data || []));
-  }, []);
-
-  useEffect(() => {
-    const fetchEnrollments = async () => {
-      setLoading(true);
+  const { data: enrollmentsData, isLoading: loading } = useQuery({
+    queryKey: ['enrollments-list', statusFilter, programFilter],
+    queryFn: async () => {
       let query = supabase.from('enrollments')
         .select('*, programs(program_name), cohorts(cohort_label), organizations(organization_name)')
         .order('first_payment_date', { ascending: false, nullsFirst: false })
@@ -53,12 +55,11 @@ export default function EnrollmentsPage() {
       if (programFilter !== 'all') query = query.eq('program_id', programFilter);
       const { data } = await query;
       const rows = data || [];
-      setEnrollments(rows);
 
-      // Fetch custom field values for all loaded enrollments
+      let valueMap = new Map<string, Record<string, string>>();
       if (rows.length > 0 && customFields.length > 0) {
-        const fieldKeyById = new Map<string, string>(customFields.map(f => [f.id, f.key]));
-        const ids = rows.map(e => e.id);
+        const fieldKeyById = new Map<string, string>(customFields.map((f: any) => [f.id, f.key]));
+        const ids = rows.map((e: any) => e.id);
         const CHUNK = 100;
         let allFv: any[] = [];
         for (let i = 0; i < ids.length; i += CHUNK) {
@@ -68,20 +69,19 @@ export default function EnrollmentsPage() {
             .in('enrollment_id', ids.slice(i, i + CHUNK));
           allFv = allFv.concat(fv || []);
         }
-        const map = new Map<string, Record<string, string>>();
         for (const fv of allFv) {
           const key = fieldKeyById.get(fv.field_id);
           if (!key) continue;
-          if (!map.has(fv.enrollment_id)) map.set(fv.enrollment_id, {});
-          map.get(fv.enrollment_id)![key] = fv.value ?? '';
+          if (!valueMap.has(fv.enrollment_id)) valueMap.set(fv.enrollment_id, {});
+          valueMap.get(fv.enrollment_id)![key] = fv.value ?? '';
         }
-        setValueMap(map);
       }
-
-      setLoading(false);
-    };
-    fetchEnrollments();
-  }, [statusFilter, programFilter, customFields]);
+      return { rows, valueMap };
+    },
+    staleTime: 30_000,
+  });
+  const enrollments = enrollmentsData?.rows ?? [];
+  const valueMap = enrollmentsData?.valueMap ?? new Map();
 
   const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
 

@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, Check, Trash2, Pencil } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { StatCard } from '@/components/shared/StatCard';
 import { Wallet, Users } from 'lucide-react';
@@ -42,7 +43,7 @@ export default function PayrollPage() {
   // Staff dialog
   const [staffOpen, setStaffOpen] = useState(false);
   const [editingStaffId, setEditingStaffId] = useState<string | null>(null);
-  const [staffForm, setStaffForm] = useState({ full_name: '', role_title: '', base_salary: '', email: '', phone: '', bank_name: '', account_number: '', program_id: '' });
+  const [staffForm, setStaffForm] = useState({ full_name: '', role_title: '', base_salary: '', email: '', phone: '', bank_name: '', account_number: '', program_id: '', externally_funded: false, funder_name: '' });
 
   // Run dialog
   const [runOpen, setRunOpen] = useState(false);
@@ -83,7 +84,7 @@ export default function PayrollPage() {
 
   const resetStaffForm = () => {
     setEditingStaffId(null);
-    setStaffForm({ full_name: '', role_title: '', base_salary: '', email: '', phone: '', bank_name: '', account_number: '', program_id: '' });
+    setStaffForm({ full_name: '', role_title: '', base_salary: '', email: '', phone: '', bank_name: '', account_number: '', program_id: '', externally_funded: false, funder_name: '' });
   };
 
   const openEditStaff = (s: any) => {
@@ -97,6 +98,8 @@ export default function PayrollPage() {
       bank_name: s.bank_name || '',
       account_number: s.account_number || '',
       program_id: s.program_id || '',
+      externally_funded: s.externally_funded ?? false,
+      funder_name: s.funder_name || '',
     });
     setStaffOpen(true);
   };
@@ -114,6 +117,8 @@ export default function PayrollPage() {
         bank_name: staffForm.bank_name || null,
         account_number: staffForm.account_number || null,
         program_id: staffForm.program_id || null,
+        externally_funded: staffForm.externally_funded,
+        funder_name: staffForm.externally_funded && staffForm.funder_name ? staffForm.funder_name : null,
       };
       const { error } = editingStaffId
         ? await supabase.from('staff').update(payload).eq('id', editingStaffId)
@@ -221,6 +226,9 @@ export default function PayrollPage() {
     { key: 'phone', header: 'Phone', render: (r: any) => r.phone || '—' },
     { key: 'bank_name', header: 'Bank', render: (r: any) => r.bank_name || '—' },
     { key: 'account_number', header: 'Account #', render: (r: any) => r.account_number || '—' },
+    { key: 'funded_by', header: 'Funded By', render: (r: any) => r.externally_funded
+      ? <Badge variant="outline" className="text-blue-600 border-blue-300">{r.funder_name || 'External'}</Badge>
+      : <span className="text-muted-foreground text-sm">Internal</span> },
     { key: 'active', header: 'Status', render: (r: any) => <Badge variant={r.active ? 'default' : 'secondary'}>{r.active ? 'Active' : 'Inactive'}</Badge> },
     { key: 'actions', header: '', render: (r: any) => (
       <div className="flex gap-1 justify-end">
@@ -272,7 +280,7 @@ export default function PayrollPage() {
                     }}>
                       <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select staff" /></SelectTrigger>
                       <SelectContent>
-                        {staff.filter(s => s.active).map(s => (
+                        {staff.filter(s => s.active && !(s as any).externally_funded).map(s => (
                           <SelectItem key={s.id} value={s.id}>{s.full_name} {s.role_title ? `— ${s.role_title}` : ''}</SelectItem>
                         ))}
                       </SelectContent>
@@ -359,6 +367,24 @@ export default function PayrollPage() {
                       <Label>Account Number</Label>
                       <Input value={staffForm.account_number} onChange={e => setStaffForm({ ...staffForm, account_number: e.target.value })} className="mt-1.5" placeholder="10-digit NUBAN" />
                     </div>
+                  </div>
+                  <div className="border rounded-lg p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label>Externally Funded</Label>
+                        <p className="text-xs text-muted-foreground">Paid by a third party — excluded from your payroll</p>
+                      </div>
+                      <Switch
+                        checked={staffForm.externally_funded}
+                        onCheckedChange={v => setStaffForm({ ...staffForm, externally_funded: v, funder_name: v ? staffForm.funder_name : '' })}
+                      />
+                    </div>
+                    {staffForm.externally_funded && (
+                      <div>
+                        <Label>Funder Name</Label>
+                        <Input value={staffForm.funder_name} onChange={e => setStaffForm({ ...staffForm, funder_name: e.target.value })} className="mt-1.5" placeholder="e.g. NJFP" />
+                      </div>
+                    )}
                   </div>
                   <Button onClick={saveStaff} className="w-full">{editingStaffId ? 'Save Changes' : 'Add Staff'}</Button>
                 </div>

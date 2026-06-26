@@ -19,6 +19,7 @@ interface AuthContextType {
   session: Session | null;
   roles: AppRole[];
   loading: boolean;
+  rolesReady: boolean;
   isAdmin: boolean;
   isOrganization: boolean;
   isStaff: boolean;
@@ -41,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isHubManager, setIsHubManager] = useState(false);
   const [demoExpiresAt, setDemoExpiresAt] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
+  const [rolesReady, setRolesReady] = useState(false);
   const currentUserRef = useRef<{ id: string; email?: string } | null>(null);
 
   const fetchRoles = async (userId: string) => {
@@ -67,13 +69,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
+      setLoading(false);
+      initialised = true;
       if (session?.user) {
         currentUserRef.current = { id: session.user.id, email: session.user.email };
         await fetchRoles(session.user.id);
       }
-      setLoading(false);
-      initialised = true;
-    }).catch(() => setLoading(false));
+      setRolesReady(true);
+    }).catch(() => { setLoading(false); setRolesReady(true); });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
@@ -85,7 +88,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             logAuthEvent('user_login', session.user.id, session.user.email);
           }
           currentUserRef.current = { id: session.user.id, email: session.user.email };
+          setRolesReady(false);
           await fetchRoles(session.user.id);
+          setRolesReady(true);
         } else {
           if (event === 'SIGNED_OUT' && currentUserRef.current) {
             logAuthEvent('user_logout', currentUserRef.current.id, currentUserRef.current.email);
@@ -94,6 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setRoles([]);
           setIsSuperadmin(false);
           setIsHubManager(false);
+          setRolesReady(true);
         }
       }
     );
@@ -129,6 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         session,
         roles,
         loading,
+        rolesReady,
         isAdmin: roles.includes('admin') || isSuperadmin,
         isOrganization: roles.includes('organization'),
         isStaff: roles.includes('staff') && !roles.includes('admin') && !isSuperadmin,

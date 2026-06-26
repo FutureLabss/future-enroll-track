@@ -86,9 +86,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AdminGuard() {
-  const { isAdmin, isStaff, isHubManager, loading } = useAuth();
+  const { isAdmin, isStaff, isHubManager, loading, rolesReady } = useAuth();
   const location = useLocation();
-  if (loading) return <PageSpinner />;
+  if (loading || !rolesReady) return <PageSpinner />;
   // Hub managers (CEO, training manager) can access classroom management only
   if (!isAdmin && isHubManager && location.pathname.startsWith('/admin/classrooms')) return <Outlet />;
   if (!isAdmin) return <Navigate to={isStaff ? '/staff/classrooms' : '/student'} replace />;
@@ -96,8 +96,8 @@ function AdminGuard() {
 }
 
 function RoleRedirect() {
-  const { isAdmin, isOrganization, isStaff, loading } = useAuth();
-  if (loading) return <PageSpinner />;
+  const { isAdmin, isOrganization, isStaff, loading, rolesReady } = useAuth();
+  if (loading || !rolesReady) return <PageSpinner />;
   if (isAdmin) return <Navigate to="/admin" replace />;
   if (isOrganization) return <Navigate to="/org" replace />;
   if (isStaff) return <Navigate to="/staff/classrooms" replace />;

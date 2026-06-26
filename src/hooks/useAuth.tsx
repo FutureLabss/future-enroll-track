@@ -23,6 +23,7 @@ interface AuthContextType {
   isOrganization: boolean;
   isStaff: boolean;
   isSuperadmin: boolean;
+  isHubManager: boolean;
   isDemo: boolean;
   demoExpiresAt: Date | null;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
@@ -37,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [isSuperadmin, setIsSuperadmin] = useState(false);
+  const [isHubManager, setIsHubManager] = useState(false);
   const [demoExpiresAt, setDemoExpiresAt] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
   const currentUserRef = useRef<{ id: string; email?: string } | null>(null);
@@ -46,12 +48,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const [rolesRes, saRes, memberRes] = await Promise.all([
         supabase.from('user_roles').select('role').eq('user_id', userId),
         supabase.from('superadmins').select('user_id').eq('user_id', userId).maybeSingle(),
-        supabase.from('hub_members').select('demo_expires_at').eq('user_id', userId).maybeSingle(),
+        supabase.from('hub_members').select('hub_role, demo_expires_at').eq('user_id', userId).maybeSingle(),
       ]);
       if (!rolesRes.error && rolesRes.data) {
         setRoles(rolesRes.data.map(r => r.role as AppRole));
       }
       setIsSuperadmin(!!saRes.data);
+      setIsHubManager(memberRes.data?.hub_role === 'manager');
       const exp = memberRes.data?.demo_expires_at;
       setDemoExpiresAt(exp ? new Date(exp) : null);
     } catch (_e) {
@@ -90,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           currentUserRef.current = null;
           setRoles([]);
           setIsSuperadmin(false);
+          setIsHubManager(false);
         }
       }
     );
@@ -129,6 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isOrganization: roles.includes('organization'),
         isStaff: roles.includes('staff') && !roles.includes('admin') && !isSuperadmin,
         isSuperadmin,
+        isHubManager,
         isDemo: !!demoExpiresAt && demoExpiresAt > new Date(),
         demoExpiresAt,
         signIn,

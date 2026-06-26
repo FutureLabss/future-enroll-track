@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { BrowserRouter, Routes, Route, Navigate, Outlet, useParams } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation, useParams } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { AppLayout } from "@/components/layout/AppLayout";
 
@@ -86,8 +86,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AdminGuard() {
-  const { isAdmin, isStaff, loading } = useAuth();
+  const { isAdmin, isStaff, isHubManager, loading } = useAuth();
+  const location = useLocation();
   if (loading) return <PageSpinner />;
+  // Hub managers (CEO, training manager) can access classroom management only
+  if (!isAdmin && isHubManager && location.pathname.startsWith('/admin/classrooms')) return <Outlet />;
   if (!isAdmin) return <Navigate to={isStaff ? '/staff/classrooms' : '/student'} replace />;
   return <Outlet />;
 }

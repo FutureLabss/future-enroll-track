@@ -24,6 +24,9 @@ export default function CreateInvoicePage() {
     full_name: '',
     email: '',
     phone: '',
+    address: '',
+    guardian_name: '',
+    guardian_phone: '',
     program_id: '',
     cohort_id: '',
     organization_id: '',
@@ -117,6 +120,9 @@ export default function CreateInvoicePage() {
           full_name: form.full_name,
           email: form.email,
           phone: form.phone || null,
+          address: form.address || null,
+          guardian_name: form.guardian_name || null,
+          guardian_phone: form.guardian_phone || null,
           program_id: form.program_id,
           cohort_id: form.cohort_id || null,
           organization_id: form.organization_id || null,
@@ -211,6 +217,28 @@ export default function CreateInvoicePage() {
             {form.phone && !/^\+[1-9]\d{6,14}$/.test(form.phone) && (
               <p className="text-xs text-destructive mt-1">Use international format: +234...</p>
             )}
+          </div>
+          <div className="sm:col-span-2">
+            <Label>Address</Label>
+            <Input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} className="mt-1.5" placeholder="Street, city, state" />
+          </div>
+          <div>
+            <Label>Guardian Name</Label>
+            <Input value={form.guardian_name} onChange={e => setForm({ ...form, guardian_name: e.target.value })} className="mt-1.5" placeholder="Parent or guardian full name" />
+          </div>
+          <div>
+            <Label>Guardian Phone</Label>
+            <Input
+              value={form.guardian_phone}
+              onChange={e => {
+                const val = e.target.value;
+                if (val === '' || /^\+?[0-9]*$/.test(val)) {
+                  setForm({ ...form, guardian_phone: val });
+                }
+              }}
+              className="mt-1.5"
+              placeholder="+2347032400529"
+            />
           </div>
           <div>
             <Label>Program *</Label>

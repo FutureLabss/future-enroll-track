@@ -29,11 +29,11 @@ export default function EnrollmentDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
-  const [editForm, setEditForm] = useState({ full_name: '', email: '', phone: '' });
+  const [editForm, setEditForm] = useState({ full_name: '', email: '', phone: '', address: '', guardian_name: '', guardian_phone: '' });
   const [saving, setSaving] = useState(false);
 
   const openEdit = () => {
-    setEditForm({ full_name: enrollment.full_name || '', email: enrollment.email || '', phone: enrollment.phone || '' });
+    setEditForm({ full_name: enrollment.full_name || '', email: enrollment.email || '', phone: enrollment.phone || '', address: (enrollment as any).address || '', guardian_name: (enrollment as any).guardian_name || '', guardian_phone: (enrollment as any).guardian_phone || '' });
     setEditOpen(true);
   };
 
@@ -45,6 +45,9 @@ export default function EnrollmentDetailPage() {
         full_name: editForm.full_name.trim(),
         email: editForm.email.trim(),
         phone: editForm.phone.trim() || null,
+        address: editForm.address.trim() || null,
+        guardian_name: editForm.guardian_name.trim() || null,
+        guardian_phone: editForm.guardian_phone.trim() || null,
       }).eq('id', enrollment.id);
       if (enrErr) throw enrErr;
 
@@ -302,6 +305,9 @@ export default function EnrollmentDetailPage() {
             ['Full Name', enrollment.full_name],
             ['Email', enrollment.email],
             ['Phone', enrollment.phone || '—'],
+            ['Address', (enrollment as any).address || '—'],
+            ['Guardian Name', (enrollment as any).guardian_name || '—'],
+            ['Guardian Phone', (enrollment as any).guardian_phone || '—'],
             ['Payment Type', enrollment.payment_type],
             ['Sponsor', enrollment.organizations?.organization_name || '—'],
             ['Verification', enrollment.verification_status || 'pending'],
@@ -409,6 +415,18 @@ export default function EnrollmentDetailPage() {
             <div>
               <Label>Phone</Label>
               <Input value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: e.target.value })} placeholder="+234..." className="mt-1.5" />
+            </div>
+            <div>
+              <Label>Address</Label>
+              <Input value={editForm.address} onChange={e => setEditForm({ ...editForm, address: e.target.value })} placeholder="Street, city, state" className="mt-1.5" />
+            </div>
+            <div>
+              <Label>Guardian Name</Label>
+              <Input value={editForm.guardian_name} onChange={e => setEditForm({ ...editForm, guardian_name: e.target.value })} placeholder="Parent or guardian" className="mt-1.5" />
+            </div>
+            <div>
+              <Label>Guardian Phone</Label>
+              <Input value={editForm.guardian_phone} onChange={e => setEditForm({ ...editForm, guardian_phone: e.target.value })} placeholder="+234..." className="mt-1.5" />
             </div>
             <Button onClick={handleEditSave} disabled={saving} className="w-full">
               {saving ? 'Saving...' : 'Save Changes'}

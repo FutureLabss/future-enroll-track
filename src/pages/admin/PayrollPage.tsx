@@ -79,7 +79,6 @@ export default function PayrollPage() {
       if (r.error) throw new Error('Failed to load payroll: ' + r.error.message);
       return { staff: s.data || [], runs: r.data || [], programs: p.data || [] };
     },
-    enabled: !!hubId,
   });
 
   const staff = payrollData?.staff ?? [];

@@ -87,15 +87,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
 
-        if (event === 'SIGNED_IN' && session?.user) {
-          logAuthEvent('user_login', session.user.id, session.user.email);
-          currentUserRef.current = { id: session.user.id, email: session.user.email };
+        const prevUserId = currentUserRef.current?.id;
+        const newUserId = session?.user?.id;
+
+        if (newUserId && newUserId !== prevUserId) {
+          // Different user signed in (actual login, not session restore for same user)
+          if (event === 'SIGNED_IN') {
+            logAuthEvent('user_login', newUserId, session!.user.email);
+          }
+          currentUserRef.current = { id: newUserId, email: session!.user.email };
           setRolesReady(false);
-          await fetchRoles(session.user.id);
+          await fetchRoles(newUserId);
           setRolesReady(true);
-        } else if (event === 'SIGNED_OUT') {
-          if (currentUserRef.current) {
-            logAuthEvent('user_logout', currentUserRef.current.id, currentUserRef.current.email);
+        } else if (!newUserId && prevUserId) {
+          // User signed out
+          if (event === 'SIGNED_OUT') {
+            logAuthEvent('user_logout', prevUserId, currentUserRef.current?.email);
           }
           currentUserRef.current = null;
           setRoles([]);
@@ -104,7 +111,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setHubId(null);
           setRolesReady(true);
         }
-        // TOKEN_REFRESHED, INITIAL_SESSION, USER_UPDATED: session/user updated above; roles unchanged
+        // Same user (TOKEN_REFRESHED, INITIAL_SESSION, USER_UPDATED, SIGNED_IN on restore):
+        // session/user refs updated above, roles unchanged
       }
     );
 

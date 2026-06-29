@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,6 +18,7 @@ interface Installment {
 const INSTALLMENT_OPTIONS = [2, 3, 4, 6, 12];
 
 export default function CreateInvoicePage() {
+  const { hubId } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
 
@@ -102,6 +104,7 @@ export default function CreateInvoicePage() {
     try {
       const totalAmount = parseFloat(form.total_amount);
       if (isNaN(totalAmount) || totalAmount <= 0) throw new Error('Invalid amount');
+      if (!form.program_id) throw new Error('Please select a program');
 
       if (form.payment_plan_type === 'installment') {
         const installmentTotal = installments.reduce((s, inst) => s + parseFloat(inst.amount || '0'), 0);
@@ -120,6 +123,7 @@ export default function CreateInvoicePage() {
           cohort_id: form.cohort_id || null,
           organization_id: form.organization_id || null,
           total_amount: totalAmount,
+          hub_id: hubId,
         })
         .select()
         .single();
@@ -130,11 +134,11 @@ export default function CreateInvoicePage() {
         .from('invoices')
         .insert({
           enrollment_id: enrollment.id,
-          invoice_number: '',
           total_amount: totalAmount,
           currency: form.currency,
           payment_plan_type: form.payment_plan_type,
           status: 'active',
+          hub_id: hubId,
         } as any)
         .select()
         .single();

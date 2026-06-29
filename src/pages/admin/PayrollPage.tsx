@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable } from '@/components/shared/DataTable';
 import { Button } from '@/components/ui/button';
@@ -37,6 +38,7 @@ const monthOptions = () => {
 };
 
 export default function PayrollPage() {
+  const { hubId } = useAuth();
   const [selectedMonth, setSelectedMonth] = useState(() => toMonthValue(new Date()));
   const queryClient = useQueryClient();
 
@@ -65,16 +67,19 @@ export default function PayrollPage() {
   }, []);
 
   const { data: payrollData, isLoading: loading } = useQuery({
-    queryKey: ['payroll', selectedMonth],
+    queryKey: ['payroll', selectedMonth, hubId],
     queryFn: async () => {
+      let staffQuery = supabase.from('staff').select('*, programs(program_name)').order('full_name');
+      if (hubId) staffQuery = staffQuery.eq('hub_id', hubId);
       const [s, r, p] = await Promise.all([
-        supabase.from('staff').select('*, programs(program_name)').order('full_name'),
+        staffQuery,
         supabase.from('payroll_runs').select('*, staff(full_name, role_title)').eq('pay_month', selectedMonth).order('created_at', { ascending: false }),
         supabase.from('programs').select('id, program_name').eq('active', true),
       ]);
       if (r.error) throw new Error('Failed to load payroll: ' + r.error.message);
       return { staff: s.data || [], runs: r.data || [], programs: p.data || [] };
     },
+    enabled: !!hubId,
   });
 
   const staff = payrollData?.staff ?? [];

@@ -20,6 +20,7 @@ interface AuthContextType {
   roles: AppRole[];
   loading: boolean;
   rolesReady: boolean;
+  hubId: string | null;
   isAdmin: boolean;
   isOrganization: boolean;
   isStaff: boolean;
@@ -40,6 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [isSuperadmin, setIsSuperadmin] = useState(false);
   const [isHubManager, setIsHubManager] = useState(false);
+  const [hubId, setHubId] = useState<string | null>(null);
   const [demoExpiresAt, setDemoExpiresAt] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
   const [rolesReady, setRolesReady] = useState(false);
@@ -50,13 +52,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const [rolesRes, saRes, memberRes] = await Promise.all([
         supabase.from('user_roles').select('role').eq('user_id', userId),
         supabase.from('superadmins').select('user_id').eq('user_id', userId).maybeSingle(),
-        supabase.from('hub_members').select('hub_role, demo_expires_at').eq('user_id', userId).maybeSingle(),
+        supabase.from('hub_members').select('hub_id, hub_role, demo_expires_at').eq('user_id', userId).maybeSingle(),
       ]);
       if (!rolesRes.error && rolesRes.data) {
         setRoles(rolesRes.data.map(r => r.role as AppRole));
       }
       setIsSuperadmin(!!saRes.data);
       setIsHubManager(memberRes.data?.hub_role === 'manager');
+      setHubId(memberRes.data?.hub_id ?? null);
       const exp = memberRes.data?.demo_expires_at;
       setDemoExpiresAt(exp ? new Date(exp) : null);
     } catch (_e) {
@@ -83,24 +86,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!initialised) return;
         setSession(session);
         setUser(session?.user ?? null);
-        if (session?.user) {
-          if (event === 'SIGNED_IN') {
-            logAuthEvent('user_login', session.user.id, session.user.email);
-          }
+
+        if (event === 'SIGNED_IN' && session?.user) {
+          logAuthEvent('user_login', session.user.id, session.user.email);
           currentUserRef.current = { id: session.user.id, email: session.user.email };
           setRolesReady(false);
           await fetchRoles(session.user.id);
           setRolesReady(true);
-        } else {
-          if (event === 'SIGNED_OUT' && currentUserRef.current) {
+        } else if (event === 'SIGNED_OUT') {
+          if (currentUserRef.current) {
             logAuthEvent('user_logout', currentUserRef.current.id, currentUserRef.current.email);
           }
           currentUserRef.current = null;
           setRoles([]);
           setIsSuperadmin(false);
           setIsHubManager(false);
+          setHubId(null);
           setRolesReady(true);
         }
+        // TOKEN_REFRESHED, INITIAL_SESSION, USER_UPDATED: session/user updated above; roles unchanged
       }
     );
 
@@ -136,6 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         roles,
         loading,
         rolesReady,
+        hubId,
         isAdmin: roles.includes('admin') || isSuperadmin,
         isOrganization: roles.includes('organization'),
         isStaff: roles.includes('staff') && !roles.includes('admin') && !isSuperadmin,

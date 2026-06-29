@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,7 +17,6 @@ interface Installment {
 const INSTALLMENT_OPTIONS = [2, 3, 4, 6, 12];
 
 export default function CreateInvoicePage() {
-  const { hubId } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
 
@@ -123,7 +121,6 @@ export default function CreateInvoicePage() {
           cohort_id: form.cohort_id || null,
           organization_id: form.organization_id || null,
           total_amount: totalAmount,
-          hub_id: hubId,
         })
         .select()
         .single();
@@ -138,7 +135,6 @@ export default function CreateInvoicePage() {
           currency: form.currency,
           payment_plan_type: form.payment_plan_type,
           status: 'active',
-          hub_id: hubId,
         } as any)
         .select()
         .single();

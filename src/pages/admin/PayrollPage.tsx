@@ -127,7 +127,7 @@ export default function PayrollPage() {
       };
       const { error } = editingStaffId
         ? await supabase.from('staff').update(payload).eq('id', editingStaffId)
-        : await supabase.from('staff').insert(payload);
+        : await supabase.from('staff').insert({ ...payload, hub_id: hubId });
       if (error) throw error;
 
       // Send onboarding email to new staff members who have an email address

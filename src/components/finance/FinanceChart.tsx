@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FinanceRow } from '@/hooks/useFinanceSummary';
@@ -11,7 +12,7 @@ interface Props {
 }
 
 export function FinanceChart({ rows, loading }: Props) {
-  const data = [...rows]
+  const data = useMemo(() => [...rows]
     .sort((a, b) => a.month.localeCompare(b.month))
     .map(r => ({
       month: fmtMonth(r.month),
@@ -19,7 +20,7 @@ export function FinanceChart({ rows, loading }: Props) {
       Payroll: r.payroll_total,
       Expenses: r.expenses_total,
       Profit: r.profit,
-    }));
+    })), [rows]);
 
   return (
     <Card className="mb-6">

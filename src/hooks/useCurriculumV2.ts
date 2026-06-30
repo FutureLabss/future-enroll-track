@@ -75,14 +75,12 @@ export function useCurriculumV2(classroomId: string) {
   const { data: curricula = [], isLoading: loading, error: fetchErr } = useQuery({
     queryKey,
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_classroom_curricula', { p_classroom_id: classroomId });
+      const { data, error } = await supabase.rpc('get_classroom_curricula_trees' as any, { p_classroom_id: classroomId });
       if (error) {
         toast.error(`Could not load curriculum: ${error.message}`);
         throw new Error(error.message);
       }
-      const list = data || [];
-      const trees = await Promise.all(list.map((c: any) => fetchCurriculumTree(c.id)));
-      return list.map((c: any, i: number) => ({ ...c, tracks: trees[i] || [] })) as CurriculumV2[];
+      return (data || []) as CurriculumV2[];
     },
     enabled: Boolean(classroomId),
   });

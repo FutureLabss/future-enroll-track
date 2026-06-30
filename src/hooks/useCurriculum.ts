@@ -1,50 +1,41 @@
-import { useEffect, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 
 export function useCurriculum(cohortId: string) {
-  const [curriculum, setCurriculum] = useState<any>(null);
-  const [weeks, setWeeks] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const queryKey = ['curriculum', cohortId];
 
-  const fetchCurriculum = async () => {
-    if (!cohortId) { setLoading(false); return; }
+  const { data, isLoading: loading } = useQuery({
+    queryKey,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('curriculums')
+        .select('*, curriculum_weeks(*, curriculum_lessons(*, lesson_materials(*)))')
+        .eq('cohort_id', cohortId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      return {
+        ...data,
+        curriculum_weeks: (data.curriculum_weeks || [])
+          .sort((a: any, b: any) => a.week_number - b.week_number)
+          .map((w: any) => ({
+            ...w,
+            curriculum_lessons: (w.curriculum_lessons || []).sort(
+              (a: any, b: any) => a.lesson_order - b.lesson_order
+            ),
+          })),
+      };
+    },
+    enabled: Boolean(cohortId),
+  });
 
-    const { data: cur } = await supabase
-      .from('curriculums')
-      .select('*')
-      .eq('cohort_id', cohortId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+  const invalidate = () => queryClient.invalidateQueries({ queryKey });
 
-    if (cur) {
-      setCurriculum(cur);
-      const { data: wks } = await supabase
-        .from('curriculum_weeks')
-        .select('*, curriculum_lessons(*, lesson_materials(*))')
-        .eq('curriculum_id', cur.id)
-        .order('week_number', { ascending: true });
-
-      setWeeks(
-        (wks || []).map(w => ({
-          ...w,
-          curriculum_lessons: (w.curriculum_lessons || []).sort(
-            (a: any, b: any) => a.lesson_order - b.lesson_order
-          ),
-        }))
-      );
-    } else {
-      setCurriculum(null);
-      setWeeks([]);
-    }
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    if (!cohortId) { setLoading(false); return; }
-    setLoading(true);
-    fetchCurriculum();
-  }, [cohortId]);
+  const curriculum = data ?? null;
+  const weeks = (data as any)?.curriculum_weeks ?? [];
 
   const createCurriculum = async (title: string) => {
     const { data: cohort } = await supabase
@@ -56,7 +47,7 @@ export function useCurriculum(cohortId: string) {
     if (cohort?.classroom_id) payload.classroom_id = cohort.classroom_id;
     const { error } = await supabase.from('curriculums').insert(payload);
     if (error) throw error;
-    await fetchCurriculum();
+    await invalidate();
   };
 
   const updateCurriculum = async (payload: { title?: string; description?: string }) => {
@@ -64,54 +55,44 @@ export function useCurriculum(cohortId: string) {
     const { error } = await supabase
       .from('curriculums')
       .update({ ...payload, updated_at: new Date().toISOString() })
-      .eq('id', curriculum.id);
+      .eq('id', (curriculum as any).id);
     if (error) throw error;
-    await fetchCurriculum();
+    await invalidate();
   };
 
   const deleteCurriculum = async () => {
     if (!curriculum) throw new Error('No curriculum found');
-    const { error } = await supabase
-      .from('curriculums')
-      .delete()
-      .eq('id', curriculum.id);
+    const { error } = await supabase.from('curriculums').delete().eq('id', (curriculum as any).id);
     if (error) throw error;
-    setCurriculum(null);
-    setWeeks([]);
+    await invalidate();
   };
 
   const addWeek = async (weekNumber: number, title: string, objectives: string, startDate?: string) => {
     if (!curriculum) throw new Error('No curriculum found');
     const { error } = await supabase.from('curriculum_weeks').insert({
-      curriculum_id: curriculum.id,
+      curriculum_id: (curriculum as any).id,
       week_number: weekNumber,
       title,
       objectives: objectives || null,
       start_date: startDate || null,
     });
     if (error) throw error;
-    await fetchCurriculum();
+    await invalidate();
   };
 
   const updateWeek = async (
     weekId: string,
     payload: { week_number?: number; title?: string; objectives?: string; start_date?: string | null }
   ) => {
-    const { error } = await supabase
-      .from('curriculum_weeks')
-      .update(payload)
-      .eq('id', weekId);
+    const { error } = await supabase.from('curriculum_weeks').update(payload).eq('id', weekId);
     if (error) throw error;
-    await fetchCurriculum();
+    await invalidate();
   };
 
   const deleteWeek = async (weekId: string) => {
-    const { error } = await supabase
-      .from('curriculum_weeks')
-      .delete()
-      .eq('id', weekId);
+    const { error } = await supabase.from('curriculum_weeks').delete().eq('id', weekId);
     if (error) throw error;
-    await fetchCurriculum();
+    await invalidate();
   };
 
   const addLesson = async (weekId: string, title: string, objectives: string, order: number) => {
@@ -122,28 +103,22 @@ export function useCurriculum(cohortId: string) {
       lesson_order: order,
     });
     if (error) throw error;
-    await fetchCurriculum();
+    await invalidate();
   };
 
   const updateLesson = async (
     lessonId: string,
     payload: { title?: string; objectives?: string; lesson_order?: number }
   ) => {
-    const { error } = await supabase
-      .from('curriculum_lessons')
-      .update(payload)
-      .eq('id', lessonId);
+    const { error } = await supabase.from('curriculum_lessons').update(payload).eq('id', lessonId);
     if (error) throw error;
-    await fetchCurriculum();
+    await invalidate();
   };
 
   const deleteLesson = async (lessonId: string) => {
-    const { error } = await supabase
-      .from('curriculum_lessons')
-      .delete()
-      .eq('id', lessonId);
+    const { error } = await supabase.from('curriculum_lessons').delete().eq('id', lessonId);
     if (error) throw error;
-    await fetchCurriculum();
+    await invalidate();
   };
 
   const addMaterial = async (
@@ -158,9 +133,7 @@ export function useCurriculum(cohortId: string) {
         .from('lesson-materials')
         .upload(path, opts.file, { upsert: true });
       if (upErr) throw upErr;
-      const { data: urlData } = supabase.storage
-        .from('lesson-materials')
-        .getPublicUrl(path);
+      const { data: urlData } = supabase.storage.from('lesson-materials').getPublicUrl(path);
       fileUrl = urlData.publicUrl;
     }
     const { error } = await supabase.from('lesson_materials').insert({
@@ -170,23 +143,20 @@ export function useCurriculum(cohortId: string) {
       file_url: fileUrl || null,
     });
     if (error) throw error;
-    await fetchCurriculum();
+    await invalidate();
   };
 
   const deleteMaterial = async (materialId: string) => {
-    const { error } = await supabase
-      .from('lesson_materials')
-      .delete()
-      .eq('id', materialId);
+    const { error } = await supabase.from('lesson_materials').delete().eq('id', materialId);
     if (error) throw error;
-    await fetchCurriculum();
+    await invalidate();
   };
 
   return {
     curriculum,
     weeks,
     loading,
-    refetch: fetchCurriculum,
+    refetch: invalidate,
     createCurriculum,
     updateCurriculum,
     deleteCurriculum,

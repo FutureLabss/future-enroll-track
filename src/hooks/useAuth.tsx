@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 
@@ -91,7 +91,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const newUserId = session?.user?.id;
 
         if (newUserId && newUserId !== prevUserId) {
-          // Different user signed in (actual login, not session restore for same user)
           if (event === 'SIGNED_IN') {
             logAuthEvent('user_login', newUserId, session!.user.email);
           }
@@ -100,7 +99,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await fetchRoles(newUserId);
           setRolesReady(true);
         } else if (!newUserId && prevUserId) {
-          // User signed out
           if (event === 'SIGNED_OUT') {
             logAuthEvent('user_logout', prevUserId, currentUserRef.current?.email);
           }
@@ -111,8 +109,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setHubId(null);
           setRolesReady(true);
         }
-        // Same user (TOKEN_REFRESHED, INITIAL_SESSION, USER_UPDATED, SIGNED_IN on restore):
-        // session/user refs updated above, roles unchanged
       }
     );
 
@@ -140,27 +136,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
   };
 
+  const value = useMemo<AuthContextType>(() => ({
+    user,
+    session,
+    roles,
+    loading,
+    rolesReady,
+    hubId,
+    isAdmin: roles.includes('admin') || isSuperadmin,
+    isOrganization: roles.includes('organization'),
+    isStaff: roles.includes('staff') && !roles.includes('admin') && !isSuperadmin,
+    isSuperadmin,
+    isHubManager,
+    isDemo: !!demoExpiresAt && demoExpiresAt > new Date(),
+    demoExpiresAt,
+    signIn,
+    signOut,
+    signUp,
+  // signIn/signOut/signUp are defined once and never change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [user, session, roles, loading, rolesReady, hubId, isSuperadmin, isHubManager, demoExpiresAt]);
+
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        session,
-        roles,
-        loading,
-        rolesReady,
-        hubId,
-        isAdmin: roles.includes('admin') || isSuperadmin,
-        isOrganization: roles.includes('organization'),
-        isStaff: roles.includes('staff') && !roles.includes('admin') && !isSuperadmin,
-        isSuperadmin,
-        isHubManager,
-        isDemo: !!demoExpiresAt && demoExpiresAt > new Date(),
-        demoExpiresAt,
-        signIn,
-        signUp,
-        signOut,
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

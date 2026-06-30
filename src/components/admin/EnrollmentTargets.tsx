@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -78,10 +78,10 @@ export default function EnrollmentTargets() {
     load();
   };
 
-  const totals = rows.reduce(
+  const totals = useMemo(() => rows.reduce(
     (a, r) => ({ target: a.target + (r.target_count || 0), actual: a.actual + (r.actual_count || 0) }),
     { target: 0, actual: 0 }
-  );
+  ), [rows]);
   const overallPct = totals.target > 0 ? Math.round((totals.actual / totals.target) * 1000) / 10 : null;
 
   return (

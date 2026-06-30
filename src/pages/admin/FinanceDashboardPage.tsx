@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { FinanceFilterBar } from '@/components/finance/FinanceFilterBar';
 import { FinanceSummaryCards } from '@/components/finance/FinanceSummaryCards';
@@ -16,6 +16,10 @@ export default function FinanceDashboardPage() {
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
 
   const { rows, loading, error, totals } = useFinanceSummary({ mode, months, startDate, endDate });
+
+  const handleSelectMonth = useCallback((month: string) => {
+    setSelectedMonth(prev => prev === month ? null : month);
+  }, []);
 
   return (
     <div>
@@ -53,7 +57,7 @@ export default function FinanceDashboardPage() {
       <MonthSummaryTable
         rows={rows}
         selectedMonth={selectedMonth}
-        onSelectMonth={month => setSelectedMonth(prev => prev === month ? null : month)}
+        onSelectMonth={handleSelectMonth}
       />
 
       <MonthDetailSheet

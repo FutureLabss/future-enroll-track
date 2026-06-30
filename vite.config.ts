@@ -18,4 +18,15 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'xlsx': ['xlsx'],
+          'recharts': ['recharts'],
+          'framer-motion': ['framer-motion'],
+        },
+      },
+    },
+  },
 }));

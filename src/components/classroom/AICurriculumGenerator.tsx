@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { memo, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
@@ -18,14 +18,19 @@ interface CurriculumStructure {
   tracks: Track[];
 }
 
-function StructurePreview({ structure }: { structure: CurriculumStructure }) {
+const StructurePreview = memo(function StructurePreview({ structure }: { structure: CurriculumStructure }) {
   const [openTracks, setOpenTracks] = useState<Set<number>>(new Set([0]));
   const [openModules, setOpenModules] = useState<Set<string>>(new Set());
 
-  const totalLessons = structure.tracks
-    .flatMap(t => t.modules)
-    .flatMap(m => m.units)
-    .reduce((s, u) => s + u.lessons.length, 0);
+  const { moduleCount, unitCount, totalLessons } = useMemo(() => {
+    const allModules = structure.tracks.flatMap(t => t.modules);
+    const allUnits = allModules.flatMap(m => m.units);
+    return {
+      moduleCount: allModules.length,
+      unitCount: allUnits.length,
+      totalLessons: allUnits.reduce((s, u) => s + u.lessons.length, 0),
+    };
+  }, [structure]);
 
   return (
     <div className="space-y-3">
@@ -34,8 +39,8 @@ function StructurePreview({ structure }: { structure: CurriculumStructure }) {
         {structure.description && <p className="text-sm text-muted-foreground mt-1">{structure.description}</p>}
         <div className="flex gap-4 mt-3 text-xs text-muted-foreground">
           <span>{structure.tracks.length} track{structure.tracks.length !== 1 ? 's' : ''}</span>
-          <span>{structure.tracks.flatMap(t => t.modules).length} modules</span>
-          <span>{structure.tracks.flatMap(t => t.modules).flatMap(m => m.units).length} units</span>
+          <span>{moduleCount} modules</span>
+          <span>{unitCount} units</span>
           <span>{totalLessons} lessons</span>
         </div>
       </div>
@@ -105,7 +110,7 @@ function StructurePreview({ structure }: { structure: CurriculumStructure }) {
       </div>
     </div>
   );
-}
+});
 
 export function AICurriculumGenerator({
   classroomId,

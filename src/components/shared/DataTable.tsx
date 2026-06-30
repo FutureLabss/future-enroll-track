@@ -1,4 +1,4 @@
-import { forwardRef, useState, useMemo } from 'react';
+import { forwardRef, memo, useState, useMemo } from 'react';
 import {
   Table,
   TableBody,
@@ -162,6 +162,7 @@ function DataTableInner<T extends Record<string, any>>(
   );
 }
 
-export const DataTable = forwardRef(DataTableInner) as <T extends Record<string, any>>(
+const DataTableBase = forwardRef(DataTableInner);
+export const DataTable = memo(DataTableBase) as <T extends Record<string, any>>(
   props: DataTableProps<T> & { ref?: React.ForwardedRef<HTMLDivElement> }
 ) => React.ReactElement;

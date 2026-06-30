@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import * as XLSX from 'xlsx';
 import { useNavigate } from 'react-router-dom';
 import { format, subMonths, startOfMonth } from 'date-fns';
 import { supabase } from '@/lib/supabase';
@@ -149,7 +148,7 @@ export default function EnrollmentsPage() {
     ? new Date(r.first_payment_date).toLocaleDateString()
     : '—';
 
-  const handleExport = () => {
+  const handleExport = async () => {
     const exportRows = groupByPayment && groupedEnrollments
       ? Object.values(groupedEnrollments).flat()
       : filteredEnrollments;
@@ -177,6 +176,7 @@ export default function EnrollmentsPage() {
 
     const filename = `enrollments-${new Date().toISOString().split('T')[0]}`;
     if (exportFormat === 'xlsx') {
+      const XLSX = await import('xlsx');
       const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Enrollments');

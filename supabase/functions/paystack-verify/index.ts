@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ status: 'success', already_recorded: true, reference }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    await admin.from('payments').insert({
+    const { error: insertError } = await admin.from('payments').insert({
       invoice_id,
       installment_id,
       amount,
@@ -55,6 +55,13 @@ Deno.serve(async (req) => {
       payment_method: 'paystack',
       notes: tx.channel ? `Paystack (${tx.channel})` : 'Paystack',
     });
+    if (insertError) {
+      // Unique violation on payment_reference means a concurrent webhook already recorded this payment
+      if (insertError.code === '23505') {
+        return new Response(JSON.stringify({ status: 'success', already_recorded: true, reference }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      throw insertError;
+    }
 
     if (installment_id) {
       await admin.from('installments').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', installment_id);
@@ -87,10 +94,17 @@ Deno.serve(async (req) => {
       await admin.from('enrollments').update(updates).eq('id', enrollment_id);
 
       // Auto-enroll into classroom/cohort
-      try {
-        await admin.rpc('auto_enroll_student_classroom', { p_enrollment_id: enrollment_id });
-      } catch (err) {
-        console.error('Auto-enroll failed:', err);
+      const { error: enrollError } = await admin.rpc('auto_enroll_student_classroom', { p_enrollment_id: enrollment_id });
+      if (enrollError) {
+        console.error('Auto-enroll failed:', enrollError);
+        // Record in audit log so ops team can identify and manually re-trigger
+        await admin.from('audit_logs').insert({
+          user_id: null,
+          action: 'auto_enroll_failed',
+          entity_type: 'enrollment',
+          entity_id: enrollment_id,
+          details: { error: enrollError.message, invoice_id, reference },
+        });
       }
     }
 

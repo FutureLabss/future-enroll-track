@@ -32,27 +32,34 @@ async function sendWhatsApp(to: string, body: string) {
   if (!res.ok) throw new Error(`Twilio error ${res.status}: ${await res.text()}`);
 }
 
-function buildEmail(item: any, daysOut: number): { subject: string; html: string } {
+function buildEmail(item: any, daysOut: number | 'overdue'): { subject: string; html: string } {
   const amt = `₦${Number(item.amount).toLocaleString("en-NG")}`;
   const due = new Date(item.next_due_date).toLocaleDateString("en-NG", { year: "numeric", month: "long", day: "numeric" });
-  const urgency = daysOut === 1 ? "⚠️ Tomorrow" : `in ${daysOut} days`;
-  const subject = `Payment Reminder: ${amt} due ${urgency} — ${item.payer_name}`;
+  const isOverdue = daysOut === 'overdue';
+  const urgency = isOverdue ? "⛔ OVERDUE" : daysOut === 1 ? "⚠️ Tomorrow" : `in ${daysOut} days`;
+  const accentColor = isOverdue ? "#ef4444" : "#f59e0b";
+  const subject = isOverdue
+    ? `Overdue Payment: ${amt} was due ${due} — ${item.payer_name}`
+    : `Payment Reminder: ${amt} due ${urgency} — ${item.payer_name}`;
   const html = `
     <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
       <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:32px;text-align:center;">
         <h1 style="color:#fff;margin:0;font-size:24px;">FutureLabs</h1>
       </div>
       <div style="padding:32px;">
-        <h2 style="color:#1a1a2e;margin-top:0;">Payment Reminder</h2>
+        <h2 style="color:#1a1a2e;margin-top:0;">${isOverdue ? 'Overdue Payment Notice' : 'Payment Reminder'}</h2>
         <p>Hi ${item.payer_name},</p>
-        <p>This is a reminder that your recurring payment is due <strong>${urgency}</strong>.</p>
-        <div style="background:#fffbeb;border-radius:8px;padding:20px;margin:16px 0;border-left:4px solid #f59e0b;">
+        <p>${isOverdue
+          ? 'Your recurring payment below is <strong>overdue</strong>. Please settle it as soon as possible.'
+          : `This is a reminder that your recurring payment is due <strong>${urgency}</strong>.`
+        }</p>
+        <div style="background:${isOverdue ? '#fef2f2' : '#fffbeb'};border-radius:8px;padding:20px;margin:16px 0;border-left:4px solid ${accentColor};">
           <p style="margin:4px 0;"><strong>Amount:</strong> ${amt}</p>
           <p style="margin:4px 0;"><strong>Due Date:</strong> ${due}</p>
           <p style="margin:4px 0;"><strong>Category:</strong> <span style="text-transform:capitalize;">${item.category}</span></p>
           <p style="margin:4px 0;"><strong>Frequency:</strong> <span style="text-transform:capitalize;">${item.frequency}</span></p>
         </div>
-        <p>Please ensure payment is made on time. Contact us if you have any questions.</p>
+        <p>${isOverdue ? 'Please contact us immediately if you have any questions.' : 'Please ensure payment is made on time. Contact us if you have any questions.'}</p>
       </div>
       <div style="background:#f9fafb;padding:20px;text-align:center;font-size:12px;color:#6b7280;">
         <p>FutureLabs Payment Tracking System</p>
@@ -61,11 +68,13 @@ function buildEmail(item: any, daysOut: number): { subject: string; html: string
   return { subject, html };
 }
 
-function buildWhatsAppText(item: any, daysOut: number): string {
+function buildWhatsAppText(item: any, daysOut: number | 'overdue'): string {
   const amt = `₦${Number(item.amount).toLocaleString("en-NG")}`;
   const due = new Date(item.next_due_date).toLocaleDateString("en-NG", { year: "numeric", month: "long", day: "numeric" });
-  const urgency = daysOut === 1 ? "tomorrow" : `in ${daysOut} days`;
-  return `⏰ *Payment Reminder — FutureLabs*\n\nHi ${item.payer_name},\n\nYour recurring payment of *${amt}* is due *${urgency}* (${due}).\n\nCategory: ${item.category}\nFrequency: ${item.frequency}\n\nPlease ensure timely payment.`;
+  const isOverdue = daysOut === 'overdue';
+  const urgency = isOverdue ? "OVERDUE" : daysOut === 1 ? "tomorrow" : `in ${daysOut} days`;
+  const icon = isOverdue ? "⛔" : "⏰";
+  return `${icon} *${isOverdue ? 'Overdue Payment' : 'Payment Reminder'} — FutureLabs*\n\nHi ${item.payer_name},\n\nYour recurring payment of *${amt}* ${isOverdue ? `was due on ${due} and is now *overdue*` : `is due *${urgency}* (${due})`}.\n\nCategory: ${item.category}\nFrequency: ${item.frequency}\n\n${isOverdue ? 'Please settle this as soon as possible.' : 'Please ensure timely payment.'}`;
 }
 
 function addDays(date: Date, n: number): Date {
@@ -84,14 +93,16 @@ Deno.serve(async (req) => {
     );
 
     const today = new Date();
+    const todayStr = today.toISOString().slice(0, 10);
     const in1Day = addDays(today, 1).toISOString().slice(0, 10);
     const in3Days = addDays(today, 3).toISOString().slice(0, 10);
 
+    // Fetch upcoming (1d, 3d) and overdue items in one query
     const { data: items, error } = await supabase
       .from("recurring_income")
       .select("*")
       .eq("active", true)
-      .in("next_due_date", [in1Day, in3Days]);
+      .or(`next_due_date.in.(${in1Day},${in3Days}),next_due_date.lt.${todayStr}`);
 
     if (error) throw error;
 
@@ -99,11 +110,12 @@ Deno.serve(async (req) => {
     const log: string[] = [];
 
     for (const item of items || []) {
-      const daysOut = item.next_due_date === in1Day ? 1 : 3;
-      const sentField = daysOut === 3 ? "reminder_3d_sent_at" : "reminder_1d_sent_at";
+      const isOverdue = item.next_due_date < todayStr;
+      const daysOut: number | 'overdue' = isOverdue ? 'overdue' : item.next_due_date === in1Day ? 1 : 3;
+      const sentField = isOverdue ? "overdue_sent_at" : daysOut === 3 ? "reminder_3d_sent_at" : "reminder_1d_sent_at";
 
       if (item[sentField]) {
-        log.push(`${item.id} (${daysOut}d): already sent`);
+        log.push(`${item.id} (${daysOut}): already sent`);
         continue;
       }
 
@@ -120,7 +132,7 @@ Deno.serve(async (req) => {
 
       await supabase.from("recurring_income").update({ [sentField]: new Date().toISOString() }).eq("id", item.id);
       sent++;
-      log.push(`${item.payer_name} (${daysOut}d)${errors.length ? ` ERRORS: ${errors.join(", ")}` : " OK"}`);
+      log.push(`${item.payer_name} (${daysOut})${errors.length ? ` ERRORS: ${errors.join(", ")}` : " OK"}`);
     }
 
     return new Response(JSON.stringify({ success: true, sent, log }), {

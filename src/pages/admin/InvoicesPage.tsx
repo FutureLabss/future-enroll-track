@@ -11,9 +11,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, Plus, Search } from 'lucide-react';
+import { CalendarIcon, ChevronLeft, ChevronRight, Plus, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
+
+const PAGE_SIZE = 50;
 
 export default function InvoicesPage() {
   const navigate = useNavigate();
@@ -22,43 +24,55 @@ export default function InvoicesPage() {
   const [dateMode, setDateMode] = useState('all');
   const [dateFrom, setDateFrom] = useState<Date | undefined>();
   const [dateTo, setDateTo] = useState<Date | undefined>();
+  const [page, setPage] = useState(0);
 
-  const { data: invoices = [], isLoading: loading } = useQuery({
-    queryKey: ['invoices', statusFilter],
+  const { dbDateFrom, dbDateTo } = useMemo(() => {
+    if (dateMode === 'custom') {
+      return {
+        dbDateFrom: dateFrom ? dateFrom.toISOString() : null,
+        dbDateTo: dateTo ? new Date(dateTo.getTime() + 86400000).toISOString() : null,
+      };
+    }
+    if (dateMode !== 'all') {
+      return {
+        dbDateFrom: startOfMonth(subMonths(new Date(), Number(dateMode) - 1)).toISOString(),
+        dbDateTo: null,
+      };
+    }
+    return { dbDateFrom: null, dbDateTo: null };
+  }, [dateMode, dateFrom, dateTo]);
+
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ['invoices', statusFilter, dbDateFrom, dbDateTo, page],
     queryFn: async () => {
       let query = supabase
         .from('invoices')
-        .select('*, enrollments(full_name, email)')
-        .order('created_at', { ascending: false });
+        .select('*, enrollments(full_name, email)', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
       if (statusFilter !== 'all') query = query.eq('status', statusFilter);
-      const { data, error } = await query;
+      if (dbDateFrom) query = query.gte('created_at', dbDateFrom);
+      if (dbDateTo) query = query.lte('created_at', dbDateTo);
+      const { data: rows, error, count } = await query;
       if (error) throw error;
-      return data || [];
+      return { rows: rows || [], total: count ?? 0 };
     },
     staleTime: 30_000,
   });
 
-  const filtered = useMemo(() => {
-    const presetFrom = dateMode !== 'all' && dateMode !== 'custom'
-      ? startOfMonth(subMonths(new Date(), Number(dateMode) - 1))
-      : null;
-    const customFrom = dateMode === 'custom' ? dateFrom : null;
-    const customTo = dateMode === 'custom' ? dateTo : null;
+  const invoices = data?.rows ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
 
-    return invoices.filter((i: any) => {
-      if (
-        !i.invoice_number?.toLowerCase().includes(search.toLowerCase()) &&
-        !i.enrollments?.full_name?.toLowerCase().includes(search.toLowerCase())
-      ) return false;
-      const created = i.created_at ? new Date(i.created_at) : null;
-      if (presetFrom && created && created < presetFrom) return false;
-      if (customFrom && created && created < customFrom) return false;
-      if (customTo && created && created > customTo) return false;
-      return true;
-    });
-  }, [invoices, search, dateMode, dateFrom, dateTo]);
+  // Search is client-side within the current page only
+  const filtered = invoices.filter((i: any) =>
+    i.invoice_number?.toLowerCase().includes(search.toLowerCase()) ||
+    i.enrollments?.full_name?.toLowerCase().includes(search.toLowerCase())
+  );
 
   const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
+
+  const resetPage = () => setPage(0);
 
   const columns = [
     { key: 'invoice_number', header: 'Invoice #' },
@@ -74,7 +88,7 @@ export default function InvoicesPage() {
     <div>
       <PageHeader
         title="Invoices"
-        description="Manage invoices and payment plans"
+        description={`${total.toLocaleString()} total`}
         actions={
           <Button onClick={() => navigate('/admin/invoices/new')}>
             <Plus className="h-4 w-4 mr-2" /> New Invoice
@@ -90,7 +104,7 @@ export default function InvoicesPage() {
 
         <div>
           <Label className="text-xs text-muted-foreground">Period</Label>
-          <Select value={dateMode} onValueChange={v => { setDateMode(v); if (v !== 'custom') { setDateFrom(undefined); setDateTo(undefined); } }}>
+          <Select value={dateMode} onValueChange={v => { setDateMode(v); resetPage(); if (v !== 'custom') { setDateFrom(undefined); setDateTo(undefined); } }}>
             <SelectTrigger className="w-40 mt-1"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All time</SelectItem>
@@ -115,7 +129,7 @@ export default function InvoicesPage() {
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={dateFrom} onSelect={setDateFrom} initialFocus className="p-3 pointer-events-auto" />
+                  <Calendar mode="single" selected={dateFrom} onSelect={d => { setDateFrom(d); resetPage(); }} initialFocus className="p-3 pointer-events-auto" />
                 </PopoverContent>
               </Popover>
             </div>
@@ -129,14 +143,14 @@ export default function InvoicesPage() {
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={dateTo} onSelect={setDateTo} disabled={d => (dateFrom ? d < dateFrom : false)} initialFocus className="p-3 pointer-events-auto" />
+                  <Calendar mode="single" selected={dateTo} onSelect={d => { setDateTo(d); resetPage(); }} disabled={d => (dateFrom ? d < dateFrom : false)} initialFocus className="p-3 pointer-events-auto" />
                 </PopoverContent>
               </Popover>
             </div>
           </>
         )}
 
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={statusFilter} onValueChange={v => { setStatusFilter(v); resetPage(); }}>
           <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
@@ -152,7 +166,24 @@ export default function InvoicesPage() {
       {loading ? (
         <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>
       ) : (
-        <DataTable columns={columns} data={filtered} onRowClick={(inv) => navigate(`/admin/invoices/${inv.id}`)} />
+        <>
+          <DataTable columns={columns} data={filtered} onRowClick={(inv) => navigate(`/admin/invoices/${inv.id}`)} />
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4">
+              <p className="text-sm text-muted-foreground">
+                Page {page + 1} of {totalPages} · {total.toLocaleString()} records
+              </p>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -13,10 +13,12 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { CalendarIcon, Download, Eye, LayoutGrid, List } from 'lucide-react';
+import { CalendarIcon, ChevronLeft, ChevronRight, Download, Eye, LayoutGrid, List } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+
+const PAGE_SIZE = 50;
 
 export default function EnrollmentsPage() {
   const navigate = useNavigate();
@@ -24,9 +26,10 @@ export default function EnrollmentsPage() {
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [programFilter, setProgramFilter] = useState('all');
   const [groupByPayment, setGroupByPayment] = useState(false);
-  const [dateMode, setDateMode] = useState('all'); // 'all' | '1' | '3' | '6' | '12' | 'custom'
+  const [dateMode, setDateMode] = useState('all');
   const [dateFrom, setDateFrom] = useState<Date | undefined>();
   const [dateTo, setDateTo] = useState<Date | undefined>();
+  const [page, setPage] = useState(0);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState('csv');
 
@@ -44,16 +47,38 @@ export default function EnrollmentsPage() {
   const programs = staticData?.programs ?? [];
   const customFields = staticData?.customFields ?? [];
 
+  // Compute server-side date bounds so date filtering hits the DB, not the client
+  const { dbDateFrom, dbDateTo } = useMemo(() => {
+    if (dateMode === 'custom') {
+      return {
+        dbDateFrom: dateFrom ? dateFrom.toISOString() : null,
+        dbDateTo: dateTo ? new Date(dateTo.getTime() + 86400000).toISOString() : null,
+      };
+    }
+    if (dateMode !== 'all') {
+      return {
+        dbDateFrom: startOfMonth(subMonths(new Date(), Number(dateMode) - 1)).toISOString(),
+        dbDateTo: null,
+      };
+    }
+    return { dbDateFrom: null, dbDateTo: null };
+  }, [dateMode, dateFrom, dateTo]);
+
   const { data: enrollmentsData, isLoading: loading } = useQuery({
-    queryKey: ['enrollments-list', statusFilter, programFilter],
+    queryKey: ['enrollments-list', statusFilter, programFilter, dbDateFrom, dbDateTo, page],
     queryFn: async () => {
       let query = supabase.from('enrollments')
-        .select('*, programs(program_name), cohorts(cohort_label), organizations(organization_name)')
+        .select('*, programs(program_name), cohorts(cohort_label), organizations(organization_name)', { count: 'exact' })
         .order('first_payment_date', { ascending: false, nullsFirst: false })
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+
       if (statusFilter !== 'all') query = query.eq('enrollment_status', statusFilter);
       if (programFilter !== 'all') query = query.eq('program_id', programFilter);
-      const { data } = await query;
+      if (dbDateFrom) query = query.gte('created_at', dbDateFrom);
+      if (dbDateTo) query = query.lte('created_at', dbDateTo);
+
+      const { data, count } = await query;
       const rows = data || [];
 
       let valueMap = new Map<string, Record<string, string>>();
@@ -76,40 +101,31 @@ export default function EnrollmentsPage() {
           valueMap.get(fv.enrollment_id)![key] = fv.value ?? '';
         }
       }
-      return { rows, valueMap };
+      return { rows, valueMap, total: count ?? 0 };
     },
     staleTime: 30_000,
   });
   const enrollments = enrollmentsData?.rows ?? [];
   const valueMap = enrollmentsData?.valueMap ?? new Map();
+  const total = enrollmentsData?.total ?? 0;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
 
   const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
 
   const getPaymentStatus = (r: any) => {
     const paid = Number(r.amount_paid);
-    const total = Number(r.total_amount);
-    if (total <= 0) return 'N/A';
-    if (paid >= total) return 'Fully Paid';
+    const tot = Number(r.total_amount);
+    if (tot <= 0) return 'N/A';
+    if (paid >= tot) return 'Fully Paid';
     if (paid > 0) return 'Partially Paid';
     return 'Unpaid';
   };
 
+  // Payment filter is computed from columns, so it stays client-side within the page
   const filteredEnrollments = useMemo(() => {
-    const presetFrom = dateMode !== 'all' && dateMode !== 'custom'
-      ? startOfMonth(subMonths(new Date(), Number(dateMode) - 1))
-      : null;
-    const customFrom = dateMode === 'custom' ? dateFrom : null;
-    const customTo = dateMode === 'custom' ? dateTo : null;
-
-    return enrollments.filter(e => {
-      if (paymentFilter !== 'all' && getPaymentStatus(e) !== paymentFilter) return false;
-      const enrolled = e.created_at ? new Date(e.created_at) : null;
-      if (presetFrom && enrolled && enrolled < presetFrom) return false;
-      if (customFrom && enrolled && enrolled < customFrom) return false;
-      if (customTo && enrolled && enrolled > customTo) return false;
-      return true;
-    });
-  }, [enrollments, paymentFilter, dateMode, dateFrom, dateTo]);
+    if (paymentFilter === 'all') return enrollments;
+    return enrollments.filter(e => getPaymentStatus(e) === paymentFilter);
+  }, [enrollments, paymentFilter]);
 
   const groupedEnrollments = useMemo(() => {
     if (!groupByPayment) return null;
@@ -155,7 +171,7 @@ export default function EnrollmentsPage() {
         e.enrollment_status, getPaymentStatus(e),
         Number(e.total_amount), Number(e.amount_paid), Number(e.outstanding_balance),
         e.created_at ? new Date(e.created_at).toLocaleDateString() : '',
-        ...exportCustomFields.map((f: any) => cv[f.key] ?? ''),
+        ...exportCustomFields.map((f: any) => (cv[f.key] ?? '')),
       ];
     });
 
@@ -177,6 +193,8 @@ export default function EnrollmentsPage() {
     toast.success(`Exported ${exportRows.length} records as ${exportFormat.toUpperCase()}`);
   };
 
+  const resetPage = () => setPage(0);
+
   const columns = [
     { key: 'full_name', header: 'Student' },
     { key: 'email', header: 'Email' },
@@ -191,7 +209,6 @@ export default function EnrollmentsPage() {
       return <Badge variant="outline" className={`font-medium ${paymentBadgeStyle[ps] || ''}`}>{ps}</Badge>;
     }},
     { key: 'enrollment_status', header: 'Status', render: (r: any) => <StatusBadge status={r.enrollment_status} /> },
-    // Custom profile fields
     ...customFields.map(f => ({
       key: `cf_${f.key}`,
       header: f.label,
@@ -226,7 +243,7 @@ export default function EnrollmentsPage() {
     <div>
       <PageHeader
         title="Enrollments"
-        description="Manage all student enrollments"
+        description={`${total.toLocaleString()} total`}
         actions={
           <Button onClick={() => setExportOpen(true)}>
             <Download className="h-4 w-4 mr-2" /> Export
@@ -237,7 +254,7 @@ export default function EnrollmentsPage() {
       <div className="flex flex-wrap gap-3 mb-6 items-end">
         <div>
           <Label className="text-xs text-muted-foreground">Period</Label>
-          <Select value={dateMode} onValueChange={v => { setDateMode(v); if (v !== 'custom') { setDateFrom(undefined); setDateTo(undefined); } }}>
+          <Select value={dateMode} onValueChange={v => { setDateMode(v); resetPage(); if (v !== 'custom') { setDateFrom(undefined); setDateTo(undefined); } }}>
             <SelectTrigger className="w-40 mt-1"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All time</SelectItem>
@@ -262,7 +279,7 @@ export default function EnrollmentsPage() {
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={dateFrom} onSelect={setDateFrom} initialFocus className="p-3 pointer-events-auto" />
+                  <Calendar mode="single" selected={dateFrom} onSelect={d => { setDateFrom(d); resetPage(); }} initialFocus className="p-3 pointer-events-auto" />
                 </PopoverContent>
               </Popover>
             </div>
@@ -276,14 +293,14 @@ export default function EnrollmentsPage() {
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={dateTo} onSelect={setDateTo} disabled={d => (dateFrom ? d < dateFrom : false)} initialFocus className="p-3 pointer-events-auto" />
+                  <Calendar mode="single" selected={dateTo} onSelect={d => { setDateTo(d); resetPage(); }} disabled={d => (dateFrom ? d < dateFrom : false)} initialFocus className="p-3 pointer-events-auto" />
                 </PopoverContent>
               </Popover>
             </div>
           </>
         )}
 
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={statusFilter} onValueChange={v => { setStatusFilter(v); resetPage(); }}>
           <SelectTrigger className="w-40"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
@@ -295,7 +312,7 @@ export default function EnrollmentsPage() {
           </SelectContent>
         </Select>
 
-        <Select value={programFilter} onValueChange={setProgramFilter}>
+        <Select value={programFilter} onValueChange={v => { setProgramFilter(v); resetPage(); }}>
           <SelectTrigger className="w-48"><SelectValue placeholder="All Programs" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Programs</SelectItem>
@@ -343,13 +360,30 @@ export default function EnrollmentsPage() {
           })}
         </div>
       ) : (
-        renderTable(filteredEnrollments)
+        <>
+          {renderTable(filteredEnrollments)}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4">
+              <p className="text-sm text-muted-foreground">
+                Page {page + 1} of {totalPages} · {total.toLocaleString()} records
+              </p>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       <Dialog open={exportOpen} onOpenChange={setExportOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Export {filteredEnrollments.length} Records</DialogTitle>
+            <DialogTitle>Export {filteredEnrollments.length} Records (this page)</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-2">
             <div>

@@ -63,8 +63,14 @@ export default function EnrollmentsPage() {
     return { dbDateFrom: null, dbDateTo: null };
   }, [dateMode, dateFrom, dateTo]);
 
+  // Map UI labels to DB generated column values
+  const dbPaymentFilter = paymentFilter === 'Fully Paid' ? 'paid'
+    : paymentFilter === 'Partially Paid' ? 'partial'
+    : paymentFilter === 'Unpaid' ? 'unpaid'
+    : null;
+
   const { data: enrollmentsData, isLoading: loading } = useQuery({
-    queryKey: ['enrollments-list', statusFilter, programFilter, dbDateFrom, dbDateTo, page],
+    queryKey: ['enrollments-list', statusFilter, programFilter, dbDateFrom, dbDateTo, dbPaymentFilter, page],
     queryFn: async () => {
       let query = supabase.from('enrollments')
         .select('*, programs(program_name), cohorts(cohort_label), organizations(organization_name)', { count: 'exact' })
@@ -74,6 +80,7 @@ export default function EnrollmentsPage() {
 
       if (statusFilter !== 'all') query = query.eq('enrollment_status', statusFilter);
       if (programFilter !== 'all') query = query.eq('program_id', programFilter);
+      if (dbPaymentFilter) query = query.eq('payment_status', dbPaymentFilter);
       if (dbDateFrom) query = query.gte('created_at', dbDateFrom);
       if (dbDateTo) query = query.lte('created_at', dbDateTo);
 
@@ -120,22 +127,18 @@ export default function EnrollmentsPage() {
     return 'Unpaid';
   };
 
-  // Payment filter is computed from columns, so it stays client-side within the page
-  const filteredEnrollments = useMemo(() => {
-    if (paymentFilter === 'all') return enrollments;
-    return enrollments.filter(e => getPaymentStatus(e) === paymentFilter);
-  }, [enrollments, paymentFilter]);
+  const filteredEnrollments = enrollments;
 
   const groupedEnrollments = useMemo(() => {
     if (!groupByPayment) return null;
     const groups: Record<string, any[]> = {};
-    filteredEnrollments.forEach(e => {
+    enrollments.forEach(e => {
       const status = getPaymentStatus(e);
       if (!groups[status]) groups[status] = [];
       groups[status].push(e);
     });
     return groups;
-  }, [filteredEnrollments, groupByPayment]);
+  }, [enrollments, groupByPayment]);
 
   const paymentBadgeStyle: Record<string, string> = {
     'Fully Paid': 'bg-success/15 text-success border-success/30',

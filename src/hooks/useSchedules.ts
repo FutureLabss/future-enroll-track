@@ -80,17 +80,12 @@ export function useSchedules(classroomId: string) {
   const { data: schedules = [], isLoading: loading } = useQuery({
     queryKey: ['schedules', classroomId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('schedules')
-        .select(SCHEDULE_COLUMNS)
-        .eq('classroom_id', classroomId)
-        .order('scheduled_date', { ascending: true })
-        .order('start_time', { ascending: true });
+      const { data, error } = await supabase.rpc('get_classroom_schedules' as any, { p_classroom_id: classroomId });
       if (error) {
         toast.error(`Could not load schedule: ${error.message}`);
         return [];
       }
-      return enrichSchedules(data || []);
+      return (data as Schedule[]) || [];
     },
     enabled: Boolean(classroomId),
     staleTime: 30_000,

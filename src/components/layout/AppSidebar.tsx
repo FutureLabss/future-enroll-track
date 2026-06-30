@@ -1,6 +1,6 @@
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import {
   LayoutDashboard,
@@ -106,13 +106,16 @@ function HubSwitcher({ userId }: { userId: string }) {
   const [switching, setSwitching] = useState(false);
 
   useEffect(() => {
+    let mounted = true;
     Promise.all([
       supabase.rpc('list_hubs' as any),
       supabase.rpc('get_my_hub_context' as any).maybeSingle(),
     ]).then(([hubsRes, ctxRes]) => {
+      if (!mounted) return;
       if (hubsRes.data) setHubs(hubsRes.data as { id: string; name: string; slug: string }[]);
       if (ctxRes.data) setActiveHubId((ctxRes.data as any).hub_id);
     });
+    return () => { mounted = false; };
   }, [userId]);
 
   const switchHub = async (hub: { id: string; slug: string }) => {
@@ -160,25 +163,26 @@ function HubSwitcher({ userId }: { userId: string }) {
 
 export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps) {
   const { isAdmin, isOrganization, isStaff, isSuperadmin: isSA, isDemo, signOut, user } = useAuth();
-  const location = useLocation();
 
   const isSuperadmin = isSA || user?.email?.toLowerCase() === 'manassehudim@gmail.com';
-  const rawBaseNav = isAdmin ? adminNav : isOrganization ? orgNav : isStaff ? staffNav : studentNav;
-  const baseNav = isDemo ? rawBaseNav.filter(item => !DEMO_HIDDEN_ROUTES.has(item.to)) : rawBaseNav;
-  const adminExtras = isAdmin
-    ? [
-        { to: '/admin/invoice-approvals', icon: ClipboardCheck, label: 'Invoice Approvals' },
-        { to: '/admin/staff-invoices', icon: Inbox, label: isSuperadmin ? 'Staff Invoices' : 'My Invoices' },
-        ...(isSuperadmin
-          ? [
-              { to: '/admin/payroll', icon: Banknote, label: 'Payroll' },
-              { to: '/admin/manage-admins', icon: ShieldCheck, label: 'Manage Admins' },
-              { to: '/admin/hubs', icon: Building2, label: 'Hub Management' },
-            ]
-          : []),
-      ]
-    : [];
-  const nav = [...baseNav, ...adminExtras];
+  const nav = useMemo(() => {
+    const rawBaseNav = isAdmin ? adminNav : isOrganization ? orgNav : isStaff ? staffNav : studentNav;
+    const baseNav = isDemo ? rawBaseNav.filter(item => !DEMO_HIDDEN_ROUTES.has(item.to)) : rawBaseNav;
+    const adminExtras = isAdmin
+      ? [
+          { to: '/admin/invoice-approvals', icon: ClipboardCheck, label: 'Invoice Approvals' },
+          { to: '/admin/staff-invoices', icon: Inbox, label: isSuperadmin ? 'Staff Invoices' : 'My Invoices' },
+          ...(isSuperadmin
+            ? [
+                { to: '/admin/payroll', icon: Banknote, label: 'Payroll' },
+                { to: '/admin/manage-admins', icon: ShieldCheck, label: 'Manage Admins' },
+                { to: '/admin/hubs', icon: Building2, label: 'Hub Management' },
+              ]
+            : []),
+        ]
+      : [];
+    return [...baseNav, ...adminExtras];
+  }, [isAdmin, isOrganization, isStaff, isSuperadmin, isDemo]);
 
   const containerClass =
     variant === 'mobile'

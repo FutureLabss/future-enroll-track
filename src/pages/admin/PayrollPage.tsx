@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -51,10 +51,11 @@ export default function PayrollPage() {
   const [runOpen, setRunOpen] = useState(false);
   const [runForm, setRunForm] = useState({ staff_id: '', amount: '', notes: '' });
 
-  const months = monthOptions();
+  const months = useMemo(() => monthOptions(), []);
 
   // On first load, jump to the most recent month that has payroll data
   useEffect(() => {
+    let mounted = true;
     supabase
       .from('payroll_runs')
       .select('pay_month')
@@ -62,8 +63,9 @@ export default function PayrollPage() {
       .limit(1)
       .maybeSingle()
       .then(({ data }) => {
-        if (data?.pay_month) setSelectedMonth(data.pay_month);
+        if (mounted && data?.pay_month) setSelectedMonth(data.pay_month);
       });
+    return () => { mounted = false; };
   }, []);
 
   const { data: payrollData, isLoading: loading } = useQuery({

@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   ArrowLeft,
   Archive,
+  BarChart2,
   CalendarDays,
   ClipboardCheck,
   ClipboardList,
@@ -34,6 +35,7 @@ import {
   Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { CohortAnalyticsTab } from '@/components/cohort/CohortAnalyticsTab';
 
 const COHORT_STATUSES = ['upcoming', 'active', 'completed', 'archived'] as const;
 const STATUS_COLOURS: Record<string, string> = {
@@ -519,6 +521,7 @@ export default function CohortDetailPage() {
           <TabsTrigger value="attendance"><ClipboardList className="h-4 w-4 mr-1.5" />Attendance ({attendanceSessions.length})</TabsTrigger>
           <TabsTrigger value="assignments"><ClipboardCheck className="h-4 w-4 mr-1.5" />Assignments ({assignments.length})</TabsTrigger>
           {cohort.classrooms && <TabsTrigger value="classroom"><School className="h-4 w-4 mr-1.5" />Classroom</TabsTrigger>}
+          <TabsTrigger value="analytics"><BarChart2 className="h-4 w-4 mr-1.5" />Analytics</TabsTrigger>
         </TabsList>
 
         <TabsContent value="students">
@@ -557,6 +560,10 @@ export default function CohortDetailPage() {
             </div>
           </TabsContent>
         )}
+
+        <TabsContent value="analytics">
+          <CohortAnalyticsTab cohortId={id!} />
+        </TabsContent>
       </Tabs>
 
       <Dialog open={!!drillSession} onOpenChange={o => { if (!o) setDrillSession(null); }}>

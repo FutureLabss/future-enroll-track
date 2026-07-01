@@ -173,11 +173,14 @@ export default function EnrollmentDetailPage() {
       const { error } = await supabase.from('enrollments').update(updates).eq('id', enrollment.id);
       if (error) throw error;
 
-      try {
-        await supabase.functions.invoke('send-notification', {
-          body: { type: action === 'approved' ? 'invoice_settled' : 'overdue', channel: 'both', enrollment_id: enrollment.id, extra: { verification_action: action } },
-        });
-      } catch {}
+      // Only send completion email on the first approval — not on re-approval
+      if (enrollment.verification_status !== 'approved') {
+        try {
+          await supabase.functions.invoke('send-notification', {
+            body: { type: action === 'approved' ? 'invoice_settled' : 'overdue', channel: 'both', enrollment_id: enrollment.id, extra: { verification_action: action } },
+          });
+        } catch {}
+      }
 
       toast.success(`Enrollment ${action}`);
       queryClient.invalidateQueries({ queryKey: ['enrollment-detail', id] });

@@ -47,7 +47,7 @@ export default function InvoicesPage() {
     queryFn: async () => {
       let query = supabase
         .from('invoices')
-        .select('*, enrollments(full_name, email)', { count: 'exact' })
+        .select('*, enrollments!invoices_enrollment_id_fkey(full_name, email)', { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
       if (statusFilter !== 'all') query = query.eq('status', statusFilter);

@@ -21,6 +21,7 @@ interface Payload {
     cohort_id?: string;
     enrollment_status?: string;
     audience?: "all" | "outstanding" | "paid";
+    staff_type?: "teaching" | "non_teaching"; // filter by classroom_staff.staff_type
   };
 }
 
@@ -81,29 +82,38 @@ Deno.serve(async (req) => {
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: auth } },
-    });
-    const { data: userRes } = await userClient.auth.getUser();
-    if (!userRes?.user) {
-      return new Response(JSON.stringify({ error: "Not authenticated" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     const admin = createClient(supabaseUrl, serviceKey);
-    const { data: roleRow } = await admin
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userRes.user.id)
-      .eq("role", "admin")
-      .maybeSingle();
-    if (!roleRow) {
-      return new Response(JSON.stringify({ error: "Admin only" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+
+    // Allow CLI/service-role invocation (supabase functions invoke --no-verify-jwt)
+    const isServiceRoleCall = auth === `Bearer ${serviceKey}`;
+
+    let actingUserId: string | null = null;
+
+    if (!isServiceRoleCall) {
+      const userClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: auth } },
       });
+      const { data: userRes } = await userClient.auth.getUser();
+      if (!userRes?.user) {
+        return new Response(JSON.stringify({ error: "Not authenticated" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      actingUserId = userRes.user.id;
+
+      const { data: roleRow } = await admin
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", actingUserId)
+        .eq("role", "admin")
+        .maybeSingle();
+      if (!roleRow) {
+        return new Response(JSON.stringify({ error: "Admin only" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     const body = (await req.json()) as Payload;
@@ -147,32 +157,49 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Staff
+    // Staff — optionally filtered by classroom_staff.staff_type
     if (audienceType === "staff" || audienceType === "students_and_staff") {
-      const { data: staffRows, error: staffErr } = await admin
-        .from("staff")
-        .select("id, full_name, email")
-        .eq("active", true);
-      if (staffErr) throw staffErr;
+      let staffRows: any[] = [];
 
-      for (const s of staffRows || []) {
+      if (f.staff_type) {
+        // Join through classroom_staff to filter by teaching/non_teaching
+        const { data, error: staffErr } = await admin
+          .from("classroom_staff")
+          .select("staff:staff_id(id, full_name, email, active)")
+          .eq("staff_type", f.staff_type)
+          .eq("status", "active");
+        if (staffErr) throw staffErr;
+        // Dedupe: a tutor may appear in multiple classrooms
+        const seen = new Map<string, any>();
+        for (const row of data || []) {
+          const s = (row as any).staff;
+          if (s && s.active && s.email && !seen.has(s.email)) seen.set(s.email, s);
+        }
+        staffRows = Array.from(seen.values());
+      } else {
+        const { data, error: staffErr } = await admin
+          .from("staff")
+          .select("id, full_name, email")
+          .eq("active", true);
+        if (staffErr) throw staffErr;
+        staffRows = data || [];
+      }
+
+      for (const s of staffRows) {
         if (s.email) {
-          recipients.push({
-            email: s.email.toLowerCase(),
-            name: s.full_name || "",
-          });
+          recipients.push({ email: s.email.toLowerCase(), name: s.full_name || "" });
         }
       }
     }
 
-    // Imported contacts
+    // Imported contacts (also used for cc / oversight recipients)
     for (const c of body.imported_contacts || []) {
       if (c.email) {
         recipients.push({ email: c.email.toLowerCase(), name: c.name || "" });
       }
     }
 
-    // Dedupe by email (first occurrence wins for name/outstanding)
+    // Dedupe by email (first occurrence wins)
     const seen = new Map<string, Recipient>();
     for (const r of recipients) {
       if (!seen.has(r.email)) seen.set(r.email, r);
@@ -207,7 +234,7 @@ Deno.serve(async (req) => {
     }
 
     await admin.from("audit_logs").insert({
-      user_id: userRes.user.id,
+      user_id: actingUserId,
       action: "bulk_email",
       entity_type: "notification",
       entity_id: null,

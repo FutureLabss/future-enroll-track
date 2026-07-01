@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import { ThemeToggle } from '@/components/shared/ThemeToggle';
 import {
   DropdownMenu,
@@ -122,7 +123,7 @@ function HubSwitcher({ userId }: { userId: string }) {
     if (hub.id === activeHubId || switching) return;
     setSwitching(true);
     const { error } = await supabase.rpc('switch_hub_context' as any, { p_hub_id: hub.id });
-    if (error) { setSwitching(false); return; }
+    if (error) { toast.error(`Hub switch failed: ${error.message}`); setSwitching(false); return; }
     navigate(`/${hub.slug}`, { replace: true });
     window.location.reload();
   };

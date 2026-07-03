@@ -44,6 +44,12 @@ Deno.serve(async (req) => {
       const enrollment = invoice?.enrollments;
       if (!enrollment) continue;
 
+      // Skip if invoice is paid or enrollment is fully settled — installments may
+      // still be 'unpaid' when the admin approves via the verify flow (which sets
+      // amount_paid directly without reconciling individual installment statuses).
+      if (invoice.status === "paid") continue;
+      if (Number(enrollment.amount_paid) >= Number(enrollment.total_amount) && Number(enrollment.total_amount) > 0) continue;
+
       const dueDate = inst.due_date;
       let notifType = "";
 

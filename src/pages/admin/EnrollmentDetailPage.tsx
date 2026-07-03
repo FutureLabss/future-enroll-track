@@ -173,6 +173,31 @@ export default function EnrollmentDetailPage() {
       const { error } = await supabase.from('enrollments').update(updates).eq('id', enrollment.id);
       if (error) throw error;
 
+      // When approving, reconcile invoice and installment statuses to match.
+      // The verify flow sets amount_paid directly on the enrollment without going
+      // through the normal payment recording path, so invoices/installments stay
+      // unpaid unless we update them here.
+      if (action === 'approved') {
+        const { data: invoices } = await supabase
+          .from('invoices')
+          .select('id')
+          .eq('enrollment_id', enrollment.id)
+          .neq('status', 'paid');
+        if (invoices?.length) {
+          const invoiceIds = invoices.map((i: any) => i.id);
+          const now = new Date().toISOString();
+          await supabase
+            .from('installments')
+            .update({ status: 'paid', paid_at: now })
+            .in('invoice_id', invoiceIds)
+            .neq('status', 'paid');
+          await supabase
+            .from('invoices')
+            .update({ status: 'paid' })
+            .in('id', invoiceIds);
+        }
+      }
+
       // Only send completion email on the first approval — not on re-approval
       if (enrollment.verification_status !== 'approved') {
         try {

@@ -5,10 +5,11 @@ import { notifySchedule } from '@/hooks/useSchedules';
 import { toast } from 'sonner';
 
 export const PRESENTATION_COLUMNS = 'id, classroom_id, cohort_id, schedule_id, title, instructions, max_score, pass_score, status, created_by, created_at, updated_at';
-const PRESENTATION_SELECT = `${PRESENTATION_COLUMNS}, schedules(scheduled_date, start_time, end_time, location, meeting_link)`;
+const PRESENTATION_SELECT = `${PRESENTATION_COLUMNS}, cohorts(cohort_label), schedules(scheduled_date, start_time, end_time, location, meeting_link)`;
 
 export type CreatePresentationPayload = {
   classroomId: string;
+  cohortId: string;
   title: string;
   instructions?: string;
   scheduled_date: string;
@@ -20,26 +21,34 @@ export type CreatePresentationPayload = {
   pass_score?: number;
 };
 
-export function usePresentations(classroomId: string, cohortId: string) {
+/**
+ * Lists presentations for a classroom, optionally scoped to one cohort
+ * (pass cohortId when rendering the Presentations tab under a specific
+ * cohort; omit it to list every presentation across the classroom's cohorts).
+ */
+export function usePresentations(classroomId: string, cohortId?: string) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const queryKey = ['presentations', cohortId];
+  const queryKey = ['presentations', classroomId, cohortId || null];
 
   const { data: presentations = [], isLoading: loading } = useQuery({
     queryKey,
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('presentations')
         .select(PRESENTATION_SELECT)
-        .eq('cohort_id', cohortId)
+        .eq('classroom_id', classroomId)
         .order('created_at', { ascending: false });
+      if (cohortId) query = query.eq('cohort_id', cohortId);
+
+      const { data, error } = await query;
       if (error) {
         toast.error(`Could not load presentations: ${error.message}`);
         return [];
       }
       return data || [];
     },
-    enabled: Boolean(cohortId),
+    enabled: Boolean(classroomId),
     staleTime: 30_000,
   });
 
@@ -51,7 +60,7 @@ export function usePresentations(classroomId: string, cohortId: string) {
         .from('schedules')
         .insert({
           classroom_id: payload.classroomId,
-          cohort_id: cohortId,
+          cohort_id: payload.cohortId,
           title: payload.title,
           scheduled_date: payload.scheduled_date,
           start_time: payload.start_time,
@@ -68,7 +77,7 @@ export function usePresentations(classroomId: string, cohortId: string) {
         .from('presentations')
         .insert({
           classroom_id: payload.classroomId,
-          cohort_id: cohortId,
+          cohort_id: payload.cohortId,
           schedule_id: schedule.id,
           title: payload.title,
           instructions: payload.instructions?.trim() || null,

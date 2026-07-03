@@ -48,7 +48,7 @@ const GRADUATION_COLOURS: Record<string, string> = {
   pending: 'bg-muted text-muted-foreground border-muted',
 };
 
-function SchedulePresentationForm({ classroomId, onSaved, createPresentation }: { classroomId: string; onSaved: () => void; createPresentation: ReturnType<typeof usePresentations>['createPresentation'] }) {
+function SchedulePresentationForm({ classroomId, cohortId, onSaved, createPresentation }: { classroomId: string; cohortId: string; onSaved: () => void; createPresentation: ReturnType<typeof usePresentations>['createPresentation'] }) {
   const [form, setForm] = useState({
     title: '',
     instructions: '',
@@ -69,6 +69,7 @@ function SchedulePresentationForm({ classroomId, onSaved, createPresentation }: 
     try {
       await createPresentation({
         classroomId,
+        cohortId,
         title: form.title.trim(),
         instructions: form.instructions,
         scheduled_date: form.scheduled_date,
@@ -747,6 +748,7 @@ export default function CohortDetailPage() {
                 <DialogHeader><DialogTitle>Schedule Presentation</DialogTitle></DialogHeader>
                 <SchedulePresentationForm
                   classroomId={cohort.classroom_id}
+                  cohortId={id!}
                   createPresentation={createPresentation}
                   onSaved={() => setPresentationDialogOpen(false)}
                 />

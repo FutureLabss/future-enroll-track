@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useClassroom, useClassroomCohorts } from '@/hooks/useClassroom';
 import { useAttendance, useAttendanceSession } from '@/hooks/useAttendance';
 import { useAssignments } from '@/hooks/useAssignments';
+import { usePresentations } from '@/hooks/usePresentations';
 import { useSchedules } from '@/hooks/useSchedules';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -30,7 +31,7 @@ import {
   GraduationCap, LayoutList, Layers, Plus, Pencil, Ban, CheckCircle, PlayCircle,
   XCircle, ChevronDown, ChevronRight, Eye, Mail, ArrowLeftRight, ArrowLeft,
   Archive, RotateCcw, ClipboardCheck, CalendarDays, Trash2,
-  Radio, Clock, RefreshCw, Bell,
+  Radio, Clock, RefreshCw, Bell, Presentation,
 } from 'lucide-react';
 
 const COHORT_STATUSES = ['upcoming', 'active', 'completed', 'archived'] as const;
@@ -45,6 +46,7 @@ const STATUS_COLOURS: Record<string, string> = {
 };
 
 const emptyAssignmentForm = { title: '', instructions: '', due_date: '', cohort_id: '', status: 'draft', max_score: '' };
+const emptyPresentationForm = { title: '', instructions: '', cohort_id: '', scheduled_date: '', start_time: '', end_time: '', location: '', meeting_link: '', max_score: '100', pass_score: '50' };
 
 const toDateTimeLocal = (value?: string | null) => {
   if (!value) return '';
@@ -579,6 +581,7 @@ export default function ClassroomDetailPage() {
   const { cohorts, refetch: refetchCohorts } = useClassroomCohorts(id!);
   const { sessions, generateSession, closeSession, regenerateCode } = useAttendance(id!);
   const { assignments, publishAssignment, createAssignment, updateAssignment, deleteAssignment } = useAssignments(id!);
+  const { presentations, createPresentation, deletePresentation } = usePresentations(id!);
   const { schedules, refetch: refetchSchedules, updateSchedule, deleteSchedule, notifySchedule } = useSchedules(id!);
 
   const queryClient = useQueryClient();
@@ -622,6 +625,9 @@ export default function ClassroomDetailPage() {
   const [assignmentEditing, setAssignmentEditing] = useState<any>(null);
   const [assignmentForm, setAssignmentForm] = useState(emptyAssignmentForm);
   const [savingAssignment, setSavingAssignment] = useState(false);
+  const [presentationModal, setPresentationModal] = useState(false);
+  const [presentationForm, setPresentationForm] = useState(emptyPresentationForm);
+  const [savingPresentation, setSavingPresentation] = useState(false);
 
   const { data: localData } = useQuery({
     queryKey: ['classroom-local', id],
@@ -780,6 +786,56 @@ export default function ClassroomDetailPage() {
       toast.error(e.message);
     } finally {
       setPendingDeleteAssignment(null);
+    }
+  };
+
+  const openCreatePresentation = () => {
+    setPresentationForm(emptyPresentationForm);
+    setPresentationModal(true);
+  };
+
+  const resetPresentationModal = () => {
+    setPresentationModal(false);
+    setPresentationForm(emptyPresentationForm);
+  };
+
+  const handleSavePresentation = async () => {
+    if (!presentationForm.title.trim()) { toast.error('Title is required'); return; }
+    if (!presentationForm.cohort_id) { toast.error('Cohort is required'); return; }
+    if (!presentationForm.scheduled_date || !presentationForm.start_time || !presentationForm.end_time) {
+      toast.error('Date, start time and end time are required');
+      return;
+    }
+    setSavingPresentation(true);
+    try {
+      await createPresentation({
+        classroomId: id!,
+        cohortId: presentationForm.cohort_id,
+        title: presentationForm.title.trim(),
+        instructions: presentationForm.instructions,
+        scheduled_date: presentationForm.scheduled_date,
+        start_time: presentationForm.start_time,
+        end_time: presentationForm.end_time,
+        location: presentationForm.location.trim() || undefined,
+        meeting_link: presentationForm.meeting_link.trim() || undefined,
+        max_score: Number(presentationForm.max_score) || 100,
+        pass_score: Number(presentationForm.pass_score) || 50,
+      });
+      toast.success('Presentation scheduled — students have been notified');
+      resetPresentationModal();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSavingPresentation(false);
+    }
+  };
+
+  const handleDeletePresentation = async (presentation: any) => {
+    try {
+      await deletePresentation(presentation.schedule_id);
+      toast.success('Presentation deleted');
+    } catch (e: any) {
+      toast.error(e.message);
     }
   };
 
@@ -1149,6 +1205,24 @@ export default function ClassroomDetailPage() {
     ) },
   ];
 
+  const presentationColumns = [
+    { key: 'title', header: 'Presentation', render: (r: any) => <span className="font-medium">{r.title}</span> },
+    { key: 'cohort', header: 'Cohort', render: (r: any) => r.cohorts?.cohort_label || '—' },
+    { key: 'date', header: 'Date', render: (r: any) => r.schedules?.scheduled_date ? `${new Date(`${r.schedules.scheduled_date}T00:00:00`).toLocaleDateString()} · ${r.schedules.start_time}–${r.schedules.end_time}` : '—' },
+    { key: 'pass_score', header: 'Pass Score', render: (r: any) => `${r.pass_score} / ${r.max_score}` },
+    { key: 'status', header: 'Status', render: (r: any) => <Badge variant="outline" className="capitalize">{r.status}</Badge> },
+    { key: 'actions', header: '', render: (r: any) => (
+      <div className="flex items-center justify-end gap-1">
+        <Button size="sm" variant="ghost" className="h-7 px-2" onClick={(event) => { event.stopPropagation(); navigate(`/admin/presentations/${r.id}`); }}>
+          <Eye className="h-3.5 w-3.5 mr-1" />View
+        </Button>
+        <Button size="sm" variant="ghost" className="h-7 px-2 text-destructive hover:text-destructive" onClick={(event) => { event.stopPropagation(); handleDeletePresentation(r); }}>
+          <Trash2 className="h-3.5 w-3.5 mr-1" />Delete
+        </Button>
+      </div>
+    ) },
+  ];
+
   const permKeys = [
     { key: 'can_create_lessons', label: 'Create & edit lessons' },
     { key: 'can_edit_cohorts', label: 'Manage cohorts' },
@@ -1246,6 +1320,7 @@ export default function ClassroomDetailPage() {
           <TabsTrigger value="students"><GraduationCap className="h-4 w-4 mr-1.5" />Students ({students.length})</TabsTrigger>
           <TabsTrigger value="schedule"><Calendar className="h-4 w-4 mr-1.5" />Schedule</TabsTrigger>
           <TabsTrigger value="assignments"><ClipboardCheck className="h-4 w-4 mr-1.5" />Assignments</TabsTrigger>
+          <TabsTrigger value="presentations"><Presentation className="h-4 w-4 mr-1.5" />Presentations ({presentations.length})</TabsTrigger>
           <TabsTrigger value="attendance"><ClipboardList className="h-4 w-4 mr-1.5" />Attendance</TabsTrigger>
         </TabsList>
 
@@ -1387,6 +1462,26 @@ export default function ClassroomDetailPage() {
             searchPlaceholder="Search assignments..."
             emptyMessage="No assignments created yet"
             onRowClick={(row) => navigate(`/admin/assignments/${row.id}`)}
+          />
+        </TabsContent>
+
+        {/* PRESENTATIONS */}
+        <TabsContent value="presentations">
+          <div className="flex justify-end mb-4">
+            <Button onClick={openCreatePresentation} disabled={cohorts.length === 0}>
+              <Presentation className="h-4 w-4 mr-1.5" />Schedule Presentation
+            </Button>
+          </div>
+          {cohorts.length === 0 && (
+            <p className="text-sm text-muted-foreground mb-4">Create a cohort first — presentations are always scheduled for a specific cohort.</p>
+          )}
+          <DataTable
+            columns={presentationColumns}
+            data={presentations}
+            searchable
+            searchPlaceholder="Search presentations..."
+            emptyMessage="No presentations scheduled yet"
+            onRowClick={(row) => navigate(`/admin/presentations/${row.id}`)}
           />
         </TabsContent>
 
@@ -1555,6 +1650,61 @@ export default function ClassroomDetailPage() {
             <Button onClick={handleSaveAssignment} disabled={savingAssignment} className="w-full">
               {savingAssignment ? <Loader2 className="animate-spin h-4 w-4 mr-1.5" /> : null}
               {assignmentEditing ? 'Save Assignment' : 'Create Assignment'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={presentationModal} onOpenChange={o => { if (!o) resetPresentationModal(); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Schedule Presentation</DialogTitle></DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div>
+              <Label>Cohort <span className="text-destructive">*</span></Label>
+              <Select value={presentationForm.cohort_id} onValueChange={v => setPresentationForm(f => ({ ...f, cohort_id: v }))}>
+                <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select cohort..." /></SelectTrigger>
+                <SelectContent>
+                  {cohorts.map((c: any) => (
+                    <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Title <span className="text-destructive">*</span></Label>
+              <Input
+                value={presentationForm.title}
+                onChange={e => setPresentationForm(f => ({ ...f, title: e.target.value }))}
+                placeholder="e.g. Capstone Project Presentations"
+                className="mt-1.5"
+              />
+            </div>
+            <div>
+              <Label>Project Brief / Instructions</Label>
+              <Textarea
+                value={presentationForm.instructions}
+                onChange={e => setPresentationForm(f => ({ ...f, instructions: e.target.value }))}
+                placeholder="What students should be ready to present"
+                rows={3}
+                className="mt-1.5"
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div><Label>Date *</Label><Input type="date" value={presentationForm.scheduled_date} onChange={e => setPresentationForm(f => ({ ...f, scheduled_date: e.target.value }))} className="mt-1.5" /></div>
+              <div><Label>Start *</Label><Input type="time" value={presentationForm.start_time} onChange={e => setPresentationForm(f => ({ ...f, start_time: e.target.value }))} className="mt-1.5" /></div>
+              <div><Label>End *</Label><Input type="time" value={presentationForm.end_time} onChange={e => setPresentationForm(f => ({ ...f, end_time: e.target.value }))} className="mt-1.5" /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Location</Label><Input value={presentationForm.location} onChange={e => setPresentationForm(f => ({ ...f, location: e.target.value }))} className="mt-1.5" placeholder="Optional" /></div>
+              <div><Label>Meeting Link</Label><Input value={presentationForm.meeting_link} onChange={e => setPresentationForm(f => ({ ...f, meeting_link: e.target.value }))} className="mt-1.5" placeholder="Optional" /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Max Score</Label><Input type="number" min="1" value={presentationForm.max_score} onChange={e => setPresentationForm(f => ({ ...f, max_score: e.target.value }))} className="mt-1.5" /></div>
+              <div><Label>Pass Score</Label><Input type="number" min="0" value={presentationForm.pass_score} onChange={e => setPresentationForm(f => ({ ...f, pass_score: e.target.value }))} className="mt-1.5" /></div>
+            </div>
+            <Button onClick={handleSavePresentation} disabled={savingPresentation} className="w-full">
+              {savingPresentation ? <Loader2 className="animate-spin h-4 w-4 mr-1.5" /> : null}
+              Schedule & Notify Cohort
             </Button>
           </div>
         </DialogContent>

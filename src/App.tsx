@@ -62,6 +62,7 @@ const OrgReportsPage = lazy(() => import("@/pages/org/OrgReportsPage"));
 
 const ProfilePage = lazy(() => import("@/pages/profile/ProfilePage"));
 const AssignmentDetailPage = lazy(() => import("@/pages/shared/AssignmentDetailPage"));
+const PresentationDetailPage = lazy(() => import("@/pages/shared/PresentationDetailPage"));
 
 const EnrollPage = lazy(() => import("@/pages/public/EnrollPage"));
 const StudentSignupPage = lazy(() => import("@/pages/public/StudentSignupPage"));
@@ -193,6 +194,7 @@ const App = () => (
                   <Route path="/admin/classrooms" element={<ClassroomsPage />} />
                   <Route path="/admin/classrooms/:id" element={<ClassroomDetailPage />} />
                   <Route path="/admin/assignments/:id" element={<AssignmentDetailPage />} />
+                  <Route path="/admin/presentations/:id" element={<PresentationDetailPage />} />
                   <Route path="/admin/cohorts" element={<CohortsPage />} />
                   <Route path="/admin/cohorts/:id" element={<CohortDetailPage />} />
                   <Route path="/admin/staff-invitations" element={<StaffInvitationsAdminPage />} />
@@ -203,6 +205,7 @@ const App = () => (
                 <Route path="/staff/classrooms" element={<StaffClassroomsPage />} />
                 <Route path="/staff/classrooms/:id" element={<ClassroomWorkspacePage />} />
                 <Route path="/staff/assignments/:id" element={<AssignmentDetailPage />} />
+                <Route path="/staff/presentations/:id" element={<PresentationDetailPage />} />
                 <Route path="/staff/invitations" element={<StaffInvitationsPage />} />
 
                 {/* Student routes */}

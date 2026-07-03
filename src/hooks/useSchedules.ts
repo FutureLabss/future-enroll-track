@@ -74,6 +74,42 @@ export async function enrichSchedules(rows: any[]): Promise<Schedule[]> {
   });
 }
 
+export async function notifySchedule(schedule: Schedule, classroomId: string) {
+  const studentQuery = schedule.cohort_id
+    ? supabase.from('cohort_students').select('student_id').eq('cohort_id', schedule.cohort_id)
+    : supabase.rpc('get_classroom_students', { p_classroom_id: classroomId });
+
+  const { data: students, error: studentError } = await studentQuery;
+  if (studentError) throw studentError;
+
+  const rows = (students || []) as any[];
+  const userIds = [...new Set(rows.map(s => s.student_id ?? s.user_id).filter(Boolean))];
+  if (!userIds.length) throw new Error('No students found to notify');
+
+  const label = schedule.title || schedule.lessons?.title || schedule.modules?.title || 'Class';
+  const dateStr = new Date(schedule.scheduled_date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  const humanMessage = `${dateStr} · ${schedule.start_time}–${schedule.end_time}${schedule.location ? ` · ${schedule.location}` : ''}`;
+
+  const d = schedule.scheduled_date.replace(/-/g, '');
+  const tStart = schedule.start_time.replace(':', '') + '00';
+  const tEnd = schedule.end_time.replace(':', '') + '00';
+  const gcalParams = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: label,
+    dates: `${d}T${tStart}/${d}T${tEnd}`,
+    ...(schedule.location ? { location: schedule.location } : {}),
+    ...(schedule.meeting_link ? { details: `Join online: ${schedule.meeting_link}` } : {}),
+  });
+  const gcalUrl = `https://calendar.google.com/calendar/render?${gcalParams.toString()}`;
+  const message = `${humanMessage}\n\n||GCAL||:${gcalUrl}`;
+
+  const { error: notifError } = await supabase.from('notifications').insert(
+    userIds.map(uid => ({ user_id: uid, title: `Upcoming: ${label}`, message, type: 'schedule', channel: 'in_app', read: false }))
+  );
+  if (notifError) throw notifError;
+  return userIds.length;
+}
+
 export function useSchedules(classroomId: string) {
   const queryClient = useQueryClient();
 
@@ -132,41 +168,5 @@ export function useSchedules(classroomId: string) {
   const updateSchedule = (id: string, patch: Partial<Omit<Schedule, 'id' | 'classroom_id' | 'created_at'>>) => updateMutation.mutateAsync({ id, patch });
   const deleteSchedule = (id: string) => deleteMutation.mutateAsync(id);
 
-  const notifySchedule = async (schedule: Schedule) => {
-    const studentQuery = schedule.cohort_id
-      ? supabase.from('cohort_students').select('student_id').eq('cohort_id', schedule.cohort_id)
-      : supabase.rpc('get_classroom_students', { p_classroom_id: classroomId });
-
-    const { data: students, error: studentError } = await studentQuery;
-    if (studentError) throw studentError;
-
-    const rows = (students || []) as any[];
-    const userIds = [...new Set(rows.map(s => s.student_id ?? s.user_id).filter(Boolean))];
-    if (!userIds.length) throw new Error('No students found to notify');
-
-    const label = schedule.title || schedule.lessons?.title || schedule.modules?.title || 'Class';
-    const dateStr = new Date(schedule.scheduled_date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
-    const humanMessage = `${dateStr} · ${schedule.start_time}–${schedule.end_time}${schedule.location ? ` · ${schedule.location}` : ''}`;
-
-    const d = schedule.scheduled_date.replace(/-/g, '');
-    const tStart = schedule.start_time.replace(':', '') + '00';
-    const tEnd = schedule.end_time.replace(':', '') + '00';
-    const gcalParams = new URLSearchParams({
-      action: 'TEMPLATE',
-      text: label,
-      dates: `${d}T${tStart}/${d}T${tEnd}`,
-      ...(schedule.location ? { location: schedule.location } : {}),
-      ...(schedule.meeting_link ? { details: `Join online: ${schedule.meeting_link}` } : {}),
-    });
-    const gcalUrl = `https://calendar.google.com/calendar/render?${gcalParams.toString()}`;
-    const message = `${humanMessage}\n\n||GCAL||:${gcalUrl}`;
-
-    const { error: notifError } = await supabase.from('notifications').insert(
-      userIds.map(uid => ({ user_id: uid, title: `Upcoming: ${label}`, message, type: 'schedule', channel: 'in_app', read: false }))
-    );
-    if (notifError) throw notifError;
-    return userIds.length;
-  };
-
-  return { schedules, loading, refetch, createSchedule, updateSchedule, deleteSchedule, notifySchedule };
+  return { schedules, loading, refetch, createSchedule, updateSchedule, deleteSchedule, notifySchedule: (schedule: Schedule) => notifySchedule(schedule, classroomId) };
 }

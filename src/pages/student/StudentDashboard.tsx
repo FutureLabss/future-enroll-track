@@ -435,6 +435,21 @@ export default function StudentDashboard() {
                   <div className="h-full bg-primary" style={{ width: `${Math.min(Number(progress.assignment_pct || 0), 100)}%` }} />
                 </div>
               </div>
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2.5">
+                <div>
+                  <p className="text-sm font-medium">Graduation</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Assignments {progress.assignments_passed ?? 0}/{progress.assignments_required ?? 0} · Presentations {progress.presentations_passed ?? 0}/{progress.presentations_required ?? 0}
+                  </p>
+                </div>
+                <Badge variant="outline" className={`capitalize ${
+                  progress.graduation_status === 'graduated' ? 'bg-success/15 text-success border-success/30'
+                  : progress.graduation_status === 'not_graduated' ? 'bg-destructive/15 text-destructive border-destructive/30'
+                  : 'bg-muted text-muted-foreground border-muted'
+                }`}>
+                  {(progress.graduation_status || 'pending').replace('_', ' ')}
+                </Badge>
+              </div>
             </div>
           ) : (
             <p className="text-sm text-muted-foreground py-4 text-center">Progress starts when you join a cohort.</p>

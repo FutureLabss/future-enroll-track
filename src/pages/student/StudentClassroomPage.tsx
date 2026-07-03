@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useMarkAttendance } from '@/hooks/useAttendance';
 import { uploadAssignmentImage, useStudentAssignments, useSubmissions } from '@/hooks/useAssignments';
+import { useStudentPresentations } from '@/hooks/usePresentations';
 import { useStudentProgress } from '@/hooks/useAttendance';
 import { useSchedules } from '@/hooks/useSchedules';
 import { supabase } from '@/lib/supabase';
@@ -20,7 +21,7 @@ import { StudentCurriculumView } from '@/components/classroom/StudentCurriculumV
 import {
   Calendar, CalendarPlus, ClipboardList, BookOpen, BarChart2, Loader2,
   CheckCircle2, Clock, AlertCircle, MapPin, ChevronDown, ChevronUp, LayoutList,
-  Users, Video, ExternalLink, Send, ShieldCheck,
+  Users, Video, ExternalLink, Send, ShieldCheck, Presentation,
 } from 'lucide-react';
 import { downloadICS } from '@/lib/ics';
 
@@ -155,10 +156,22 @@ function ScheduleTabContent({
   );
 }
 
+const GRADUATION_LABELS: Record<string, string> = {
+  graduated: 'Graduated',
+  not_graduated: 'Not Graduated',
+  pending: 'Pending',
+};
+const GRADUATION_COLOURS: Record<string, string> = {
+  graduated: 'bg-success/15 text-success border-success/30',
+  not_graduated: 'bg-destructive/15 text-destructive border-destructive/30',
+  pending: 'bg-muted text-muted-foreground border-muted',
+};
+
 function ProgressTab({ progress }: { progress: any }) {
   if (!progress) {
     return <p className="text-muted-foreground text-center py-10">No progress data yet — join a cohort to start tracking</p>;
   }
+  const graduationStatus = progress.graduation_status || 'pending';
   return (
     <div className="space-y-5 max-w-lg">
       <div className="glass-card rounded-2xl p-6 space-y-5">
@@ -177,6 +190,17 @@ function ProgressTab({ progress }: { progress: any }) {
           </div>
           <Progress value={progress.assignment_pct} className="h-2" />
         </div>
+      </div>
+
+      <div className="glass-card rounded-2xl p-6 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="font-semibold">Graduation</h3>
+          <Badge variant="outline" className={`capitalize ${GRADUATION_COLOURS[graduationStatus] || ''}`}>{GRADUATION_LABELS[graduationStatus] || graduationStatus}</Badge>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Assignments passed: {progress.assignments_passed ?? 0}/{progress.assignments_required ?? 0}
+          {' · '}Presentations passed: {progress.presentations_passed ?? 0}/{progress.presentations_required ?? 0}
+        </p>
       </div>
     </div>
   );
@@ -676,6 +700,60 @@ function AssignmentsTab({ classroomId, cohortId }: { classroomId: string; cohort
   );
 }
 
+function PresentationsTab({ classroomId, cohortId }: { classroomId: string; cohortId?: string }) {
+  const { presentations, loading } = useStudentPresentations(classroomId, cohortId);
+
+  if (loading) return <div className="flex justify-center py-10"><Loader2 className="animate-spin h-6 w-6 text-primary" /></div>;
+
+  return (
+    <div className="space-y-4">
+      {presentations.map((p: any) => {
+        const grade = p.presentation_grades?.[0];
+        const schedule = p.schedules;
+        return (
+          <div key={p.id} className="glass-card rounded-2xl p-5 border border-border">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="font-semibold">{p.title}</h3>
+                  {grade?.status === 'graded' && (
+                    <Badge variant="outline" className="bg-success/15 text-success border-success/30">Graded</Badge>
+                  )}
+                </div>
+                {schedule?.scheduled_date && (
+                  <p className="text-sm flex items-center gap-1 mt-1 text-muted-foreground">
+                    <Clock className="h-3.5 w-3.5" />
+                    {new Date(`${schedule.scheduled_date}T00:00:00`).toLocaleDateString('en-NG', { weekday: 'short', month: 'short', day: 'numeric' })}
+                    {' · '}{schedule.start_time}–{schedule.end_time}
+                  </p>
+                )}
+                {schedule?.location && (
+                  <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><MapPin className="h-3 w-3" />{schedule.location}</p>
+                )}
+                {p.instructions && <p className="text-sm mt-2 text-muted-foreground line-clamp-2">{p.instructions}</p>}
+              </div>
+              {schedule?.meeting_link && (
+                <Button asChild size="sm" variant="outline" className="h-8 shrink-0">
+                  <a href={schedule.meeting_link} target="_blank" rel="noreferrer">
+                    <Video className="mr-1.5 h-3.5 w-3.5" />Join online
+                  </a>
+                </Button>
+              )}
+            </div>
+            {grade?.status === 'graded' && (
+              <div className="mt-3 p-3 rounded-lg bg-muted/50 text-sm space-y-1">
+                <p><strong>Score:</strong> {grade.score}{p.max_score != null ? ` / ${p.max_score}` : ''} <span className="text-muted-foreground">(pass: {p.pass_score})</span></p>
+                {grade.feedback && <p className="text-muted-foreground">{grade.feedback}</p>}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {presentations.length === 0 && <p className="text-center text-muted-foreground py-10">No presentations scheduled yet</p>}
+    </div>
+  );
+}
+
 export default function StudentClassroomPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
@@ -847,6 +925,7 @@ export default function StudentClassroomPage() {
           <TabsTrigger value="schedule"><Calendar className="h-4 w-4 mr-1.5" />Schedule</TabsTrigger>
           <TabsTrigger value="attendance"><ClipboardList className="h-4 w-4 mr-1.5" />Attendance</TabsTrigger>
           <TabsTrigger value="assignments"><BookOpen className="h-4 w-4 mr-1.5" />Assignments</TabsTrigger>
+          <TabsTrigger value="presentations"><Presentation className="h-4 w-4 mr-1.5" />Presentations</TabsTrigger>
           <TabsTrigger value="progress"><BarChart2 className="h-4 w-4 mr-1.5" />Progress</TabsTrigger>
         </TabsList>
 
@@ -877,6 +956,10 @@ export default function StudentClassroomPage() {
 
         <TabsContent value="assignments">
           <AssignmentsTab classroomId={id!} cohortId={cohortId} />
+        </TabsContent>
+
+        <TabsContent value="presentations">
+          <PresentationsTab classroomId={id!} cohortId={cohortId} />
         </TabsContent>
 
         <TabsContent value="progress">

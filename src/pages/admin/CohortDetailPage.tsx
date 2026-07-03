@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAttendanceSession } from '@/hooks/useAttendance';
+import { useAuth } from '@/hooks/useAuth';
+import { usePresentations } from '@/hooks/usePresentations';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -16,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
 import {
   ArrowLeft,
   Archive,
@@ -27,6 +30,8 @@ import {
   GraduationCap,
   Loader2,
   Pencil,
+  Presentation,
+  RefreshCw,
   RotateCcw,
   School,
   Trash2,
@@ -36,6 +41,124 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CohortAnalyticsTab } from '@/components/cohort/CohortAnalyticsTab';
+
+const GRADUATION_COLOURS: Record<string, string> = {
+  graduated: 'bg-success/15 text-success border-success/30',
+  not_graduated: 'bg-destructive/15 text-destructive border-destructive/30',
+  pending: 'bg-muted text-muted-foreground border-muted',
+};
+
+function SchedulePresentationForm({ classroomId, onSaved, createPresentation }: { classroomId: string; onSaved: () => void; createPresentation: ReturnType<typeof usePresentations>['createPresentation'] }) {
+  const [form, setForm] = useState({
+    title: '',
+    instructions: '',
+    scheduled_date: '',
+    start_time: '',
+    end_time: '',
+    location: '',
+    meeting_link: '',
+    max_score: '100',
+    pass_score: '50',
+  });
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    if (!form.title.trim()) { toast.error('Title is required'); return; }
+    if (!form.scheduled_date || !form.start_time || !form.end_time) { toast.error('Date, start time and end time are required'); return; }
+    setSaving(true);
+    try {
+      await createPresentation({
+        classroomId,
+        title: form.title.trim(),
+        instructions: form.instructions,
+        scheduled_date: form.scheduled_date,
+        start_time: form.start_time,
+        end_time: form.end_time,
+        location: form.location.trim() || undefined,
+        meeting_link: form.meeting_link.trim() || undefined,
+        max_score: Number(form.max_score) || 100,
+        pass_score: Number(form.pass_score) || 50,
+      });
+      toast.success('Presentation scheduled — students have been notified');
+      onSaved();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4 mt-2">
+      <div><Label>Title *</Label><Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="mt-1.5" placeholder="e.g. Capstone Project Presentations" /></div>
+      <div>
+        <Label>Project Brief / Instructions</Label>
+        <Textarea value={form.instructions} onChange={e => setForm({ ...form, instructions: e.target.value })} rows={3} className="mt-1.5" placeholder="What students should be ready to present" />
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <div><Label>Date *</Label><Input type="date" value={form.scheduled_date} onChange={e => setForm({ ...form, scheduled_date: e.target.value })} className="mt-1.5" /></div>
+        <div><Label>Start *</Label><Input type="time" value={form.start_time} onChange={e => setForm({ ...form, start_time: e.target.value })} className="mt-1.5" /></div>
+        <div><Label>End *</Label><Input type="time" value={form.end_time} onChange={e => setForm({ ...form, end_time: e.target.value })} className="mt-1.5" /></div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div><Label>Location</Label><Input value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} className="mt-1.5" placeholder="Optional" /></div>
+        <div><Label>Meeting Link</Label><Input value={form.meeting_link} onChange={e => setForm({ ...form, meeting_link: e.target.value })} className="mt-1.5" placeholder="Optional" /></div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div><Label>Max Score</Label><Input type="number" min="1" value={form.max_score} onChange={e => setForm({ ...form, max_score: e.target.value })} className="mt-1.5" /></div>
+        <div><Label>Pass Score</Label><Input type="number" min="0" value={form.pass_score} onChange={e => setForm({ ...form, pass_score: e.target.value })} className="mt-1.5" /></div>
+      </div>
+      <Button onClick={save} disabled={saving} className="w-full">{saving ? 'Scheduling...' : 'Schedule & Notify Cohort'}</Button>
+    </div>
+  );
+}
+
+function GraduationOverrideForm({ member, onSaved }: { member: any; onSaved: () => void }) {
+  const [status, setStatus] = useState<string>(member.graduation_override || 'graduated');
+  const [reason, setReason] = useState(member.graduation_override_reason || '');
+  const [saving, setSaving] = useState(false);
+
+  const save = async (clear: boolean) => {
+    setSaving(true);
+    const { error } = await supabase.rpc('set_graduation_override', {
+      p_cohort_student_id: member.id,
+      p_status: clear ? null : status,
+      p_reason: clear ? null : reason.trim() || null,
+    });
+    setSaving(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success(clear ? 'Override cleared' : 'Graduation status overridden');
+    onSaved();
+  };
+
+  return (
+    <div className="space-y-4 mt-2">
+      <p className="text-sm text-muted-foreground">
+        Auto-computed status: <Badge variant="outline" className={`capitalize ${GRADUATION_COLOURS[member.auto_graduation_status] || ''}`}>{member.auto_graduation_status}</Badge>
+      </p>
+      <div>
+        <Label>Override Status</Label>
+        <Select value={status} onValueChange={setStatus}>
+          <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="graduated">Graduated</SelectItem>
+            <SelectItem value="not_graduated">Not Graduated</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label>Reason</Label>
+        <Textarea value={reason} onChange={e => setReason(e.target.value)} rows={2} className="mt-1.5" placeholder="Why this override was necessary" />
+      </div>
+      <div className="flex gap-2">
+        <Button onClick={() => save(false)} disabled={saving} className="flex-1">{saving ? 'Saving...' : 'Save Override'}</Button>
+        {member.graduation_override && (
+          <Button variant="outline" onClick={() => save(true)} disabled={saving}>Clear Override</Button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const COHORT_STATUSES = ['upcoming', 'active', 'completed', 'archived'] as const;
 const STATUS_COLOURS: Record<string, string> = {
@@ -251,18 +374,22 @@ export default function CohortDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const queryKey = ['cohort-detail', id];
+  const { isAdmin } = useAuth();
 
   const [editOpen, setEditOpen] = useState(false);
   const [studentsOpen, setStudentsOpen] = useState(false);
   const [drillSession, setDrillSession] = useState<any>(null);
   const [statusBusy, setStatusBusy] = useState(false);
+  const [presentationDialogOpen, setPresentationDialogOpen] = useState(false);
+  const [overrideMember, setOverrideMember] = useState<any>(null);
+  const [recomputingGraduation, setRecomputingGraduation] = useState(false);
 
   const { data: pageData, isLoading: loading } = useQuery({
     queryKey,
     queryFn: async () => {
       const [cRes, mRes] = await Promise.all([
         supabase.from('cohorts').select('*, programs(program_name), classrooms(id, name, location)').eq('id', id!).single(),
-        supabase.from('cohort_students').select('id, student_id, enrollment_id, enrollments(enrollment_status, total_amount, amount_paid, outstanding_balance)').eq('cohort_id', id!),
+        supabase.from('cohort_students').select('id, student_id, enrollment_id, auto_graduation_status, graduation_override, graduation_override_reason, final_graduation_status, enrollments(enrollment_status, total_amount, amount_paid, outstanding_balance)').eq('cohort_id', id!),
       ]);
       const cohortRow = cRes.data;
       const rows = mRes.data || [];
@@ -362,6 +489,17 @@ export default function CohortDetailPage() {
     load();
   };
 
+  const { presentations, createPresentation, deletePresentation } = usePresentations(cohort?.classroom_id || '', id || '');
+
+  const recomputeGraduation = async () => {
+    setRecomputingGraduation(true);
+    const { error } = await supabase.rpc('compute_cohort_graduation', { p_cohort_id: id! });
+    setRecomputingGraduation(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success('Graduation status recomputed');
+    load();
+  };
+
   const stats = useMemo(() => {
     const totalPaid = members.reduce((sum, m) => sum + Number(m.enrollments?.amount_paid || 0), 0);
     const totalOutstanding = members.reduce((sum, m) => sum + Number(m.enrollments?.outstanding_balance || 0), 0);
@@ -392,6 +530,56 @@ export default function CohortDetailPage() {
     },
     { key: 'amount_paid', header: 'Paid', render: (r: any) => r.enrollments ? formatCurrency(Number(r.enrollments.amount_paid || 0)) : '—' },
     { key: 'outstanding', header: 'Outstanding', render: (r: any) => r.enrollments ? formatCurrency(Number(r.enrollments.outstanding_balance || 0)) : '—' },
+    {
+      key: 'graduation', header: 'Graduation',
+      render: (r: any) => (
+        <div className="flex items-center gap-1.5">
+          <Badge variant="outline" className={`capitalize ${GRADUATION_COLOURS[r.final_graduation_status] || ''}`}>
+            {(r.final_graduation_status || 'pending').replace('_', ' ')}
+          </Badge>
+          {r.graduation_override && <span className="text-xs text-muted-foreground" title={r.graduation_override_reason || ''}>(overridden)</span>}
+        </div>
+      ),
+    },
+    ...(isAdmin ? [{
+      key: 'graduation_actions', header: '',
+      render: (r: any) => (
+        <Button size="sm" variant="ghost" onClick={() => setOverrideMember(r)}>
+          <Pencil className="h-3.5 w-3.5 mr-1" />Override
+        </Button>
+      ),
+    }] : []),
+  ];
+
+  const presentationColumns = [
+    { key: 'title', header: 'Presentation', render: (r: any) => <span className="font-medium">{r.title}</span> },
+    { key: 'date', header: 'Date', render: (r: any) => r.schedules?.scheduled_date ? `${new Date(`${r.schedules.scheduled_date}T00:00:00`).toLocaleDateString()} · ${r.schedules.start_time}–${r.schedules.end_time}` : '—' },
+    { key: 'pass_score', header: 'Pass Score', render: (r: any) => `${r.pass_score} / ${r.max_score}` },
+    { key: 'status', header: 'Status', render: (r: any) => <Badge variant="outline" className={`capitalize ${STATUS_COLOURS[r.status] || ''}`}>{r.status}</Badge> },
+    {
+      key: 'actions', header: '',
+      render: (r: any) => (
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={(event) => event.stopPropagation()}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent onClick={(event) => event.stopPropagation()}>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Presentation?</AlertDialogTitle>
+              <AlertDialogDescription>This will permanently delete "{r.title}" and all its grades. This cannot be undone.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={() => deletePresentation(r.schedule_id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      ),
+    },
   ];
 
   const attendanceColumns = [
@@ -520,12 +708,18 @@ export default function CohortDetailPage() {
           <TabsTrigger value="students"><GraduationCap className="h-4 w-4 mr-1.5" />Students ({members.length})</TabsTrigger>
           <TabsTrigger value="attendance"><ClipboardList className="h-4 w-4 mr-1.5" />Attendance ({attendanceSessions.length})</TabsTrigger>
           <TabsTrigger value="assignments"><ClipboardCheck className="h-4 w-4 mr-1.5" />Assignments ({assignments.length})</TabsTrigger>
+          <TabsTrigger value="presentations"><Presentation className="h-4 w-4 mr-1.5" />Presentations ({presentations.length})</TabsTrigger>
           {cohort.classrooms && <TabsTrigger value="classroom"><School className="h-4 w-4 mr-1.5" />Classroom</TabsTrigger>}
           <TabsTrigger value="analytics"><BarChart2 className="h-4 w-4 mr-1.5" />Analytics</TabsTrigger>
         </TabsList>
 
         <TabsContent value="students">
-          <div className="flex items-center justify-end mb-4">
+          <div className="flex items-center justify-end gap-2 mb-4">
+            {isAdmin && (
+              <Button size="sm" variant="outline" disabled={recomputingGraduation} onClick={recomputeGraduation}>
+                <RefreshCw className="h-4 w-4 mr-1.5" />Recompute Graduation
+              </Button>
+            )}
             <Dialog open={studentsOpen} onOpenChange={setStudentsOpen}>
               <DialogTrigger asChild><Button size="sm"><UserPlus className="h-4 w-4 mr-1.5" />Manage Students</Button></DialogTrigger>
               <DialogContent className="max-w-lg">
@@ -543,6 +737,30 @@ export default function CohortDetailPage() {
 
         <TabsContent value="assignments">
           <DataTable columns={assignmentColumns} data={assignments} searchable searchPlaceholder="Search assignments..." emptyMessage="No assignments for this cohort" />
+        </TabsContent>
+
+        <TabsContent value="presentations">
+          <div className="flex items-center justify-end mb-4">
+            <Dialog open={presentationDialogOpen} onOpenChange={setPresentationDialogOpen}>
+              <DialogTrigger asChild><Button size="sm"><Presentation className="h-4 w-4 mr-1.5" />Schedule Presentation</Button></DialogTrigger>
+              <DialogContent>
+                <DialogHeader><DialogTitle>Schedule Presentation</DialogTitle></DialogHeader>
+                <SchedulePresentationForm
+                  classroomId={cohort.classroom_id}
+                  createPresentation={createPresentation}
+                  onSaved={() => setPresentationDialogOpen(false)}
+                />
+              </DialogContent>
+            </Dialog>
+          </div>
+          <DataTable
+            columns={presentationColumns}
+            data={presentations}
+            searchable
+            searchPlaceholder="Search presentations..."
+            emptyMessage="No presentations scheduled for this cohort"
+            onRowClick={(row: any) => navigate(`/admin/presentations/${row.id}`)}
+          />
         </TabsContent>
 
         {cohort.classrooms && (
@@ -577,6 +795,18 @@ export default function CohortDetailPage() {
             </DialogTitle>
           </DialogHeader>
           {drillSession && <AttendanceDrillDown session={drillSession} />}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!overrideMember} onOpenChange={o => { if (!o) setOverrideMember(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Override Graduation Status</DialogTitle></DialogHeader>
+          {overrideMember && (
+            <GraduationOverrideForm
+              member={overrideMember}
+              onSaved={() => { setOverrideMember(null); load(); }}
+            />
+          )}
         </DialogContent>
       </Dialog>
 

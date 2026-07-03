@@ -63,6 +63,9 @@ export default function StaffInvitationsAdminPage() {
   const handleResend = async (invitation: any) => {
     setResending(invitation.id);
     try {
+      if (!invitation.staff?.email) {
+        throw new Error(`No email on file for ${invitation.staff?.full_name ?? 'this staff member'} — update their staff profile first`);
+      }
       const newExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
       const { error: updateError } = await supabase
         .from('staff_invitations')
@@ -72,14 +75,19 @@ export default function StaffInvitationsAdminPage() {
 
       const { error } = await supabase.functions.invoke('send-staff-invitation', {
         body: {
-          email: invitation.staff?.email,
-          name: invitation.staff?.full_name,
+          email: invitation.staff.email,
+          name: invitation.staff.full_name,
           classroom: invitation.classrooms?.name,
           token: invitation.token,
           staffType: invitation.staff_type
         }
       });
-      if (error) throw error;
+      if (error) {
+        // FunctionsHttpError wraps the real message inside the response body
+        let msg = error.message;
+        try { const b = await (error as any).context?.json?.(); if (b?.error) msg = b.error; } catch (_) {}
+        throw new Error(msg);
+      }
       toast.success('Invitation email resent — valid for 7 days');
       fetchInvitations();
     } catch (e: any) {

@@ -58,8 +58,42 @@ Deno.serve(async (req) => {
     }
 
     const body = (await req.json()) as Payload;
-    if (!body.email || !body.name) {
-      return new Response(JSON.stringify({ error: "email and name are required" }), {
+
+    // staff.email is nullable — if the frontend sent null/undefined, recover it from
+    // the token (staff_invitations → staff.email, or → classroom_staff → auth.users
+    // for staff who have already accepted their invite).
+    let email = body.email ?? "";
+    let name = body.name ?? "";
+
+    if ((!email || !name) && body.token) {
+      const { data: invData } = await admin
+        .from("staff_invitations")
+        .select("staff_id, staff(email, full_name), classroom_id")
+        .eq("token", body.token)
+        .maybeSingle();
+
+      if (invData) {
+        const staffRow = invData.staff as any;
+        if (!email && staffRow?.email) email = staffRow.email;
+        if (!name && staffRow?.full_name) name = staffRow.full_name;
+
+        // Fallback: accepted staff have email in auth.users via classroom_staff
+        if (!email && invData.staff_id) {
+          const { data: cs } = await admin
+            .from("classroom_staff")
+            .select("user_id")
+            .eq("staff_id", invData.staff_id)
+            .maybeSingle();
+          if (cs?.user_id) {
+            const { data: authRes } = await admin.auth.admin.getUserById(cs.user_id);
+            if (authRes?.user?.email) email = authRes.user.email;
+          }
+        }
+      }
+    }
+
+    if (!email || !name) {
+      return new Response(JSON.stringify({ error: "No email address on file for this staff member — update their staff profile first" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -80,9 +114,9 @@ Deno.serve(async (req) => {
     // Primary path: Supabase invite flow.
     // New users → account created, Supabase-managed email sent.
     // Existing users → falls back to Resend.
-    const { error: inviteError } = await admin.auth.admin.inviteUserByEmail(body.email, {
+    const { error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, {
       redirectTo: newUserRedirectTo,
-      data: { full_name: body.name },
+      data: { full_name: name },
     });
 
     if (inviteError) {
@@ -99,7 +133,7 @@ Deno.serve(async (req) => {
         html = `<!DOCTYPE html><html><body style="font-family:Inter,Arial,sans-serif;background:#f7f7fb;padding:24px;color:#0f172a;">
           <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:14px;padding:28px;box-shadow:0 4px 16px rgba(15,23,42,0.06);">
             <h1 style="font-size:20px;margin:0 0 16px;color:#1e1b4b;">Classroom Invitation</h1>
-            <p style="font-size:15px;line-height:1.6;margin-bottom:16px;">Hello ${body.name},</p>
+            <p style="font-size:15px;line-height:1.6;margin-bottom:16px;">Hello ${name},</p>
             <p style="font-size:15px;line-height:1.6;margin-bottom:24px;">
               You have been added to <strong>${body.classroom}</strong> as <strong>${role}</strong>.
             </p>
@@ -115,7 +149,7 @@ Deno.serve(async (req) => {
         html = `<!DOCTYPE html><html><body style="font-family:Inter,Arial,sans-serif;background:#f7f7fb;padding:24px;color:#0f172a;">
           <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:14px;padding:28px;box-shadow:0 4px 16px rgba(15,23,42,0.06);">
             <h1 style="font-size:20px;margin:0 0 16px;color:#1e1b4b;">Welcome to the Team</h1>
-            <p style="font-size:15px;line-height:1.6;margin-bottom:16px;">Hello ${body.name},</p>
+            <p style="font-size:15px;line-height:1.6;margin-bottom:16px;">Hello ${name},</p>
             <p style="font-size:15px;line-height:1.6;margin-bottom:24px;">
               You have been added as a staff member. Click the button below to access your staff portal.
             </p>
@@ -135,8 +169,8 @@ Deno.serve(async (req) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: "FutureLabs <noreply@futurelabs.ng>",
-          to: [body.email],
+          from: "FutureLabs <no-reply@futurelabs.ng>",
+          to: [email],
           subject,
           html,
         }),
@@ -145,17 +179,27 @@ Deno.serve(async (req) => {
     }
 
     const notifMessage = isClassroomInvite
-      ? `${body.name} invited to ${body.classroom} as ${body.staffType}`
-      : `${body.name} invited as staff (payroll onboarding)`;
+      ? `${name} invited to ${body.classroom} as ${body.staffType}`
+      : `${name} invited as staff (payroll onboarding)`;
 
-    await admin.from("notifications").insert({
-      user_id: null,
-      type: "staff_invitation",
-      title: `Invitation sent to ${body.email}`,
-      message: notifMessage,
-      channel: "email",
-      sent_at: new Date().toISOString(),
-    });
+    // Non-fatal: notification is audit-only — don't let it block a successful email send.
+    // Pass hub_id explicitly because get_my_hub_id() returns NULL under the service role.
+    try {
+      const { data: hubRow } = await admin
+        .from("hub_members")
+        .select("hub_id")
+        .eq("user_id", userRes.user.id)
+        .maybeSingle();
+      await admin.from("notifications").insert({
+        user_id: null,
+        hub_id: hubRow?.hub_id ?? null,
+        type: "staff_invitation",
+        title: `Invitation sent to ${email}`,
+        message: notifMessage,
+        channel: "email",
+        sent_at: new Date().toISOString(),
+      });
+    } catch (_) { /* audit log failure must not fail the email */ }
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

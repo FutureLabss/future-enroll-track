@@ -1,4 +1,6 @@
 import { lazy, Suspense, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { fetchPaymentsAll, fetchPendingPayments, PAYMENTS_ALL_KEY, PENDING_PAYMENTS_KEY } from "@/hooks/usePayments";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -97,12 +99,15 @@ function AdminGuard() {
 
 function PrefetchChunks() {
   const { isAdmin, isStaff, isOrganization, rolesReady } = useAuth();
+  const queryClient = useQueryClient();
   useEffect(() => {
     if (!rolesReady) return;
     if (isAdmin) {
       import("@/pages/admin/AdminDashboard");
       import("@/pages/admin/ClassroomsPage");
       import("@/pages/admin/EnrollmentsPage");
+      queryClient.prefetchQuery({ queryKey: PAYMENTS_ALL_KEY, queryFn: fetchPaymentsAll, staleTime: 30_000 });
+      queryClient.prefetchQuery({ queryKey: PENDING_PAYMENTS_KEY, queryFn: fetchPendingPayments, staleTime: 30_000 });
     } else if (isStaff) {
       import("@/pages/staff/StaffClassroomsPage");
       import("@/pages/staff/ClassroomWorkspacePage");
@@ -111,7 +116,7 @@ function PrefetchChunks() {
     } else {
       import("@/pages/student/StudentDashboard");
     }
-  }, [rolesReady, isAdmin, isStaff, isOrganization]);
+  }, [rolesReady, isAdmin, isStaff, isOrganization, queryClient]);
   return null;
 }
 

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { usePendingPayments } from '@/hooks/usePayments';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/shared/StatusBadge';
@@ -11,18 +12,7 @@ export default function PendingPaymentsPage() {
   const queryClient = useQueryClient();
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const { data: items = [], isLoading: loading } = useQuery({
-    queryKey: ['pending-payments'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('pending_payments')
-        .select('*, invoices(invoice_number, enrollments(full_name, programs(program_name)))')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data || [];
-    },
-    staleTime: 30_000,
-  });
+  const { data: items = [], isLoading: loading } = usePendingPayments();
 
   const refetchItems = () => queryClient.invalidateQueries({ queryKey: ['pending-payments'] });
 

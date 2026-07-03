@@ -226,10 +226,11 @@ export default function ClassroomWorkspacePage() {
       const [csRes, staffRes, studentsRes] = await Promise.all([
         supabase.from('classroom_staff')
           .select('*, classrooms(*, programs(program_name)), classroom_permissions(*)')
-          .eq('classroom_id', id!).eq('user_id', user!.id).single(),
+          .eq('classroom_id', id!).eq('user_id', user!.id).maybeSingle(),
         supabase.from('staff').select('id, full_name'),
         supabase.rpc('get_classroom_students', { p_classroom_id: id }),
       ]);
+      if (csRes.error) throw csRes.error;
       return {
         classroomData: csRes.data ?? null,
         staffList: (staffRes.data || []) as any[],

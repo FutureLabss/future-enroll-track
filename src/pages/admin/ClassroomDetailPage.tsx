@@ -627,7 +627,7 @@ export default function ClassroomDetailPage() {
     queryKey: ['classroom-local', id],
     queryFn: async () => {
       const [clsRes, staffRes, lessonsRes, rosterRes] = await Promise.all([
-        supabase.from('classrooms').select('hub_id').eq('id', id!).single(),
+        supabase.from('classrooms').select('hub_id').eq('id', id!).maybeSingle(),
         supabase.from('classroom_staff')
           .select('*, staff(full_name, email, role_title), classroom_permissions(*)')
           .eq('classroom_id', id!).eq('status', 'active'),

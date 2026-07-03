@@ -24,10 +24,11 @@ export function useClassrooms() {
   const { data: classrooms = [], isLoading: loading } = useQuery({
     queryKey: ['classrooms'],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('classrooms')
         .select('*, programs(program_name), cohorts(id, cohort_label, status)')
         .order('created_at', { ascending: false });
+      if (error) throw error;
       return (data as any[]) || [];
     },
     staleTime: 30_000,
@@ -65,11 +66,12 @@ export function useClassroom(id: string) {
   const { data: classroom = null, isLoading: loading } = useQuery({
     queryKey: ['classroom', id],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('classrooms')
         .select('*, programs(program_name), cohorts(id, cohort_label, status, start_date, end_date)')
         .eq('id', id)
-        .single();
+        .maybeSingle();
+      if (error) throw error;
       return data as any;
     },
     enabled: Boolean(id),

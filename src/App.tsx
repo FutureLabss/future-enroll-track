@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -95,6 +95,26 @@ function AdminGuard() {
   return <Outlet />;
 }
 
+function PrefetchChunks() {
+  const { isAdmin, isStaff, isOrganization, rolesReady } = useAuth();
+  useEffect(() => {
+    if (!rolesReady) return;
+    if (isAdmin) {
+      import("@/pages/admin/AdminDashboard");
+      import("@/pages/admin/ClassroomsPage");
+      import("@/pages/admin/EnrollmentsPage");
+    } else if (isStaff) {
+      import("@/pages/staff/StaffClassroomsPage");
+      import("@/pages/staff/ClassroomWorkspacePage");
+    } else if (isOrganization) {
+      import("@/pages/org/OrgDashboard");
+    } else {
+      import("@/pages/student/StudentDashboard");
+    }
+  }, [rolesReady, isAdmin, isStaff, isOrganization]);
+  return null;
+}
+
 function RoleRedirect() {
   const { isAdmin, isOrganization, isStaff, loading, rolesReady } = useAuth();
   if (loading || !rolesReady) return <PageSpinner />;
@@ -115,6 +135,7 @@ const App = () => (
     <Sonner />
     <BrowserRouter>
       <AuthProvider>
+        <PrefetchChunks />
         <Suspense fallback={<PageSpinner />}>
           <Routes>
               <Route path="/login" element={<LoginPage />} />

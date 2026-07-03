@@ -99,18 +99,30 @@ function PrefetchChunks() {
   const { isAdmin, isStaff, isOrganization, rolesReady } = useAuth();
   useEffect(() => {
     if (!rolesReady) return;
-    if (isAdmin) {
-      import("@/pages/admin/AdminDashboard");
-      import("@/pages/admin/ClassroomsPage");
-      import("@/pages/admin/EnrollmentsPage");
-    } else if (isStaff) {
-      import("@/pages/staff/StaffClassroomsPage");
-      import("@/pages/staff/ClassroomWorkspacePage");
-    } else if (isOrganization) {
-      import("@/pages/org/OrgDashboard");
-    } else {
-      import("@/pages/student/StudentDashboard");
+
+    // vite.config groups pages by section into shared chunks, so one import()
+    // per section downloads the entire section — all routes become instant.
+    const preload = () => {
+      if (isAdmin) {
+        import("@/pages/admin/AdminDashboard");       // warms pages-admin (every admin page)
+      } else if (isStaff) {
+        import("@/pages/staff/StaffClassroomsPage");  // warms pages-staff
+      } else if (isOrganization) {
+        import("@/pages/org/OrgDashboard");            // warms pages-org
+      } else {
+        import("@/pages/student/StudentDashboard");   // warms pages-student
+      }
+      import("@/pages/profile/ProfilePage");           // warms pages-shared (profile + assignment detail)
+    };
+
+    // Defer until the browser is idle so the dashboard paint isn't delayed.
+    // Timeout of 3 s ensures it still runs on busy tabs.
+    if ('requestIdleCallback' in window) {
+      const id = requestIdleCallback(preload, { timeout: 3000 });
+      return () => cancelIdleCallback(id);
     }
+    const id = setTimeout(preload, 200);
+    return () => clearTimeout(id);
   }, [rolesReady, isAdmin, isStaff, isOrganization]);
   return null;
 }

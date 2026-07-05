@@ -198,11 +198,13 @@ export default function EnrollmentDetailPage() {
         }
       }
 
-      // Only send completion email on the first approval — not on re-approval
-      if (enrollment.verification_status !== 'approved') {
+      // Only send completion email on the first approval — not on re-approval.
+      // No email on rejection: send-notification has no rejection template, and
+      // reusing a payment type would tell a cancelled student their payment is overdue.
+      if (action === 'approved' && enrollment.verification_status !== 'approved') {
         try {
           await supabase.functions.invoke('send-notification', {
-            body: { type: action === 'approved' ? 'invoice_settled' : 'overdue', channel: 'both', enrollment_id: enrollment.id, extra: { verification_action: action } },
+            body: { type: 'invoice_settled', channel: 'both', enrollment_id: enrollment.id, extra: { verification_action: action } },
           });
         } catch {}
       }

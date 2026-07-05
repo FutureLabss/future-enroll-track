@@ -76,11 +76,11 @@ async function sendWhatsApp(to: string, body: string) {
 }
 
 function buildEmailContent(type: string, data: Record<string, any>): { subject: string; html: string } {
-  const { full_name, invoice_number, total_amount, currency, due_date, amount_paid, outstanding_balance, payment_reference, payment_method, program_name, enrollment_id, invoice_id, FRONTEND_URL } = data;
+  const { full_name, invoice_number, total_amount, currency, due_date, amount_paid, outstanding_balance, installment_amount, payment_reference, payment_method, program_name, enrollment_id, invoice_id, FRONTEND_URL } = data;
   const currencySymbol = currency === "USD" ? "$" : "₦";
   const fmt = (n: number) => `${currencySymbol}${Number(n).toLocaleString()}`;
   const formattedAmount = fmt(total_amount);
-  const formattedPaid = amount_paid ? fmt(amount_paid) : "";
+  const formattedPaid = fmt(amount_paid ?? 0);
   const formattedBalance = fmt(outstanding_balance ?? 0);
   const fmtDate = (d: string) => d ? new Date(`${d}T00:00:00`).toLocaleDateString("en-NG", { year: "numeric", month: "long", day: "numeric" }) : "";
 
@@ -164,6 +164,7 @@ function buildEmailContent(type: string, data: Record<string, any>): { subject: 
               <tr><td style="padding:5px 0; color:#6b7280;">Total Amount</td><td style="padding:5px 0; text-align:right; font-weight:600;">${formattedAmount}</td></tr>
               <tr><td style="padding:5px 0; color:#6b7280;">Amount Paid</td><td style="padding:5px 0; text-align:right; font-weight:600;">${formattedPaid}</td></tr>
               <tr style="border-top:2px solid #f59e0b;"><td style="padding:8px 0; font-weight:700;">Balance Due</td><td style="padding:8px 0; text-align:right; font-weight:700; font-size:16px; color:#b45309;">${formattedBalance}</td></tr>
+              ${installment_amount != null ? `<tr><td style="padding:5px 0; color:#6b7280;">This Installment</td><td style="padding:5px 0; text-align:right; font-weight:700; color:#b45309;">${fmt(installment_amount)}</td></tr>` : ""}
               <tr><td style="padding:5px 0; color:#6b7280;">Due Date</td><td style="padding:5px 0; text-align:right; font-weight:600;">${fmtDate(due_date)}</td></tr>
             </table>
           </div>
@@ -194,6 +195,7 @@ function buildEmailContent(type: string, data: Record<string, any>): { subject: 
               <tr><td style="padding:5px 0; color:#6b7280;">Total Amount</td><td style="padding:5px 0; text-align:right; font-weight:600;">${formattedAmount}</td></tr>
               <tr><td style="padding:5px 0; color:#6b7280;">Amount Paid</td><td style="padding:5px 0; text-align:right; font-weight:600;">${formattedPaid}</td></tr>
               <tr style="border-top:2px solid #dc2626;"><td style="padding:8px 0; font-weight:700;">Balance Due</td><td style="padding:8px 0; text-align:right; font-weight:700; font-size:16px; color:#dc2626;">${formattedBalance}</td></tr>
+              ${installment_amount != null ? `<tr><td style="padding:5px 0; color:#6b7280;">This Installment</td><td style="padding:5px 0; text-align:right; font-weight:700; color:#dc2626;">${fmt(installment_amount)}</td></tr>` : ""}
               <tr><td style="padding:5px 0; color:#6b7280;">Due Date</td><td style="padding:5px 0; text-align:right; font-weight:600; color:#dc2626;">${fmtDate(due_date)} (OVERDUE)</td></tr>
             </table>
           </div>
@@ -228,12 +230,13 @@ function buildEmailContent(type: string, data: Record<string, any>): { subject: 
 }
 
 function buildWhatsAppMessage(type: string, data: Record<string, any>): string {
-  const { full_name, invoice_number, total_amount, currency, due_date, amount_paid, outstanding_balance, program_name, enrollment_id, invoice_id, FRONTEND_URL } = data;
+  const { full_name, invoice_number, total_amount, currency, due_date, amount_paid, outstanding_balance, installment_amount, program_name, enrollment_id, invoice_id, FRONTEND_URL } = data;
   const sym = currency === "USD" ? "$" : "₦";
   const fmt = (n: number) => `${sym}${Number(n).toLocaleString()}`;
   const amt = fmt(total_amount);
-  const paid = amount_paid ? fmt(amount_paid) : "";
+  const paid = fmt(amount_paid ?? 0);
   const balance = fmt(outstanding_balance ?? 0);
+  const dueNow = installment_amount != null ? `\nDue now: ${fmt(installment_amount)}` : "";
   const bankLine = `\n\nBank transfer:\nFutureLabs Ltd · 8288339819 · Moniepoint MFB\n(Upload receipt after paying)`;
 
   switch (type) {
@@ -242,9 +245,9 @@ function buildWhatsAppMessage(type: string, data: Record<string, any>): string {
     case "payment_received":
       return `✅ *Payment Received*\n\nHi ${full_name},\nInvoice: ${invoice_number}\nAmount Paid: ${paid}\n\nThank you!`;
     case "payment_reminder":
-      return `⏰ *Payment Reminder*\n\nHi ${full_name},\nInvoice: ${invoice_number}${program_name ? ` · ${program_name}` : ""}\nTotal: ${amt} | Paid: ${paid} | Balance: ${balance}\nDue: ${due_date}\n\nPay online: ${FRONTEND_URL}/student/invoices/${invoice_id}?pay=1${bankLine}`;
+      return `⏰ *Payment Reminder*\n\nHi ${full_name},\nInvoice: ${invoice_number}${program_name ? ` · ${program_name}` : ""}\nTotal: ${amt} | Paid: ${paid} | Balance: ${balance}${dueNow}\nDue: ${due_date}\n\nPay online: ${FRONTEND_URL}/student/invoices/${invoice_id}?pay=1${bankLine}`;
     case "overdue":
-      return `⚠️ *Payment Overdue*\n\nHi ${full_name},\nInvoice: ${invoice_number}${program_name ? ` · ${program_name}` : ""}\nTotal: ${amt} | Paid: ${paid} | Balance: ${balance}\nDue: ${due_date} (OVERDUE)\n\nPay immediately: ${FRONTEND_URL}/student/invoices/${invoice_id}?pay=1${bankLine}`;
+      return `⚠️ *Payment Overdue*\n\nHi ${full_name},\nInvoice: ${invoice_number}${program_name ? ` · ${program_name}` : ""}\nTotal: ${amt} | Paid: ${paid} | Balance: ${balance}${dueNow}\nDue: ${due_date} (OVERDUE)\n\nPay immediately: ${FRONTEND_URL}/student/invoices/${invoice_id}?pay=1${bankLine}`;
     case "invoice_settled":
       return `🎉 *Invoice Fully Paid*\n\nHi ${full_name},\nInvoice: ${invoice_number}\nTotal: ${amt}\n\nThank you for completing payment!`;
     default:
@@ -320,6 +323,7 @@ Deno.serve(async (req) => {
       invoice_id: invoice_id || null,
       FRONTEND_URL: "https://admin.futurelabs.ng",
       ...extra,
+      installment_amount: extra?.installment_amount ?? (nextDue ? Number(nextDue.amount) : null),
     };
     console.log("[send-notification] origin:", requestOrigin, "→ base:", `${templateData.FRONTEND_URL}/students/${enrollment_id}`);
 

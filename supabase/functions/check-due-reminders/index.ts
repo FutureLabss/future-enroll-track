@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
         channel: "both" as const,
         enrollment_id: enrollment.id,
         invoice_id: invoice.id,
-        extra: { due_date: dueDate },
+        extra: { due_date: dueDate, installment_amount: Number(inst.amount) },
       };
 
       // Call send-notification function internally

@@ -48,6 +48,8 @@ export default function OtherIncomePage() {
   const [form, setForm] = useState<typeof blankForm>(blankForm);
   // null = creating new; string = editing existing one-off; 'recurring:id' = editing existing recurring
   const [editingKey, setEditingKey] = useState<string | null>(null);
+  // Set after warning about a duplicate payer; a second save proceeds anyway
+  const [dupAcknowledged, setDupAcknowledged] = useState(false);
 
   const [markingPaid, setMarkingPaid] = useState<string | null>(null);
   const [sendingReminder, setSendingReminder] = useState(false);
@@ -77,6 +79,7 @@ export default function OtherIncomePage() {
 
   const openNew = () => {
     setEditingKey(null);
+    setDupAcknowledged(false);
     setForm({ ...blankForm, payment_date: todayStr(), next_due_date: todayStr() });
     setDialogOpen(true);
   };
@@ -103,6 +106,7 @@ export default function OtherIncomePage() {
 
   const openSetAsRecurring = (r: any) => {
     setEditingKey(null);
+    setDupAcknowledged(false);
     setForm({
       category: r.category || 'workspace',
       payer_name: r.payer_name || '',
@@ -150,6 +154,10 @@ export default function OtherIncomePage() {
       if (editingKey?.startsWith('recurring:')) {
         // Edit existing recurring template
         const id = editingKey.replace('recurring:', '');
+        const original = recurring.find((r: any) => r.id === id);
+        // A changed due date starts a new cycle — clear the sent-flags so the
+        // new cycle gets its own reminders instead of inheriting stale ones
+        const dueDateChanged = original && original.next_due_date !== form.next_due_date;
         const { error } = await (supabase as any).from('recurring_income').update({
           category: form.category,
           payer_name: form.payer_name,
@@ -161,6 +169,7 @@ export default function OtherIncomePage() {
           end_date: form.end_date || null,
           payment_method: form.payment_method || null,
           notes: form.notes || null,
+          ...(dueDateChanged ? { reminder_1d_sent_at: null, reminder_3d_sent_at: null, overdue_sent_at: null } : {}),
         }).eq('id', id);
         if (error) throw error;
         toast.success('Recurring payment updated');
@@ -180,6 +189,18 @@ export default function OtherIncomePage() {
         toast.success('Income updated');
         refetchRows();
       } else if (form.is_recurring) {
+        // Warn if an active template already exists for this payer — duplicates
+        // send double reminders and don't get silenced when the other is paid
+        const digits = (s: string) => s.replace(/\D/g, '').slice(-10);
+        const dup = recurring.find((r: any) => r.active && (
+          (form.payer_email && r.payer_email && r.payer_email.toLowerCase() === form.payer_email.toLowerCase()) ||
+          (form.payer_phone && r.payer_phone && digits(r.payer_phone) === digits(form.payer_phone))
+        ));
+        if (dup && !dupAcknowledged) {
+          setDupAcknowledged(true);
+          toast.warning(`${dup.payer_name} already has an active ${dup.frequency} recurring payment (next due ${new Date(dup.next_due_date).toLocaleDateString()}). Edit that one instead, or save again to create a second template anyway.`);
+          return;
+        }
         // Create new recurring template
         const { error } = await (supabase as any).from('recurring_income').insert({
           category: form.category,
@@ -258,9 +279,11 @@ export default function OtherIncomePage() {
   const sendReminders = async () => {
     setSendingReminder(true);
     try {
-      const { error } = await supabase.functions.invoke('send-recurring-reminders');
+      const { data, error } = await supabase.functions.invoke('send-recurring-reminders');
       if (error) throw error;
-      toast.success('Reminders sent to payers with due payments');
+      const sent = data?.sent ?? 0;
+      if (sent > 0) toast.success(`${sent} reminder${sent === 1 ? '' : 's'} sent`);
+      else toast.info('No reminders due — payers are up to date or already reminded');
     } catch (err: any) { toast.error(err.message); }
     finally { setSendingReminder(false); }
   };
@@ -503,12 +526,13 @@ export default function OtherIncomePage() {
           ) : (
             <div className="space-y-2">
               {recurring.map(r => {
-                const isOverdue = r.active && r.next_due_date <= today;
+                const isOverdue = r.active && r.next_due_date < today;
+                const isDueToday = r.active && r.next_due_date === today;
                 return (
-                  <Card key={r.id} className={isOverdue ? 'border-destructive/40' : ''}>
+                  <Card key={r.id} className={isOverdue || isDueToday ? 'border-destructive/40' : ''}>
                     <CardContent className="py-3 px-4">
                       <div className="flex items-center gap-3 flex-wrap">
-                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${r.active ? (isOverdue ? 'bg-destructive' : 'bg-green-500') : 'bg-muted-foreground'}`} />
+                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${r.active ? (isOverdue || isDueToday ? 'bg-destructive' : 'bg-green-500') : 'bg-muted-foreground'}`} />
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -519,8 +543,8 @@ export default function OtherIncomePage() {
                             {!r.active && <Badge variant="secondary" className="text-xs">Stopped</Badge>}
                           </div>
                           <div className="flex items-center gap-3 mt-1 flex-wrap">
-                            <span className={`text-xs ${isOverdue ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
-                              {isOverdue ? 'Overdue: ' : 'Next due: '}
+                            <span className={`text-xs ${isOverdue || isDueToday ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
+                              {isOverdue ? 'Overdue: ' : isDueToday ? 'Due today: ' : 'Next due: '}
                               {new Date(r.next_due_date).toLocaleDateString()}
                             </span>
                             {r.payer_email && (
@@ -540,7 +564,7 @@ export default function OtherIncomePage() {
                           {r.active && (
                             <Button
                               size="sm"
-                              variant={isOverdue ? 'default' : 'outline'}
+                              variant={isOverdue || isDueToday ? 'default' : 'outline'}
                               className="h-7 text-xs"
                               disabled={markingPaid === r.id}
                               onClick={() => markPaid(r.id)}

@@ -110,6 +110,14 @@ Deno.serve(async (req) => {
     const log: string[] = [];
 
     for (const item of items || []) {
+      // A payment recorded on/after the current due date means this cycle is
+      // settled, even if next_due_date was never advanced (e.g. the admin
+      // recorded the payment by editing the template instead of posting it).
+      if (item.last_posted_date && item.last_posted_date >= item.next_due_date) {
+        log.push(`${item.id}: paid (last_posted ${item.last_posted_date} >= due ${item.next_due_date})`);
+        continue;
+      }
+
       const isOverdue = item.next_due_date < todayStr;
       const daysOut: number | 'overdue' = isOverdue ? 'overdue' : item.next_due_date === in1Day ? 1 : 3;
       const sentField = isOverdue ? "overdue_sent_at" : daysOut === 3 ? "reminder_3d_sent_at" : "reminder_1d_sent_at";

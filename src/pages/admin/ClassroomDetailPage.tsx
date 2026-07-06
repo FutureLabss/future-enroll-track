@@ -632,23 +632,26 @@ export default function ClassroomDetailPage() {
   const { data: localData } = useQuery({
     queryKey: ['classroom-local', id],
     queryFn: async () => {
-      const [clsRes, staffRes, lessonsRes, rosterRes] = await Promise.all([
-        supabase.from('classrooms').select('hub_id').eq('id', id!).maybeSingle(),
+      // Resolve the classroom's hub first (PK lookup) so the roster query is
+      // hub-filtered server-side — for superadmin, the unfiltered query
+      // shipped every hub's staff on each page load
+      const { data: cls } = await supabase.from('classrooms').select('hub_id').eq('id', id!).maybeSingle();
+      const hubId = (cls as any)?.hub_id;
+      let rosterQuery = supabase.from('staff').select('id, full_name, role_title, email, program_id, hub_id').eq('active', true);
+      if (hubId) rosterQuery = rosterQuery.eq('hub_id', hubId);
+      const [staffRes, lessonsRes, rosterRes] = await Promise.all([
         supabase.from('classroom_staff')
           .select('*, staff(full_name, email, role_title), classroom_permissions(*)')
           .eq('classroom_id', id!).eq('status', 'active'),
         supabase.from('old_lessons')
           .select('*, staff:tutor_id(full_name), cohorts(cohort_label)')
           .eq('classroom_id', id!).order('lesson_date', { ascending: false }),
-        supabase.from('staff').select('id, full_name, role_title, email, program_id, hub_id').eq('active', true),
+        rosterQuery,
       ]);
-      const hubId = (clsRes.data as any)?.hub_id;
       return {
         staff: staffRes.data || [],
         lessons: lessonsRes.data || [],
-        staffRoster: hubId
-          ? (rosterRes.data || []).filter((s: any) => s.hub_id === hubId)
-          : (rosterRes.data || []),
+        staffRoster: rosterRes.data || [],
       };
     },
     enabled: !!id,

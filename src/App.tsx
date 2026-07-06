@@ -1,5 +1,4 @@
 import { lazy, Suspense, useEffect } from "react";
-import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation, useParams } from "react-router-dom";
@@ -144,7 +143,6 @@ function LegacyEnrollRedirect() {
 
 const App = () => (
   <TooltipProvider>
-    <Toaster />
     <Sonner />
     <BrowserRouter>
       <AuthProvider>

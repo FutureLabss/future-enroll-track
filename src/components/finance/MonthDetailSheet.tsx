@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -58,10 +59,10 @@ interface Props {
 export function MonthDetailSheet({ month, onClose }: Props) {
   const { payments, otherIncome, expenses, payroll, loading } = useMonthDetail(month);
 
-  const totalPayments = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
-  const totalOtherIncome = otherIncome.reduce((s, o) => s + Number(o.amount || 0), 0);
-  const totalExpenses = expenses.reduce((s, e) => s + Number(e.amount || 0), 0);
-  const totalPayroll = payroll.reduce((s, r) => s + Number(r.amount || 0), 0);
+  const totalPayments = useMemo(() => payments.reduce((s, p) => s + Number(p.amount || 0), 0), [payments]);
+  const totalOtherIncome = useMemo(() => otherIncome.reduce((s, o) => s + Number(o.amount || 0), 0), [otherIncome]);
+  const totalExpenses = useMemo(() => expenses.reduce((s, e) => s + Number(e.amount || 0), 0), [expenses]);
+  const totalPayroll = useMemo(() => payroll.reduce((s, r) => s + Number(r.amount || 0), 0), [payroll]);
 
   return (
     <Sheet open={!!month} onOpenChange={open => { if (!open) onClose(); }}>

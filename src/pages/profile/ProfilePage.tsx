@@ -141,21 +141,22 @@ export default function ProfilePage() {
 
     setSavingEnrollment(true);
     try {
-      for (const enrollment of enrollments) {
-        await supabase.from('field_values').delete().eq('enrollment_id', enrollment.id);
+      const enrollmentIds = enrollments.map(e => e.id);
+      await supabase.from('field_values').delete().in('enrollment_id', enrollmentIds);
 
-        const fieldValues = customFields
+      const fieldValues = enrollmentIds.flatMap(enrollmentId =>
+        customFields
           .filter(field => customValues[field.key]?.trim())
           .map(field => ({
-            enrollment_id: enrollment.id,
+            enrollment_id: enrollmentId,
             field_id: field.id,
             value: customValues[field.key],
-          }));
+          }))
+      );
 
-        if (fieldValues.length > 0) {
-          const { error } = await supabase.from('field_values').insert(fieldValues);
-          if (error) throw error;
-        }
+      if (fieldValues.length > 0) {
+        const { error } = await supabase.from('field_values').insert(fieldValues);
+        if (error) throw error;
       }
       toast.success('Enrollment information saved');
     } catch (err: any) {

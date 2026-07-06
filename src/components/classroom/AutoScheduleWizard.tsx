@@ -89,10 +89,12 @@ export function AutoScheduleWizard({ open, onClose, classroomId, classroomName, 
     }
   }, [open]);
 
-  const curriculum = curricula.find(c => c.id === curriculumId);
-  const track = curriculum?.tracks.find((t: any) => t.id === trackId);
-  const module = track?.modules?.find((m: any) => m.id === moduleId);
-  const units: any[] = module?.units || [];
+  const { track, module, units } = useMemo(() => {
+    const curriculum = curricula.find(c => c.id === curriculumId);
+    const track = curriculum?.tracks.find((t: any) => t.id === trackId);
+    const module = track?.modules?.find((m: any) => m.id === moduleId);
+    return { track, module, units: (module?.units || []) as any[] };
+  }, [curricula, curriculumId, trackId, moduleId]);
 
   const preview = useMemo(
     () => buildPreview(units, startDate, endDate, daysOfWeek, startTime, endTime),

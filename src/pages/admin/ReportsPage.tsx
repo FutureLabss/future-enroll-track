@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import { supabase } from '@/lib/supabase';
@@ -89,7 +89,7 @@ export default function ReportsPage() {
   const [exportForm, setExportForm] = useState({ dateFrom: '', dateTo: '', format: 'csv' });
 
 
-  const filtered = enrollments.filter(e => {
+  const filtered = useMemo(() => enrollments.filter(e => {
     if (filters.program_id !== 'all' && e.program_id !== filters.program_id) return false;
     if (filters.cohort_id !== 'all' && e.cohort_id !== filters.cohort_id) return false;
     if (filters.organization_id !== 'all' && e.organization_id !== filters.organization_id) return false;
@@ -97,26 +97,27 @@ export default function ReportsPage() {
     if (filters.dateFrom && (!e.first_payment_date || e.first_payment_date < filters.dateFrom)) return false;
     if (filters.dateTo && (!e.first_payment_date || e.first_payment_date > filters.dateTo + 'T23:59:59')) return false;
     return true;
-  });
+  }), [enrollments, filters]);
 
-  // Stats
-  const totalRevenue = filtered.reduce((s, e) => s + Number(e.total_amount), 0);
-  const totalCollected = filtered.reduce((s, e) => s + Number(e.amount_paid), 0);
-  const totalOutstanding = totalRevenue - totalCollected;
+  const { totalRevenue, totalCollected, totalOutstanding, pieData, barData } = useMemo(() => {
+    const totalRevenue = filtered.reduce((s, e) => s + Number(e.total_amount), 0);
+    const totalCollected = filtered.reduce((s, e) => s + Number(e.amount_paid), 0);
 
-  // Charts data
-  const statusCounts = filtered.reduce((acc: Record<string, number>, e) => {
-    acc[e.enrollment_status] = (acc[e.enrollment_status] || 0) + 1;
-    return acc;
-  }, {});
-  const pieData = Object.entries(statusCounts).map(([name, value]) => ({ name, value }));
+    const statusCounts = filtered.reduce((acc: Record<string, number>, e) => {
+      acc[e.enrollment_status] = (acc[e.enrollment_status] || 0) + 1;
+      return acc;
+    }, {});
+    const pieData = Object.entries(statusCounts).map(([name, value]) => ({ name, value }));
 
-  const programRevenue = filtered.reduce((acc: Record<string, number>, e) => {
-    const name = e.programs?.program_name || 'Unknown';
-    acc[name] = (acc[name] || 0) + Number(e.total_amount);
-    return acc;
-  }, {});
-  const barData = Object.entries(programRevenue).map(([name, total]) => ({ name: name.length > 20 ? name.slice(0, 20) + '…' : name, total }));
+    const programRevenue = filtered.reduce((acc: Record<string, number>, e) => {
+      const name = e.programs?.program_name || 'Unknown';
+      acc[name] = (acc[name] || 0) + Number(e.total_amount);
+      return acc;
+    }, {});
+    const barData = Object.entries(programRevenue).map(([name, total]) => ({ name: name.length > 20 ? name.slice(0, 20) + '…' : name, total }));
+
+    return { totalRevenue, totalCollected, totalOutstanding: totalRevenue - totalCollected, pieData, barData };
+  }, [filtered]);
 
   const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
 

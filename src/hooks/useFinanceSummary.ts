@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
@@ -47,10 +48,10 @@ export function useFinanceSummary({ mode, months, startDate, endDate }: Params) 
     staleTime: 1000 * 60 * 5,
   });
 
-  const rows = data || [];
+  const rows = useMemo(() => data || [], [data]);
   const error = queryError ? (queryError as Error).message : null;
 
-  const totals = rows.reduce(
+  const totals = useMemo(() => rows.reduce(
     (acc, r) => {
       acc.revenue += r.revenue + r.other_income_total;
       acc.payroll += r.payroll_total;
@@ -59,7 +60,7 @@ export function useFinanceSummary({ mode, months, startDate, endDate }: Params) 
       return acc;
     },
     { revenue: 0, payroll: 0, expenses: 0, profit: 0 }
-  );
+  ), [rows]);
 
   return { rows, loading, error, totals };
 }

@@ -82,9 +82,11 @@ export default function StudentNotificationsPage() {
     setLoading(false);
   };
 
+  // Depend on the id, not the user object — token auto-refresh mints a new
+  // object hourly and would silently re-fetch everything
   useEffect(() => {
     loadNotifications();
-  }, [user]);
+  }, [user?.id]);
 
   const unread = useMemo(() => notifications.filter(notification => !notification.read), [notifications]);
   const read = useMemo(() => notifications.filter(notification => notification.read), [notifications]);

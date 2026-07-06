@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useMarkAttendance } from '@/hooks/useAttendance';
@@ -209,39 +210,45 @@ function ProgressTab({ progress }: { progress: any }) {
 function AttendanceTab({ classroomId, cohortId }: { classroomId: string; cohortId?: string }) {
   const { markAttendance } = useMarkAttendance();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [code, setCode] = useState('');
   const [marking, setMarking] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState('');
-  const [records, setRecords] = useState<any[]>([]);
-  const [openSessions, setOpenSessions] = useState<any[]>([]);
   const [historyFilter, setHistoryFilter] = useState<'today' | 'recent' | 'all'>('recent');
   const [gpsStatus, setGpsStatus] = useState<'idle' | 'captured' | 'unavailable'>('idle');
   const today = new Date().toISOString().split('T')[0];
 
-  const loadRecords = async () => {
-    if (!user) return;
-    const [recordsRes, sessionsRes] = await Promise.all([
-      supabase
-      .from('attendance_records')
-      .select('*, attendance_sessions(code, created_at, duration_mins, code_expires_at, status, old_lessons(title), schedules(title, scheduled_date, start_time, end_time, lessons(title)))')
-      .eq('student_id', user.id)
-      .eq('classroom_id', classroomId)
-      .order('marked_at', { ascending: false }),
-      supabase
-        .from('attendance_sessions')
-        .select('id, cohort_id, code_expires_at, created_at, duration_mins, status, old_lessons(title), schedules(title, scheduled_date, start_time, end_time, lessons(title))')
+  const { data: attendanceData } = useQuery({
+    queryKey: ['student-attendance', classroomId, cohortId, user?.id],
+    queryFn: async () => {
+      const [recordsRes, sessionsRes] = await Promise.all([
+        supabase
+        .from('attendance_records')
+        .select('*, attendance_sessions(code, created_at, duration_mins, code_expires_at, status, old_lessons(title), schedules(title, scheduled_date, start_time, end_time, lessons(title)))')
+        .eq('student_id', user!.id)
         .eq('classroom_id', classroomId)
-        .eq('status', 'open')
-        .gt('code_expires_at', new Date().toISOString())
-        .order('created_at', { ascending: false }),
-    ]);
-    const inCohortScope = (row: any) => !row.cohort_id || row.cohort_id === cohortId;
-    setRecords((recordsRes.data || []).filter(inCohortScope));
-    setOpenSessions((sessionsRes.data || []).filter(inCohortScope));
-  };
-
-  useEffect(() => { loadRecords(); }, [classroomId, cohortId, user]);
+        .order('marked_at', { ascending: false }),
+        supabase
+          .from('attendance_sessions')
+          .select('id, cohort_id, code_expires_at, created_at, duration_mins, status, old_lessons(title), schedules(title, scheduled_date, start_time, end_time, lessons(title))')
+          .eq('classroom_id', classroomId)
+          .eq('status', 'open')
+          .gt('code_expires_at', new Date().toISOString())
+          .order('created_at', { ascending: false }),
+      ]);
+      const inCohortScope = (row: any) => !row.cohort_id || row.cohort_id === cohortId;
+      return {
+        records: (recordsRes.data || []).filter(inCohortScope),
+        openSessions: (sessionsRes.data || []).filter(inCohortScope),
+      };
+    },
+    enabled: Boolean(user?.id),
+    staleTime: 30_000,
+  });
+  const records = attendanceData?.records ?? [];
+  const openSessions = attendanceData?.openSessions ?? [];
+  const loadRecords = () => queryClient.invalidateQueries({ queryKey: ['student-attendance', classroomId] });
 
   const handleMark = async () => {
     if (!code.trim()) { toast.error('Enter the attendance code'); return; }
@@ -757,67 +764,74 @@ function PresentationsTab({ classroomId, cohortId }: { classroomId: string; coho
 export default function StudentClassroomPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
-  const [classroom, setClassroom] = useState<any>(null);
-  const [cohortId, setCohortId] = useState('');
-  const [cohortInfo, setCohortInfo] = useState<{
-    cohort_label: string;
-    scope_type?: string;
-    scope_id?: string | null;
-    status?: string;
-    start_date?: string | null;
-    end_date?: string | null;
-    capacity?: number | null;
-  } | null>(null);
-  const [lessons, setLessons] = useState<any[]>([]);
-  const [assignmentSummary, setAssignmentSummary] = useState({ pending: 0, overdue: 0 });
-  const [loading, setLoading] = useState(true);
-  const { progress } = useStudentProgress(user?.id || '', cohortId);
-  const { schedules } = useSchedules(id!);
 
-  const today = new Date().toISOString().split('T')[0];
-
-  useEffect(() => {
-    if (!id || !user) return;
-    Promise.all([
-      supabase.from('classrooms').select('*, programs(program_name)').eq('id', id).single(),
-      supabase.from('cohort_students')
-        .select('cohort_id, status, joined_at, cohorts!inner(cohort_label, scope_type, scope_id, status, start_date, end_date, capacity)')
-        .eq('student_id', user.id)
-        .eq('cohorts.classroom_id', id)
-        .order('joined_at', { ascending: false })
-        .limit(10),
-      supabase.from('old_lessons')
-        .select('*, cohorts(cohort_label)')
-        .eq('classroom_id', id)
-        .neq('status', 'cancelled')
-        .order('lesson_date')
-        .order('start_time'),
-      supabase.from('assignments').select('id, due_date, cohort_id').eq('classroom_id', id).eq('status', 'published'),
-      supabase.from('assignment_submissions').select('assignment_id').eq('student_id', user.id),
-    ]).then(([clsRes, cohortRes, lessonsRes, assignmentsRes, submissionsRes]) => {
+  const { data: pageData } = useQuery({
+    // Keyed on user?.id, not the user object — token auto-refresh mints a new
+    // object hourly and used to silently re-fetch the whole page
+    queryKey: ['student-classroom', id, user?.id],
+    queryFn: async () => {
+      const [clsRes, cohortRes, lessonsRes, assignmentsRes, submissionsRes] = await Promise.all([
+        supabase.from('classrooms').select('*, programs(program_name)').eq('id', id!).single(),
+        supabase.from('cohort_students')
+          .select('cohort_id, status, joined_at, cohorts!inner(cohort_label, scope_type, scope_id, status, start_date, end_date, capacity)')
+          .eq('student_id', user!.id)
+          .eq('cohorts.classroom_id', id!)
+          .order('joined_at', { ascending: false })
+          .limit(10),
+        supabase.from('old_lessons')
+          .select('*, cohorts(cohort_label)')
+          .eq('classroom_id', id!)
+          .neq('status', 'cancelled')
+          .order('lesson_date')
+          .order('start_time'),
+        supabase.from('assignments').select('id, due_date, cohort_id').eq('classroom_id', id!).eq('status', 'published'),
+        supabase.from('assignment_submissions').select('assignment_id').eq('student_id', user!.id),
+      ]);
       const cohortRows = cohortRes.data || [];
       const selectedCohortRow = cohortRows.find((row: any) => row.status === 'active' && row.cohorts?.status === 'active')
         || cohortRows.find((row: any) => row.status === 'active')
         || cohortRows.find((row: any) => row.cohorts?.status === 'active')
         || cohortRows[0];
 
-      setClassroom(clsRes.data);
-      setCohortId(selectedCohortRow?.cohort_id || '');
-      setCohortInfo((selectedCohortRow as any)?.cohorts || null);
-      setLessons(lessonsRes.data || []);
       const currentCohortId = selectedCohortRow?.cohort_id || '';
       const submittedIds = new Set((submissionsRes.data || []).map((submission: any) => submission.assignment_id));
       const visibleAssignments = (assignmentsRes.data || []).filter((assignment: any) => !assignment.cohort_id || assignment.cohort_id === currentCohortId);
       const pendingAssignments = visibleAssignments.filter((assignment: any) => !submittedIds.has(assignment.id));
-      setAssignmentSummary({
-        pending: pendingAssignments.length,
-        overdue: pendingAssignments.filter((assignment: any) => assignment.due_date && new Date(assignment.due_date) < new Date()).length,
-      });
-      setLoading(false);
-    });
-  }, [id, user]);
 
-  if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
+      return {
+        classroom: clsRes.data,
+        cohortId: currentCohortId,
+        cohortInfo: ((selectedCohortRow as any)?.cohorts || null) as {
+          cohort_label: string;
+          scope_type?: string;
+          scope_id?: string | null;
+          status?: string;
+          start_date?: string | null;
+          end_date?: string | null;
+          capacity?: number | null;
+        } | null,
+        lessons: lessonsRes.data || [],
+        assignmentSummary: {
+          pending: pendingAssignments.length,
+          overdue: pendingAssignments.filter((assignment: any) => assignment.due_date && new Date(assignment.due_date) < new Date()).length,
+        },
+      };
+    },
+    enabled: Boolean(id && user?.id),
+    staleTime: 30_000,
+  });
+
+  const classroom = pageData?.classroom ?? null;
+  const cohortId = pageData?.cohortId ?? '';
+  const cohortInfo = pageData?.cohortInfo ?? null;
+  const lessons = pageData?.lessons ?? [];
+  const assignmentSummary = pageData?.assignmentSummary ?? { pending: 0, overdue: 0 };
+  const { progress } = useStudentProgress(user?.id || '', cohortId);
+  const { schedules } = useSchedules(id!);
+
+  const today = new Date().toISOString().split('T')[0];
+
+  if (!pageData) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
   if (!classroom) return <div className="text-center py-20 text-muted-foreground">Classroom not found.</div>;
 
   const visibleLessons = lessons.filter(l => !l.cohort_id || l.cohort_id === cohortId);

@@ -85,6 +85,14 @@ CREATE POLICY "Admins manage X" ON public.X FOR ALL
 - Always `GRANT EXECUTE ON FUNCTION ... TO authenticated`
 - Audit-trail actions: insert into `audit_logs(user_id, action, entity_type, entity_id, details jsonb)`
 
+### Never wrap RLS helpers in (select …) wholesale
+Wrapping `auth.uid()`/`has_role()`/`is_superadmin()`/`get_my_hub_id()` in scalar subselects
+(the standard Supabase initplan advice) took this app down on 2026-07-06: policies here nest
+EXISTS over other RLS-protected tables, so the wrappers multiplied into ~1000 InitPlan nodes
+per query and PLANNING alone blew past the 8s statement timeout on classroom tables. If you
+try it again, do it per-table on flat policies only, and check `EXPLAIN (SUMMARY)` planning
+time as that table's most complex role (staff/student) before keeping it.
+
 ### Fragile RLS chain (content hierarchy)
 `curricula → tracks → modules → units → lessons → schedules` policies join 5-6 tables deep
 (see `20260518000026_lms_v2_content_hierarchy.sql`). Every hop currently lands on a PK or

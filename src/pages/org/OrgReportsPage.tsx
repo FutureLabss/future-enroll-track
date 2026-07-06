@@ -1,39 +1,26 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/hooks/useAuth';
+import { useMemo } from 'react';
+import { useOrgEnrollments } from '@/hooks/useOrgEnrollments';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatCard } from '@/components/shared/StatCard';
 import { Users, CreditCard, TrendingUp } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 const COLORS = ['hsl(250, 84%, 54%)', 'hsl(165, 82%, 40%)', 'hsl(38, 92%, 50%)', 'hsl(0, 84%, 60%)', 'hsl(280, 65%, 60%)'];
 
+const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
+
 export default function OrgReportsPage() {
-  const { user } = useAuth();
-  const [enrollments, setEnrollments] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { enrollments, loading } = useOrgEnrollments();
 
-  useEffect(() => {
-    if (!user) return;
-    supabase.from('profiles').select('organization_id').eq('user_id', user.id).single().then(async ({ data: profile }) => {
-      if (!profile?.organization_id) { setLoading(false); return; }
-      const { data } = await supabase.from('enrollments')
-        .select('*, programs(program_name)')
-        .eq('organization_id', profile.organization_id);
-      setEnrollments(data || []);
-      setLoading(false);
-    });
-  }, [user]);
-
-  const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
-  const total = enrollments.reduce((s, e) => s + Number(e.total_amount), 0);
-  const paid = enrollments.reduce((s, e) => s + Number(e.amount_paid), 0);
-
-  const statusCounts = enrollments.reduce((acc: Record<string, number>, e) => {
-    acc[e.enrollment_status] = (acc[e.enrollment_status] || 0) + 1;
-    return acc;
-  }, {});
-  const pieData = Object.entries(statusCounts).map(([name, value]) => ({ name, value }));
+  const { total, paid, pieData } = useMemo(() => {
+    const total = enrollments.reduce((s: number, e: any) => s + Number(e.total_amount), 0);
+    const paid = enrollments.reduce((s: number, e: any) => s + Number(e.amount_paid), 0);
+    const statusCounts = enrollments.reduce((acc: Record<string, number>, e: any) => {
+      acc[e.enrollment_status] = (acc[e.enrollment_status] || 0) + 1;
+      return acc;
+    }, {});
+    return { total, paid, pieData: Object.entries(statusCounts).map(([name, value]) => ({ name, value })) };
+  }, [enrollments]);
 
   if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
 

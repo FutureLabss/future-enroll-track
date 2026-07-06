@@ -1,6 +1,5 @@
-import { useMemo, useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/hooks/useAuth';
+import { useMemo } from 'react';
+import { useOrgEnrollments } from '@/hooks/useOrgEnrollments';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable } from '@/components/shared/DataTable';
 import { StatusBadge } from '@/components/shared/StatusBadge';
@@ -8,27 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Download } from 'lucide-react';
 import { toast } from 'sonner';
 
+const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
+
 export default function OrgEnrollmentsPage() {
-  const { user } = useAuth();
-  const [enrollments, setEnrollments] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!user) return;
-    const fetch = async () => {
-      const { data: profile } = await supabase.from('profiles').select('organization_id').eq('user_id', user.id).single();
-      if (!profile?.organization_id) { setLoading(false); return; }
-      const { data } = await supabase.from('enrollments')
-        .select('*, programs(program_name), cohorts(cohort_label)')
-        .eq('organization_id', profile.organization_id)
-        .order('created_at', { ascending: false });
-      setEnrollments(data || []);
-      setLoading(false);
-    };
-    fetch();
-  }, [user]);
-
-  const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
+  const { enrollments, loading } = useOrgEnrollments();
 
   const handleExport = () => {
     if (enrollments.length === 0) { toast.error('No data'); return; }

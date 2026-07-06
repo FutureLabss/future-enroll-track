@@ -116,6 +116,19 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Scope audience-wide sends to the acting admin's hub — the service role
+    // bypasses RLS, so without this a bare audience_type fetched every
+    // student/staff member on the platform
+    let hubId: string | null = null;
+    if (actingUserId) {
+      const { data: member } = await admin
+        .from("hub_members")
+        .select("hub_id")
+        .eq("user_id", actingUserId)
+        .maybeSingle();
+      hubId = member?.hub_id ?? null;
+    }
+
     const body = (await req.json()) as Payload;
     if (!body.subject || !body.message) {
       return new Response(JSON.stringify({ error: "subject and message required" }), {
@@ -132,10 +145,15 @@ Deno.serve(async (req) => {
     if (audienceType === "students" || audienceType === "students_and_staff") {
       let q = admin
         .from("enrollments")
-        .select("id, full_name, email, total_amount, amount_paid, outstanding_balance");
+        .select("id, full_name, email, total_amount, amount_paid, outstanding_balance")
+        .limit(2000);
       if (f.program_id) q = q.eq("program_id", f.program_id);
       if (f.cohort_id) q = q.eq("cohort_id", f.cohort_id);
       if (f.enrollment_status) q = q.eq("enrollment_status", f.enrollment_status);
+      if (!f.program_id && !f.cohort_id && hubId) {
+        const { data: hubPrograms } = await admin.from("programs").select("id").eq("hub_id", hubId);
+        q = q.in("program_id", (hubPrograms || []).map((p: any) => p.id));
+      }
 
       const { data: enrollments, error: enrollErr } = await q;
       if (enrollErr) throw enrollErr;
@@ -177,10 +195,12 @@ Deno.serve(async (req) => {
         }
         staffRows = Array.from(seen.values());
       } else {
-        const { data, error: staffErr } = await admin
+        let staffQ = admin
           .from("staff")
           .select("id, full_name, email")
           .eq("active", true);
+        if (hubId) staffQ = staffQ.eq("hub_id", hubId);
+        const { data, error: staffErr } = await staffQ;
         if (staffErr) throw staffErr;
         staffRows = data || [];
       }
@@ -206,31 +226,48 @@ Deno.serve(async (req) => {
     }
     const deduped = Array.from(seen.values());
 
+    // Send in bounded concurrent batches; record the audit rows in one insert
+    const CONCURRENCY = 10;
     let sent = 0, failed = 0;
     const errors: string[] = [];
+    const notifRows: Record<string, unknown>[] = [];
 
-    for (const r of deduped) {
-      try {
+    for (let i = 0; i < deduped.length; i += CONCURRENCY) {
+      const batch = deduped.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(batch.map(async (r) => {
         const personalized = body.message
           .replace(/\{\{\s*name\s*\}\}/gi, r.name || "")
           .replace(/\{\{\s*outstanding\s*\}\}/gi, r.outstanding != null
             ? `₦${Number(r.outstanding).toLocaleString("en-NG")}`
             : "");
-        await sendEmail(r.email, body.subject, buildHtml(body.subject, personalized));
-        sent++;
-        await admin.from("notifications").insert({
-          user_id: null,
-          enrollment_id: r.enrollment_id ?? null,
-          type: "bulk_announcement",
-          title: body.subject,
-          message: personalized.slice(0, 500),
-          channel: "email",
-          sent_at: new Date().toISOString(),
-        });
-      } catch (e) {
-        failed++;
-        errors.push(`${r.email}: ${(e as Error).message}`);
+        try {
+          await sendEmail(r.email, body.subject, buildHtml(body.subject, personalized));
+          return { ok: true as const, r, personalized };
+        } catch (e) {
+          return { ok: false as const, r, err: (e as Error).message };
+        }
+      }));
+      for (const res of results) {
+        if (res.ok) {
+          sent++;
+          notifRows.push({
+            user_id: null,
+            enrollment_id: res.r.enrollment_id ?? null,
+            type: "bulk_announcement",
+            title: body.subject,
+            message: res.personalized.slice(0, 500),
+            channel: "email",
+            sent_at: new Date().toISOString(),
+          });
+        } else {
+          failed++;
+          errors.push(`${res.r.email}: ${res.err}`);
+        }
       }
+    }
+
+    if (notifRows.length > 0) {
+      await admin.from("notifications").insert(notifRows);
     }
 
     await admin.from("audit_logs").insert({

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { usePaymentsAll } from '@/hooks/usePayments';
@@ -133,7 +133,7 @@ export default function PaymentsPage() {
 
   const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
 
-  const openReceipt = (r: any) => {
+  const openReceipt = useCallback((r: any) => {
     setSelectedReceipt({
       payment_reference: r.payment_reference,
       amount: Number(r.amount),
@@ -144,9 +144,9 @@ export default function PaymentsPage() {
       program_name: r.invoices?.enrollments?.programs?.program_name || '',
     });
     setReceiptOpen(true);
-  };
+  }, []);
 
-  const columns = [
+  const columns = useMemo(() => [
     { key: 'type', header: 'Type', render: (r: any) => r._kind === 'other'
       ? <span className="text-xs px-2 py-0.5 rounded bg-accent/15 text-accent-foreground">Other Income</span>
       : r._kind === 'invoice'
@@ -163,7 +163,7 @@ export default function PaymentsPage() {
         <FileText className="h-4 w-4 mr-1" /> Receipt
       </Button>
     ) : null },
-  ];
+  ], [openReceipt]);
 
   return (
     <div>

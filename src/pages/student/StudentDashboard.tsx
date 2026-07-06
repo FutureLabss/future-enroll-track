@@ -259,7 +259,7 @@ export default function StudentDashboard() {
   const primaryCohort = primaryCohortMembership?.cohorts;
   const profileComplete = profileMeta.total === 0 || (profileMeta.requiredMissing === 0 && profileMeta.completed >= profileMeta.total);
 
-  const columns = [
+  const columns = useMemo(() => [
     { key: 'program', header: 'Program', render: (r: any) => r.programs?.program_name || '—' },
     {
       key: 'cohort',
@@ -276,7 +276,7 @@ export default function StudentDashboard() {
     { key: 'amount_paid', header: 'Paid', render: (r: any) => formatCurrency(Number(r.amount_paid || 0)) },
     { key: 'outstanding_balance', header: 'Balance', render: (r: any) => formatCurrency(Number(r.outstanding_balance || 0)) },
     { key: 'enrollment_status', header: 'Status', render: (r: any) => <StatusBadge status={r.enrollment_status} /> },
-  ];
+  ], []);
 
   if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
 

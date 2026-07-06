@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -18,14 +19,14 @@ export default function NotificationsPage() {
     staleTime: 30_000,
   });
 
-  const columns = [
+  const columns = useMemo(() => [
     { key: 'type', header: 'Type', render: (r: any) => <span className="capitalize">{r.type?.replace(/_/g, ' ')}</span> },
     { key: 'title', header: 'Title' },
     { key: 'message', header: 'Message', render: (r: any) => <span className="text-muted-foreground truncate max-w-[300px] block">{r.message}</span> },
     { key: 'channel', header: 'Channel', render: (r: any) => <StatusBadge status={r.channel === 'email' ? 'active' : 'pending'} /> },
     { key: 'read', header: 'Read', render: (r: any) => r.read ? 'Yes' : 'No' },
     { key: 'created_at', header: 'Date', render: (r: any) => new Date(r.created_at).toLocaleDateString() },
-  ];
+  ], []);
 
   return (
     <div>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -84,7 +84,7 @@ export default function OtherIncomePage() {
     setDialogOpen(true);
   };
 
-  const openEditIncome = (r: any) => {
+  const openEditIncome = useCallback((r: any) => {
     setEditingKey(r.id);
     setForm({
       category: r.category || 'workspace',
@@ -102,9 +102,9 @@ export default function OtherIncomePage() {
       end_date: '',
     });
     setDialogOpen(true);
-  };
+  }, []);
 
-  const openSetAsRecurring = (r: any) => {
+  const openSetAsRecurring = useCallback((r: any) => {
     setEditingKey(null);
     setDupAcknowledged(false);
     setForm({
@@ -123,7 +123,7 @@ export default function OtherIncomePage() {
       end_date: '',
     });
     setDialogOpen(true);
-  };
+  }, []);
 
   const openEditRecurring = (r: any) => {
     setEditingKey(`recurring:${r.id}`);
@@ -241,12 +241,12 @@ export default function OtherIncomePage() {
     } catch (err: any) { toast.error(err.message); }
   };
 
-  const removeIncome = async (id: string) => {
+  const removeIncome = useCallback(async (id: string) => {
     const { error } = await supabase.from('other_income').delete().eq('id', id);
     if (error) return toast.error(error.message);
     toast.success('Deleted');
     refetchRows();
-  };
+  }, []);
 
   const markPaid = async (id: string) => {
     setMarkingPaid(id);
@@ -308,7 +308,7 @@ export default function OtherIncomePage() {
     ? 'Set Up Recurring Payment'
     : 'Record Income';
 
-  const incomeColumns = [
+  const incomeColumns = useMemo(() => [
     { key: 'payment_date', header: 'Date', render: (r: any) => new Date(r.payment_date).toLocaleDateString() },
     { key: 'category', header: 'Category', render: (r: any) => <span className="capitalize">{r.category}</span> },
     { key: 'payer_name', header: 'Payer' },
@@ -344,7 +344,7 @@ export default function OtherIncomePage() {
         </div>
       ),
     },
-  ];
+  ], [openEditIncome, openSetAsRecurring, removeIncome]);
 
   return (
     <div>

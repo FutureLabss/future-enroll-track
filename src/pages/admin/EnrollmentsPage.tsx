@@ -198,7 +198,7 @@ export default function EnrollmentsPage() {
 
   const resetPage = () => setPage(0);
 
-  const columns = [
+  const columns = useMemo(() => [
     { key: 'full_name', header: 'Student' },
     { key: 'email', header: 'Email' },
     { key: 'phone', header: 'Phone', render: (r: any) => r.phone || '—' },
@@ -229,7 +229,7 @@ export default function EnrollmentsPage() {
         <Eye className="h-4 w-4" />
       </Button>
     )},
-  ];
+  ], [navigate, valueMap]);
 
   const renderTable = (data: any[]) => (
     <DataTable

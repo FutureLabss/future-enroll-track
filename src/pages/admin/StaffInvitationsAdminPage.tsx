@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useMemo, useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable } from '@/components/shared/DataTable';
@@ -26,7 +26,7 @@ export default function StaffInvitationsAdminPage() {
     fetchInvitations();
   }, []);
 
-  const handlePromoteToAdmin = async (invitation: any) => {
+  const handlePromoteToAdmin = useCallback(async (invitation: any) => {
     if (!confirm(`Promote ${invitation.staff?.full_name} to admin? They'll have full admin access to this hub.`)) return;
     const { data: cs, error: csErr } = await supabase
       .from('classroom_staff')
@@ -45,9 +45,9 @@ export default function StaffInvitationsAdminPage() {
       toast.success(`${invitation.staff?.full_name} is now an admin.`);
       fetchInvitations();
     }
-  };
+  }, []);
 
-  const handleRevoke = async (id: string) => {
+  const handleRevoke = useCallback(async (id: string) => {
     const { error } = await supabase
       .from('staff_invitations')
       .update({ status: 'revoked' })
@@ -58,9 +58,9 @@ export default function StaffInvitationsAdminPage() {
       toast.success('Invitation revoked');
       fetchInvitations();
     }
-  };
+  }, []);
 
-  const handleResend = async (invitation: any) => {
+  const handleResend = useCallback(async (invitation: any) => {
     setResending(invitation.id);
     try {
       if (!invitation.staff?.email) {
@@ -95,9 +95,9 @@ export default function StaffInvitationsAdminPage() {
     } finally {
       setResending(null);
     }
-  };
+  }, []);
 
-  const columns = [
+  const columns = useMemo(() => [
     { key: 'staff', header: 'Staff', render: (r: any) => (
       <div>
         <p className="font-medium">{r.staff?.full_name}</p>
@@ -140,7 +140,7 @@ export default function StaffInvitationsAdminPage() {
         )}
       </div>
     )}
-  ];
+  ], [handlePromoteToAdmin, handleResend, handleRevoke, resending]);
 
   return (
     <div>

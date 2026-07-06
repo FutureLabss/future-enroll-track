@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useMemo, useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
@@ -726,7 +726,7 @@ export default function ClassroomDetailPage() {
     setAssignmentModal(true);
   };
 
-  const openEditAssignment = (assignment: any) => {
+  const openEditAssignment = useCallback((assignment: any) => {
     setAssignmentEditing(assignment);
     setAssignmentForm({
       title: assignment.title || '',
@@ -737,7 +737,7 @@ export default function ClassroomDetailPage() {
       max_score: assignment.max_score != null ? String(assignment.max_score) : '',
     });
     setAssignmentModal(true);
-  };
+  }, []);
 
   const resetAssignmentModal = () => {
     setAssignmentModal(false);
@@ -773,9 +773,9 @@ export default function ClassroomDetailPage() {
     }
   };
 
-  const handleDeleteAssignment = (assignment: any) => {
+  const handleDeleteAssignment = useCallback((assignment: any) => {
     setPendingDeleteAssignment(assignment);
-  };
+  }, []);
 
   const doDeleteAssignment = async () => {
     if (!pendingDeleteAssignment) return;
@@ -830,14 +830,14 @@ export default function ClassroomDetailPage() {
     }
   };
 
-  const handleDeletePresentation = async (presentation: any) => {
+  const handleDeletePresentation = useCallback(async (presentation: any) => {
     try {
       await deletePresentation(presentation.schedule_id);
       toast.success('Presentation deleted');
     } catch (e: any) {
       toast.error(e.message);
     }
-  };
+  }, []);
 
   const handleSendReminders = () => {
     if (!classroom?.program_id) return;
@@ -906,12 +906,12 @@ export default function ClassroomDetailPage() {
     }
   };
 
-  const handleRevokeStaff = async (csId: string) => {
+  const handleRevokeStaff = useCallback(async (csId: string) => {
     const { error } = await supabase.from('classroom_staff').update({ status: 'revoked' }).eq('id', csId);
     if (error) { toast.error(error.message); return; }
     toast.success('Access revoked');
     loadAll();
-  };
+  }, []);
 
   const handleClassroomStatus = (status: 'active' | 'archived') => {
     if (status === 'archived') { setArchiveDialogOpen(true); return; }
@@ -931,10 +931,10 @@ export default function ClassroomDetailPage() {
     }
   };
 
-  const openPermissions = (cs: any) => {
+  const openPermissions = useCallback((cs: any) => {
     setPerms(cs.classroom_permissions || {});
     setPermissionsModal({ open: true, cs });
-  };
+  }, []);
 
   const handleSavePerms = async () => {
     const cs = permissionsModal.cs;
@@ -957,14 +957,14 @@ export default function ClassroomDetailPage() {
     loadAll();
   };
 
-  const handleLessonStatus = async (lessonId: string, status: string) => {
+  const handleLessonStatus = useCallback(async (lessonId: string, status: string) => {
     const { error } = await supabase.from('old_lessons').update({ status }).eq('id', lessonId);
     if (error) { toast.error(error.message); return; }
     toast.success(`Lesson marked as ${status}`);
     loadAll();
-  };
+  }, []);
 
-  const openLessonEdit = (lesson: any) => {
+  const openLessonEdit = useCallback((lesson: any) => {
     setLessonForm({
       title: lesson.title,
       lesson_date: lesson.lesson_date,
@@ -974,7 +974,7 @@ export default function ClassroomDetailPage() {
       week_number: lesson.week_number?.toString() || '',
     });
     setLessonEditModal({ open: true, lesson });
-  };
+  }, []);
 
   const handleSaveLesson = async () => {
     const lesson = lessonEditModal.lesson;
@@ -1002,7 +1002,7 @@ export default function ClassroomDetailPage() {
     loadAll();
   };
 
-  const openScheduleEdit = (schedule: any) => {
+  const openScheduleEdit = useCallback((schedule: any) => {
     setScheduleForm({
       title: schedule.title || '',
       cohort_id: schedule.cohort_id || '',
@@ -1014,7 +1014,7 @@ export default function ClassroomDetailPage() {
       meeting_link: schedule.meeting_link || '',
     });
     setScheduleEditModal({ open: true, schedule });
-  };
+  }, []);
 
   const handleSaveSchedule = async () => {
     const schedule = scheduleEditModal.schedule;
@@ -1040,21 +1040,21 @@ export default function ClassroomDetailPage() {
     }
   };
 
-  const handleDeleteSchedule = async (scheduleId: string) => {
+  const handleDeleteSchedule = useCallback(async (scheduleId: string) => {
     try {
       await deleteSchedule(scheduleId);
       toast.success('Schedule deleted');
     } catch (e: any) {
       toast.error(e.message);
     }
-  };
+  }, []);
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
   if (!classroom) return <div className="text-center py-20 text-muted-foreground">Classroom not found.</div>;
 
   const programId = (classroom as any).program_id || null;
 
-  const staffColumns = [
+  const staffColumns = useMemo(() => [
     { key: 'name', header: 'Name', render: (r: any) => r.staff?.full_name || '—' },
     { key: 'role_title', header: 'Role', render: (r: any) => r.staff?.role_title || '—' },
     { key: 'type', header: 'Type', render: (r: any) => (
@@ -1079,9 +1079,9 @@ export default function ClassroomDetailPage() {
         <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => handleRevokeStaff(r.id)}><Ban className="h-3.5 w-3.5 mr-1" />Revoke</Button>
       </div>
     ) : null },
-  ];
+  ], [handleRevokeStaff, openPermissions, isSuperadmin]);
 
-  const studentColumns = [
+  const studentColumns = useMemo(() => [
     { key: 'name', header: 'Student', render: (r: any) => r.full_name || <span className="text-muted-foreground text-sm">—</span> },
     { key: 'email', header: 'Email', render: (r: any) => r.email || '—' },
     { key: 'cohort', header: 'Cohort', render: (r: any) => r.cohort_label || <span className="text-muted-foreground text-sm">—</span> },
@@ -1097,9 +1097,9 @@ export default function ClassroomDetailPage() {
         <ArrowLeftRight className="h-3.5 w-3.5" />
       </Button>
     ) : null },
-  ];
+  ], []);
 
-  const lessonColumns = [
+  const lessonColumns = useMemo(() => [
     { key: 'date', header: 'Date', render: (r: any) => new Date(r.lesson_date).toLocaleDateString() },
     { key: 'title', header: 'Lesson', render: (r: any) => r.title },
     { key: 'time', header: 'Time', render: (r: any) => `${r.start_time} – ${r.end_time}` },
@@ -1122,9 +1122,9 @@ export default function ClassroomDetailPage() {
         <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => openLessonEdit(r)} title="Edit"><Pencil className="h-4 w-4" /></Button>
       </div>
     )},
-  ];
+  ], [handleLessonStatus, openLessonEdit]);
 
-  const scheduleColumns = [
+  const scheduleColumns = useMemo(() => [
     { key: 'date', header: 'Date', render: (r: any) => new Date(r.scheduled_date + 'T12:00:00').toLocaleDateString('en-NG', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) },
     { key: 'title', header: 'Session / Unit', render: (r: any) => <span className="font-medium">{r.title || r.lessons?.title || '—'}</span> },
     { key: 'time', header: 'Time', render: (r: any) => `${r.start_time} – ${r.end_time}` },
@@ -1152,9 +1152,9 @@ export default function ClassroomDetailPage() {
         <Button size="sm" variant="ghost" className="text-destructive h-7 px-2" onClick={() => handleDeleteSchedule(r.id)} title="Delete"><Trash2 className="h-4 w-4" /></Button>
       </div>
     )},
-  ];
+  ], [handleDeleteSchedule, openScheduleEdit]);
 
-  const cohortColumns = [
+  const cohortColumns = useMemo(() => [
     { key: 'cohort_label', header: 'Cohort', render: (r: any) => <span className="font-medium">{r.cohort_label}</span> },
     { key: 'status', header: 'Status', render: (r: any) => (
       <Badge variant="outline" className={`capitalize ${STATUS_COLOURS[r.status] || ''}`}>{r.status || '—'}</Badge>
@@ -1174,9 +1174,9 @@ export default function ClassroomDetailPage() {
         </Button>
       </div>
     )},
-  ];
+  ], []);
 
-  const assignmentColumns = [
+  const assignmentColumns = useMemo(() => [
     { key: 'title', header: 'Assignment', render: (r: any) => <span className="font-medium">{r.title}</span> },
     { key: 'cohort', header: 'Cohort', render: (r: any) => r.cohorts?.cohort_label || 'All' },
     { key: 'unit', header: 'Unit', render: (r: any) => r.units?.title || '—' },
@@ -1203,9 +1203,9 @@ export default function ClassroomDetailPage() {
         </Button>
       </div>
     ) },
-  ];
+  ], [handleDeleteAssignment, navigate, openEditAssignment]);
 
-  const presentationColumns = [
+  const presentationColumns = useMemo(() => [
     { key: 'title', header: 'Presentation', render: (r: any) => <span className="font-medium">{r.title}</span> },
     { key: 'cohort', header: 'Cohort', render: (r: any) => r.cohorts?.cohort_label || '—' },
     { key: 'date', header: 'Date', render: (r: any) => r.schedules?.scheduled_date ? `${new Date(`${r.schedules.scheduled_date}T00:00:00`).toLocaleDateString()} · ${r.schedules.start_time}–${r.schedules.end_time}` : '—' },
@@ -1221,7 +1221,7 @@ export default function ClassroomDetailPage() {
         </Button>
       </div>
     ) },
-  ];
+  ], [handleDeletePresentation, navigate]);
 
   const permKeys = [
     { key: 'can_create_lessons', label: 'Create & edit lessons' },

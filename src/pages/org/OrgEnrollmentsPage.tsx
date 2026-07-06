@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -48,14 +48,14 @@ export default function OrgEnrollmentsPage() {
     toast.success(`Exported ${enrollments.length} records`);
   };
 
-  const columns = [
+  const columns = useMemo(() => [
     { key: 'full_name', header: 'Student' },
     { key: 'email', header: 'Email' },
     { key: 'program', header: 'Program', render: (r: any) => r.programs?.program_name || '—' },
     { key: 'cohort', header: 'Cohort', render: (r: any) => r.cohorts?.cohort_label || '—' },
     { key: 'total_amount', header: 'Total', render: (r: any) => formatCurrency(Number(r.total_amount)) },
     { key: 'enrollment_status', header: 'Status', render: (r: any) => <StatusBadge status={r.enrollment_status} /> },
-  ];
+  ], []);
 
   if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
 

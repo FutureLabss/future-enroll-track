@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useMemo, useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
@@ -381,7 +381,7 @@ export default function ClassroomWorkspacePage() {
     }
   };
 
-  const handleOpenScheduleEdit = (r: any) => {
+  const handleOpenScheduleEdit = useCallback((r: any) => {
     setScheduleForm({
       title: r.title || '',
       lesson_id: r.lesson_id || '',
@@ -395,7 +395,7 @@ export default function ClassroomWorkspacePage() {
       meeting_link: r.meeting_link || '',
     });
     setScheduleEditModal({ open: true, schedule: r });
-  };
+  }, []);
 
   const handleUpdateSchedule = async () => {
     if (!scheduleForm.scheduled_date) { toast.error('Date required'); return; }
@@ -423,14 +423,14 @@ export default function ClassroomWorkspacePage() {
     }
   };
 
-  const handleScheduleStatus = async (scheduleId: string, status: 'scheduled' | 'completed' | 'cancelled') => {
+  const handleScheduleStatus = useCallback(async (scheduleId: string, status: 'scheduled' | 'completed' | 'cancelled') => {
     try {
       await updateSchedule(scheduleId, { status });
       toast.success(`Schedule ${status}`);
     } catch (e: any) {
       toast.error(e.message);
     }
-  };
+  }, []);
 
   const openCreateAssignment = () => {
     setAssignEditing(null);
@@ -611,7 +611,7 @@ export default function ClassroomWorkspacePage() {
     new Map(lessonOptions.map((lesson: any) => [lesson.unit_id, lesson])).values()
   );
 
-  const scheduleColumns = [
+  const scheduleColumns = useMemo(() => [
     { key: 'date', header: 'Date', render: (r: any) => new Date(r.scheduled_date + 'T00:00:00').toLocaleDateString() },
     { key: 'title', header: 'Session', render: (r: any) => r.title || r.lessons?.title || r.modules?.title || <span className="text-muted-foreground text-xs italic">Untitled</span> },
     { key: 'time', header: 'Time', render: (r: any) => `${r.start_time} – ${r.end_time}` },
@@ -665,7 +665,7 @@ export default function ClassroomWorkspacePage() {
         )}
       </div>
     )},
-  ];
+  ], [handleOpenScheduleEdit, handleScheduleStatus]);
 
   return (
     <div>

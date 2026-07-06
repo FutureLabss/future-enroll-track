@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -93,7 +93,7 @@ export default function PayrollPage() {
     setStaffForm({ full_name: '', role_title: '', base_salary: '', email: '', phone: '', bank_name: '', account_number: '', program_id: '', externally_funded: false, funder_name: '' });
   };
 
-  const openEditStaff = (s: any) => {
+  const openEditStaff = useCallback((s: any) => {
     setEditingStaffId(s.id);
     setStaffForm({
       full_name: s.full_name || '',
@@ -108,7 +108,7 @@ export default function PayrollPage() {
       funder_name: s.funder_name || '',
     });
     setStaffOpen(true);
-  };
+  }, []);
 
   const saveStaff = async () => {
     try {
@@ -149,7 +149,7 @@ export default function PayrollPage() {
     } catch (err: any) { toast.error(err.message); }
   };
 
-  const removeStaff = async (id: string) => {
+  const removeStaff = useCallback(async (id: string) => {
     if (!confirm('Remove this staff member? Their payroll history and login account will be deleted too.')) return;
     const { data, error } = await supabase.functions.invoke('delete-user-account', {
       body: { account_type: 'staff', id },
@@ -157,7 +157,7 @@ export default function PayrollPage() {
     if (error) return toast.error((data as any)?.error || error.message);
     toast.success('Staff member and login account removed');
     fetchAll();
-  };
+  }, []);
 
   const recordRun = async () => {
     try {
@@ -178,25 +178,25 @@ export default function PayrollPage() {
     } catch (err: any) { toast.error(err.message); }
   };
 
-  const markPaid = async (id: string) => {
+  const markPaid = useCallback(async (id: string) => {
     const { error } = await supabase.from('payroll_runs').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', id);
     if (error) return toast.error(error.message);
     toast.success('Marked as paid');
     fetchAll();
-  };
+  }, []);
 
-  const deleteRun = async (id: string) => {
+  const deleteRun = useCallback(async (id: string) => {
     if (!confirm('Delete this payroll entry?')) return;
     const { error } = await supabase.from('payroll_runs').delete().eq('id', id);
     if (error) return toast.error(error.message);
     fetchAll();
-  };
+  }, []);
 
   const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
   const monthTotal = runs.reduce((s, r) => s + Number(r.amount), 0);
   const monthPaid = runs.filter(r => r.status === 'paid').reduce((s, r) => s + Number(r.amount), 0);
 
-  const runColumns = [
+  const runColumns = useMemo(() => [
     { key: 'staff', header: 'Staff', render: (r: any) => (
       <div>
         <div className="font-medium">{r.staff?.full_name || '—'}</div>
@@ -221,9 +221,9 @@ export default function PayrollPage() {
         </Button>
       </div>
     )},
-  ];
+  ], [deleteRun, markPaid]);
 
-  const staffColumns = [
+  const staffColumns = useMemo(() => [
     { key: 'full_name', header: 'Name' },
     { key: 'role_title', header: 'Role', render: (r: any) => r.role_title || '—' },
     { key: 'program', header: 'Program', render: (r: any) => r.programs?.program_name || <span className="text-muted-foreground text-sm">—</span> },
@@ -246,7 +246,7 @@ export default function PayrollPage() {
         </Button>
       </div>
     )},
-  ];
+  ], [openEditStaff, removeStaff]);
 
   return (
     <div>

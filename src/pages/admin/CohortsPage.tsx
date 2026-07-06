@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
@@ -77,7 +77,7 @@ export default function CohortsPage() {
     queryClient.invalidateQueries({ queryKey: ['cohorts'] });
   };
 
-  const columns = [
+  const columns = useMemo(() => [
     {
       key: 'cohort_label', header: 'Cohort',
       render: (r: any) => <span className="font-medium">{r.cohort_label}</span>,
@@ -107,7 +107,7 @@ export default function CohortsPage() {
     },
     { key: 'start_date', header: 'Start', render: (r: any) => r.start_date ? new Date(r.start_date).toLocaleDateString() : '—' },
     { key: 'end_date', header: 'End', render: (r: any) => r.end_date ? new Date(r.end_date).toLocaleDateString() : '—' },
-  ];
+  ], []);
 
   return (
     <div>

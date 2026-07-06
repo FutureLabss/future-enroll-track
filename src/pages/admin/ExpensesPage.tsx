@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -17,6 +17,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RecurringManager } from '@/components/shared/RecurringManager';
 
 const CATEGORIES = ['rent', 'utilities', 'supplies', 'internet', 'maintenance', 'marketing', 'travel', 'other'];
+
+const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
 
 export default function ExpensesPage() {
   const { user } = useAuth();
@@ -48,7 +50,7 @@ export default function ExpensesPage() {
 
   const reset = () => { setEditingId(null); setForm(blank); };
 
-  const openEdit = (r: any) => {
+  const openEdit = useCallback((r: any) => {
     setEditingId(r.id);
     setForm({
       category: r.category || 'rent',
@@ -60,7 +62,7 @@ export default function ExpensesPage() {
       notes: r.notes || '',
     });
     setOpen(true);
-  };
+  }, []);
 
   const handleSave = async () => {
     try {
@@ -89,21 +91,20 @@ export default function ExpensesPage() {
     }
   };
 
-  const remove = async (id: string) => {
+  const remove = useCallback(async (id: string) => {
     if (!confirm('Delete this expense?')) return;
     const { error } = await supabase.from('expenses').delete().eq('id', id);
     if (error) return toast.error(error.message);
     toast.success('Deleted');
-    refetch();
-  };
+    queryClient.invalidateQueries({ queryKey: ['expenses'] });
+  }, [queryClient]);
 
-  const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
   const total = rows.reduce((s, r) => s + Number(r.amount), 0);
   const thisMonth = rows
     .filter(r => r.payment_date?.slice(0, 7) === new Date().toISOString().slice(0, 7))
     .reduce((s, r) => s + Number(r.amount), 0);
 
-  const columns = [
+  const columns = useMemo(() => [
     { key: 'payment_date', header: 'Date', render: (r: any) => new Date(r.payment_date).toLocaleDateString() },
     { key: 'category', header: 'Category', render: (r: any) => <span className="capitalize">{r.category}</span> },
     { key: 'vendor_name', header: 'Vendor', render: (r: any) => r.vendor_name || '—' },
@@ -120,7 +121,7 @@ export default function ExpensesPage() {
         </Button>
       </div>
     )},
-  ];
+  ], [openEdit, remove]);
 
   return (
     <div>

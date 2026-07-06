@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
@@ -36,10 +36,10 @@ export default function ProgramsPage() {
 
   const load = () => queryClient.invalidateQueries({ queryKey: ['programs'] });
 
-  const openEdit = (program: any) => {
+  const openEdit = useCallback((program: any) => {
     setEditProgram(program);
     setForm({ program_name: program.program_name, description: program.description || '', active: program.active });
-  };
+  }, []);
 
   const handleCreate = async () => {
     if (!form.program_name.trim()) { toast.error('Name required'); return; }
@@ -77,7 +77,7 @@ export default function ProgramsPage() {
     load();
   };
 
-  const columns = [
+  const columns = useMemo(() => [
     { key: 'program_name', header: 'Program Name' },
     {
       key: 'description', header: 'Description',
@@ -118,7 +118,7 @@ export default function ProgramsPage() {
         </div>
       ),
     },
-  ];
+  ], [navigate, openEdit]);
 
   const ProgramForm = ({ onSave, label }: { onSave: () => void; label: string }) => (
     <div className="space-y-4 mt-4">

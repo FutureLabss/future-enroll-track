@@ -124,7 +124,7 @@ export default function ProgramDetailPage() {
     return <div className="text-center py-20 text-muted-foreground">Program not found.</div>;
   }
 
-  const classroomColumns = [
+  const classroomColumns = useMemo(() => [
     { key: 'name', header: 'Classroom', render: (row: any) => <span className="font-medium">{row.name}</span> },
     {
       key: 'status',
@@ -151,9 +151,9 @@ export default function ProgramDetailPage() {
       header: 'Staff',
       render: (row: any) => (row.classroom_staff || []).filter((staff: any) => staff.status === 'active').length,
     },
-  ];
+  ], []);
 
-  const cohortColumns = [
+  const cohortColumns = useMemo(() => [
     { key: 'cohort_label', header: 'Cohort', render: (row: any) => <span className="font-medium">{row.cohort_label}</span> },
     { key: 'classroom', header: 'Classroom', render: (row: any) => row.classrooms?.name || 'Unassigned' },
     {
@@ -167,9 +167,9 @@ export default function ProgramDetailPage() {
     { key: 'students', header: 'Students', render: (row: any) => row.cohort_students?.[0]?.count ?? 0 },
     { key: 'start_date', header: 'Start', render: (row: any) => row.start_date ? new Date(row.start_date).toLocaleDateString() : '—' },
     { key: 'end_date', header: 'End', render: (row: any) => row.end_date ? new Date(row.end_date).toLocaleDateString() : '—' },
-  ];
+  ], []);
 
-  const enrollmentColumns = [
+  const enrollmentColumns = useMemo(() => [
     { key: 'full_name', header: 'Student', render: (row: any) => <span className="font-medium">{row.full_name}</span> },
     { key: 'email', header: 'Email' },
     {
@@ -179,7 +179,7 @@ export default function ProgramDetailPage() {
     },
     { key: 'amount_paid', header: 'Paid', render: (row: any) => formatCurrency(Number(row.amount_paid || 0)) },
     { key: 'outstanding_balance', header: 'Outstanding', render: (row: any) => formatCurrency(Number(row.outstanding_balance || 0)) },
-  ];
+  ], []);
 
   return (
     <div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable } from '@/components/shared/DataTable';
@@ -36,13 +36,13 @@ export default function OrganizationsPage() {
     fetch();
   };
 
-  const columns = [
+  const columns = useMemo(() => [
     { key: 'organization_name', header: 'Organization' },
     { key: 'organization_type', header: 'Type', render: (r: any) => <span className="capitalize">{r.organization_type}</span> },
     { key: 'contact_name', header: 'Contact', render: (r: any) => r.contact_name || '—' },
     { key: 'contact_email', header: 'Email', render: (r: any) => r.contact_email || '—' },
     { key: 'active', header: 'Status', render: (r: any) => <StatusBadge status={r.active ? 'active' : 'cancelled'} /> },
-  ];
+  ], []);
 
   return (
     <div>

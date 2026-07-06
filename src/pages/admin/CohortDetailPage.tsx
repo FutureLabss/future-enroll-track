@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAttendanceSession } from '@/hooks/useAttendance';
 import { useAuth } from '@/hooks/useAuth';
@@ -476,12 +476,12 @@ export default function CohortDetailPage() {
     navigate(cohort.classrooms?.id ? `/admin/classrooms/${cohort.classrooms.id}` : '/admin/cohorts');
   };
 
-  const deleteAttendanceSession = async (sessionId: string) => {
+  const deleteAttendanceSession = useCallback(async (sessionId: string) => {
     const { error } = await supabase.from('attendance_sessions').delete().eq('id', sessionId);
     if (error) { toast.error(error.message); return; }
     toast.success('Attendance session deleted');
     load();
-  };
+  }, []);
 
   const publishAssignment = async (assignmentId: string) => {
     const { error } = await supabase.from('assignments').update({ status: 'published' }).eq('id', assignmentId);
@@ -520,7 +520,7 @@ export default function CohortDetailPage() {
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
   if (!cohort) return <div className="text-center py-20 text-muted-foreground">Cohort not found.</div>;
 
-  const studentColumns = [
+  const studentColumns = useMemo(() => [
     { key: 'name', header: 'Student', render: (r: any) => r.profile?.full_name || <span className="text-muted-foreground text-sm">—</span> },
     { key: 'email', header: 'Email', render: (r: any) => r.profile?.email || '—' },
     {
@@ -550,9 +550,9 @@ export default function CohortDetailPage() {
         </Button>
       ),
     }] : []),
-  ];
+  ], [isAdmin]);
 
-  const presentationColumns = [
+  const presentationColumns = useMemo(() => [
     { key: 'title', header: 'Presentation', render: (r: any) => <span className="font-medium">{r.title}</span> },
     { key: 'date', header: 'Date', render: (r: any) => r.schedules?.scheduled_date ? `${new Date(`${r.schedules.scheduled_date}T00:00:00`).toLocaleDateString()} · ${r.schedules.start_time}–${r.schedules.end_time}` : '—' },
     { key: 'pass_score', header: 'Pass Score', render: (r: any) => `${r.pass_score} / ${r.max_score}` },
@@ -581,9 +581,9 @@ export default function CohortDetailPage() {
         </AlertDialog>
       ),
     },
-  ];
+  ], []);
 
-  const attendanceColumns = [
+  const attendanceColumns = useMemo(() => [
     { key: 'code', header: 'Code', render: (r: any) => <span className="font-mono font-semibold tracking-wider">{r.code}</span> },
     { key: 'lesson', header: 'Lesson', render: (r: any) => r.schedules?.lessons?.title || r.schedules?.title || r.old_lessons?.title || '—' },
     { key: 'status', header: 'Status', render: (r: any) => <Badge variant="outline" className={STATUS_COLOURS[r.status] || ''}>{r.status}</Badge> },
@@ -616,9 +616,9 @@ export default function CohortDetailPage() {
         </AlertDialog>
       </div>
     )},
-  ];
+  ], [deleteAttendanceSession]);
 
-  const assignmentColumns = [
+  const assignmentColumns = useMemo(() => [
     { key: 'title', header: 'Assignment', render: (r: any) => <span className="font-medium">{r.title}</span> },
     { key: 'unit', header: 'Unit', render: (r: any) => r.units?.title || r.old_lessons?.title || '—' },
     { key: 'due_date', header: 'Due', render: (r: any) => r.due_date ? new Date(r.due_date).toLocaleDateString() : '—' },
@@ -628,7 +628,7 @@ export default function CohortDetailPage() {
         <ClipboardCheck className="h-3.5 w-3.5 mr-1" />Publish
       </Button>
     ) : null },
-  ];
+  ], []);
 
   return (
     <div>

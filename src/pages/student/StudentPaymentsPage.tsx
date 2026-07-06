@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -39,7 +39,7 @@ export default function StudentPaymentsPage() {
   }, {});
   const mostUsedMethod = Object.entries(methodCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
 
-  const openReceipt = (r: any) => {
+  const openReceipt = useCallback((r: any) => {
     setSelectedReceipt({
       payment_reference: r.payment_reference,
       amount: Number(r.amount),
@@ -50,9 +50,9 @@ export default function StudentPaymentsPage() {
       program_name: r.invoices?.enrollments?.programs?.program_name || '',
     });
     setReceiptOpen(true);
-  };
+  }, []);
 
-  const columns = [
+  const columns = useMemo(() => [
     { key: 'payment_reference', header: 'Reference' },
     { key: 'invoice', header: 'Invoice', render: (r: any) => r.invoices?.invoice_number || '—' },
     { key: 'amount', header: 'Amount', render: (r: any) => formatCurrency(Number(r.amount)) },
@@ -66,7 +66,7 @@ export default function StudentPaymentsPage() {
         <FileText className="h-4 w-4 mr-1" /> Receipt
       </Button>
     )},
-  ];
+  ], [openReceipt]);
 
   if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
 

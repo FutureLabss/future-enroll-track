@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
@@ -48,7 +49,7 @@ export default function StudentInvoicesPage() {
     .sort((a, b) => String(getNextInstallment(a)?.due_date || a.created_at).localeCompare(String(getNextInstallment(b)?.due_date || b.created_at)))[0];
   const nextDue = nextDueInvoice ? getNextInstallment(nextDueInvoice) : null;
 
-  const columns = [
+  const columns = useMemo(() => [
     { key: 'invoice_number', header: 'Invoice #' },
     { key: 'program', header: 'Program', render: (r: any) => r.enrollments?.programs?.program_name || '—' },
     { key: 'total_amount', header: 'Amount', render: (r: any) => formatCurrency(Number(r.total_amount)) },
@@ -71,7 +72,7 @@ export default function StudentInvoicesPage() {
         View <ArrowRight className="ml-1.5 h-4 w-4" />
       </Button>
     ) },
-  ];
+  ], []);
 
   if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
 

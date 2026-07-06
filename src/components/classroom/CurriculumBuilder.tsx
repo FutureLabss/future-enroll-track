@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { memo, useCallback, useState, useRef } from 'react';
 import { useCurriculum } from '@/hooks/useCurriculum';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,7 +29,7 @@ const MATERIAL_COLOURS: Record<string, string> = {
   image: 'text-green-500',
 };
 
-function MaterialItem({ material, canEdit, onDelete }: { material: any; canEdit: boolean; onDelete: () => void }) {
+const MaterialItem = memo(function MaterialItem({ material, canEdit, onDelete }: { material: any; canEdit: boolean; onDelete: (id: string) => void }) {
   const Icon = MATERIAL_ICONS[material.material_type] || Link2;
   return (
     <div className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-muted/40 group/mat">
@@ -49,7 +49,7 @@ function MaterialItem({ material, canEdit, onDelete }: { material: any; canEdit:
       )}
       {canEdit && (
         <button
-          onClick={onDelete}
+          onClick={() => onDelete(material.id)}
           className="opacity-0 group-hover/mat:opacity-100 transition-opacity text-destructive hover:text-destructive/80"
         >
           <X className="h-3.5 w-3.5" />
@@ -57,7 +57,7 @@ function MaterialItem({ material, canEdit, onDelete }: { material: any; canEdit:
       )}
     </div>
   );
-}
+});
 
 export function CurriculumBuilder({
   cohortId,
@@ -75,6 +75,10 @@ export function CurriculumBuilder({
     addLesson, updateLesson, deleteLesson,
     addMaterial, deleteMaterial,
   } = useCurriculum(cohortId);
+
+  const handleDeleteMaterial = useCallback(async (id: string) => {
+    try { await deleteMaterial(id); } catch (e: any) { toast.error(e.message); }
+  }, []);
 
   const [initOpen, setInitOpen] = useState(false);
   const [editCurriculumOpen, setEditCurriculumOpen] = useState(false);
@@ -356,9 +360,7 @@ export function CurriculumBuilder({
                         key={m.id}
                         material={m}
                         canEdit={canEdit}
-                        onDelete={async () => {
-                          try { await deleteMaterial(m.id); } catch (e: any) { toast.error(e.message); }
-                        }}
+                        onDelete={handleDeleteMaterial}
                       />
                     ))}
                     {canEdit && (

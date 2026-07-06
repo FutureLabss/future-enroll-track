@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { memo, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useCurriculumV2, CurriculumV2, TrackV2, ModuleV2, UnitV2, LessonV2 } from '@/hooks/useCurriculumV2';
 import { supabase } from '@/lib/supabase';
@@ -270,7 +270,7 @@ function LessonRow({ lesson, onUpdate, onDelete }: { lesson: LessonV2; onUpdate:
 }
 
 // ── Unit section ──────────────────────────────────────────────────────────────
-function UnitSection({ unit, curriculumId, hook }: { unit: UnitV2; curriculumId: string; hook: ReturnType<typeof useCurriculumV2> }) {
+const UnitSection = memo(function UnitSection({ unit, curriculumId, hook }: { unit: UnitV2; curriculumId: string; hook: ReturnType<typeof useCurriculumV2> }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [addLesson, setAddLesson] = useState(false);
@@ -348,10 +348,10 @@ function UnitSection({ unit, curriculumId, hook }: { unit: UnitV2; curriculumId:
       />
     </div>
   );
-}
+});
 
 // ── Module section ────────────────────────────────────────────────────────────
-function ModuleSection({ mod, curriculumId, hook }: { mod: ModuleV2; curriculumId: string; hook: ReturnType<typeof useCurriculumV2> }) {
+const ModuleSection = memo(function ModuleSection({ mod, curriculumId, hook }: { mod: ModuleV2; curriculumId: string; hook: ReturnType<typeof useCurriculumV2> }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [addUnit, setAddUnit] = useState(false);
@@ -405,10 +405,10 @@ function ModuleSection({ mod, curriculumId, hook }: { mod: ModuleV2; curriculumI
       />
     </div>
   );
-}
+});
 
 // ── Track section ─────────────────────────────────────────────────────────────
-function TrackSection({ track, curriculumId, hook }: { track: TrackV2; curriculumId: string; hook: ReturnType<typeof useCurriculumV2> }) {
+const TrackSection = memo(function TrackSection({ track, curriculumId, hook }: { track: TrackV2; curriculumId: string; hook: ReturnType<typeof useCurriculumV2> }) {
   const [open, setOpen] = useState(true);
   const [editing, setEditing] = useState(false);
   const [addModule, setAddModule] = useState(false);
@@ -461,10 +461,10 @@ function TrackSection({ track, curriculumId, hook }: { track: TrackV2; curriculu
       />
     </div>
   );
-}
+});
 
 // ── Curriculum panel ──────────────────────────────────────────────────────────
-function CurriculumPanel({ curriculum, hook, classroomId, onDeleted }: { curriculum: CurriculumV2; hook: ReturnType<typeof useCurriculumV2>; classroomId: string; onDeleted: () => void }) {
+const CurriculumPanel = memo(function CurriculumPanel({ curriculum, hook, classroomId, onDeleted }: { curriculum: CurriculumV2; hook: ReturnType<typeof useCurriculumV2>; classroomId: string; onDeleted: () => void }) {
   const [addTrack, setAddTrack] = useState(false);
   const [editing, setEditing] = useState(false);
   const [copyOpen, setCopyOpen] = useState(false);
@@ -522,7 +522,7 @@ function CurriculumPanel({ curriculum, hook, classroomId, onDeleted }: { curricu
       />
     </div>
   );
-}
+});
 
 // ── Root export ───────────────────────────────────────────────────────────────
 export function CurriculumTreeV2({ classroomId }: { classroomId: string }) {

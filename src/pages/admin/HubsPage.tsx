@@ -28,7 +28,7 @@ const PLAN_COLOURS: Record<string, string> = {
 };
 
 export default function HubsPage() {
-  const { user, isSuperadmin, session } = useAuth();
+  const { user, isSuperadmin, rolesReady, session } = useAuth();
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -47,13 +47,18 @@ export default function HubsPage() {
       ]);
       return { hubs: hubsRes.data || [], invitations: invRes.data || [] };
     },
-    enabled: isSuperadmin,
+    // RLS already restricts these tables; rolesReady avoids a fetch gate on the
+    // async isSuperadmin flag, which starts false and caused an access-denied flash
+    enabled: rolesReady && isSuperadmin,
   });
 
   const hubs = hubsData?.hubs ?? [];
   const invitations = hubsData?.invitations ?? [];
   const fetchAll = () => queryClient.invalidateQueries({ queryKey: ['hubs'] });
 
+  if (!rolesReady) {
+    return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-7 w-7 text-primary" /></div>;
+  }
   if (!isSuperadmin) {
     return (
       <div className="text-center py-20">

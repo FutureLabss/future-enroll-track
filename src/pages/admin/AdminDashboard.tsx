@@ -16,7 +16,7 @@ const RECENT_COLS = 'id, full_name, email, total_amount, amount_paid, enrollment
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const { isAdmin, loading: authLoading } = useAuth();
+  const { isAdmin, rolesReady } = useAuth();
 
   const { data, isLoading: loading } = useQuery({
     queryKey: ['dashboard'],
@@ -42,7 +42,8 @@ export default function AdminDashboard() {
         recentEnrollments: recentEnrollRes.data || [],
       };
     },
-    enabled: !authLoading && isAdmin,
+    // isAdmin starts false and resolves async; rolesReady is the readiness signal
+    enabled: rolesReady && isAdmin,
     staleTime: 1000 * 60 * 5,
   });
 
@@ -57,7 +58,7 @@ export default function AdminDashboard() {
     { key: 'enrollment_status', header: 'Status', render: (r: any) => <StatusBadge status={r.enrollment_status} /> },
   ], []);
 
-  if (loading) {
+  if (loading || !rolesReady) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />

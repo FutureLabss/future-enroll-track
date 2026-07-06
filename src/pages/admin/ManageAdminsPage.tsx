@@ -29,7 +29,7 @@ interface StaffRow {
 }
 
 export default function ManageAdminsPage() {
-  const { isSuperadmin, loading: authLoading } = useAuth();
+  const { isSuperadmin, rolesReady } = useAuth();
   const [admins, setAdmins] = useState<AdminRow[]>([]);
   const [staffUsers, setStaffUsers] = useState<StaffRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,7 +84,9 @@ export default function ManageAdminsPage() {
     if (isSuperadmin) { loadAdmins(); loadStaff(); }
   }, [isSuperadmin]);
 
-  if (authLoading) return null;
+  // Wait for the async role fetch — redirecting on the initial false value
+  // bounced real superadmins off this page before roles resolved
+  if (!rolesReady) return null;
   if (!isSuperadmin) return <Navigate to="/admin" replace />;
 
   const handleInvite = async (e: React.FormEvent) => {

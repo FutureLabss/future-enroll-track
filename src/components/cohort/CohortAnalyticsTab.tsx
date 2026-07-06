@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, TrendingUp, DollarSign, CheckCircle, Users } from 'lucide-react';
 import { useCohortAnalytics } from '@/hooks/useCohortAnalytics';
 
+const STUDENT_LIST_CAP = 50;
+
 const fmt = (val: number) =>
   `₦${Number(val || 0).toLocaleString('en-NG', { maximumFractionDigits: 0 })}`;
 
@@ -187,7 +189,7 @@ export function CohortAnalyticsTab({ cohortId }: Props) {
         <div className="glass-card rounded-xl p-5">
           <h3 className="font-semibold mb-4">Student Attendance</h3>
           <div className="space-y-2">
-            {studentRows.map(s => (
+            {studentRows.slice(0, STUDENT_LIST_CAP).map(s => (
               <div
                 key={s.student_id}
                 className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2.5"
@@ -224,6 +226,11 @@ export function CohortAnalyticsTab({ cohortId }: Props) {
                 </div>
               </div>
             ))}
+            {studentRows.length > STUDENT_LIST_CAP && (
+              <p className="text-center text-xs text-muted-foreground pt-2">
+                Showing first {STUDENT_LIST_CAP} of {studentRows.length} students
+              </p>
+            )}
           </div>
         </div>
       )}

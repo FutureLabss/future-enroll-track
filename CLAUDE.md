@@ -85,6 +85,13 @@ CREATE POLICY "Admins manage X" ON public.X FOR ALL
 - Always `GRANT EXECUTE ON FUNCTION ... TO authenticated`
 - Audit-trail actions: insert into `audit_logs(user_id, action, entity_type, entity_id, details jsonb)`
 
+### Fragile RLS chain (content hierarchy)
+`curricula → tracks → modules → units → lessons → schedules` policies join 5-6 tables deep
+(see `20260518000026_lms_v2_content_hierarchy.sql`). Every hop currently lands on a PK or
+indexed column — if you change any join key in this chain, verify a supporting index exists,
+or all five dependent tables degrade at once. This shape already caused one recursion outage
+(`20260515000015_fix_classroom_rls_circular_references.sql`).
+
 ### Classroom ↔ student sync (key invariant)
 Students must exist in **`classroom_students`** to see a classroom. Adding to `cohort_students` alone is not enough — `trg_sync_cohort_student_to_classroom` handles the sync automatically. Never bypass it.
 

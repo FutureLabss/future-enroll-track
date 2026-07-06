@@ -388,18 +388,17 @@ export default function CohortDetailPage() {
   const { data: pageData, isLoading: loading } = useQuery({
     queryKey,
     queryFn: async () => {
-      const [cRes, mRes] = await Promise.all([
+      // Two waves instead of four: sessions/assignments only filter by cohort
+      // id so they don't need the cohort row first, and the schedules lookup
+      // embeds its lessons join instead of a fourth round trip
+      const [cRes, mRes, sessionsRes, assignmentsRes] = await Promise.all([
         supabase.from('cohorts').select('*, programs(program_name), classrooms(id, name, location)').eq('id', id!).single(),
         supabase.from('cohort_students').select('id, student_id, enrollment_id, auto_graduation_status, graduation_override, graduation_override_reason, final_graduation_status, enrollments(enrollment_status, total_amount, amount_paid, outstanding_balance)').eq('cohort_id', id!),
+        supabase.from('attendance_sessions').select('id, code, status, created_at, lesson_id, schedule_id').eq('cohort_id', id!).order('created_at', { ascending: false }),
+        supabase.from('assignments').select('id, title, unit_id, lesson_id, due_date, status, cohort_id, classroom_id, created_at').eq('cohort_id', id!).order('created_at', { ascending: false }),
       ]);
       const cohortRow = cRes.data;
       const rows = mRes.data || [];
-
-      const [sessionsRes, assignmentsRes] = cohortRow?.classroom_id ? await Promise.all([
-        supabase.from('attendance_sessions').select('id, code, status, created_at, lesson_id, schedule_id').eq('cohort_id', id!).order('created_at', { ascending: false }),
-        supabase.from('assignments').select('id, title, unit_id, lesson_id, due_date, status, cohort_id, classroom_id, created_at').eq('cohort_id', id!).order('created_at', { ascending: false }),
-      ]) : [{ data: [] }, { data: [] }];
-
       const sessionRows = (sessionsRes.data || []) as any[];
       const assignmentRows = (assignmentsRes.data || []) as any[];
 
@@ -411,33 +410,23 @@ export default function CohortDetailPage() {
 
       const [oldLessonsForSessions, schedulesData, unitsData, oldLessonsForAssignments, profilesData] = await Promise.all([
         sessionLessonIds.length ? supabase.from('old_lessons').select('id, title, lesson_date').in('id', sessionLessonIds) : { data: [] as any[] },
-        sessionScheduleIds.length ? supabase.from('schedules').select('id, title, scheduled_date, lesson_id').in('id', sessionScheduleIds) : { data: [] as any[] },
+        sessionScheduleIds.length ? supabase.from('schedules').select('id, title, scheduled_date, lesson_id, lessons(id, title)').in('id', sessionScheduleIds) : { data: [] as any[] },
         assignmentUnitIds.length ? supabase.from('units').select('id, title').in('id', assignmentUnitIds) : { data: [] as any[] },
         assignmentLessonIds.length ? supabase.from('old_lessons').select('id, title, lesson_date').in('id', assignmentLessonIds) : { data: [] as any[] },
         studentIds.length ? supabase.from('profiles').select('user_id, full_name, email').in('user_id', studentIds) : { data: [] as any[] },
       ]);
 
-      const scheduleRows = (schedulesData.data || []) as any[];
-      const scheduleLessonIds = [...new Set(scheduleRows.map((r) => r.lesson_id).filter(Boolean))];
-      const { data: lessonsForSchedules } = scheduleLessonIds.length
-        ? await supabase.from('lessons').select('id, title').in('id', scheduleLessonIds)
-        : { data: [] as any[] };
-
       const sessionOldLessonsById = new Map((oldLessonsForSessions.data || []).map((r: any) => [r.id, r]));
-      const schedulesById = new Map(scheduleRows.map((r) => [r.id, r]));
-      const scheduleLessonsById = new Map((lessonsForSchedules || []).map((r: any) => [r.id, r]));
+      const schedulesById = new Map(((schedulesData.data || []) as any[]).map((r) => [r.id, r]));
       const unitsById = new Map((unitsData.data || []).map((r: any) => [r.id, r]));
       const assignmentOldLessonsById = new Map((oldLessonsForAssignments.data || []).map((r: any) => [r.id, r]));
       const profileMap = new Map((profilesData.data || []).map((p: any) => [p.user_id, p]));
 
-      const enrichedSessions = sessionRows.map((r) => {
-        const schedule = r.schedule_id ? schedulesById.get(r.schedule_id) : null;
-        return {
-          ...r,
-          old_lessons: r.lesson_id ? sessionOldLessonsById.get(r.lesson_id) || null : null,
-          schedules: schedule ? { ...schedule, lessons: schedule.lesson_id ? scheduleLessonsById.get(schedule.lesson_id) || null : null } : null,
-        };
-      });
+      const enrichedSessions = sessionRows.map((r) => ({
+        ...r,
+        old_lessons: r.lesson_id ? sessionOldLessonsById.get(r.lesson_id) || null : null,
+        schedules: (r.schedule_id ? schedulesById.get(r.schedule_id) : null) ?? null,
+      }));
       const enrichedAssignments = assignmentRows.map((r) => ({
         ...r,
         units: r.unit_id ? unitsById.get(r.unit_id) || null : null,

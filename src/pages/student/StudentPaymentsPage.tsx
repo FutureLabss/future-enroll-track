@@ -60,7 +60,7 @@ export default function StudentPaymentsPage() {
     { key: 'payment_method', header: 'Method', render: (r: any) => (
       <Badge variant="outline" className="capitalize">{r.payment_method?.replace('_', ' ') || '—'}</Badge>
     ) },
-    { key: 'created_at', header: 'Date', render: (r: any) => new Date(r.created_at).toLocaleDateString() },
+    { key: 'created_at', header: 'Date', render: (r: any) => new Date(r.created_at).toLocaleDateString('en-NG') },
     { key: 'receipt', header: '', render: (r: any) => (
       <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openReceipt(r); }}>
         <FileText className="h-4 w-4 mr-1" /> Receipt
@@ -89,7 +89,7 @@ export default function StudentPaymentsPage() {
             <ReceiptText className="h-4 w-4 text-primary" />
           </div>
           <p className="mt-2 text-2xl font-semibold">{latestPayment ? formatCurrency(Number(latestPayment.amount || 0)) : '—'}</p>
-          <p className="text-xs text-muted-foreground">{latestPayment ? new Date(latestPayment.created_at).toLocaleDateString() : 'No payments yet'}</p>
+          <p className="text-xs text-muted-foreground">{latestPayment ? new Date(latestPayment.created_at).toLocaleDateString('en-NG') : 'No payments yet'}</p>
         </div>
         <div className="glass-card rounded-xl border border-border p-4">
           <div className="flex items-center justify-between gap-3">

@@ -1100,7 +1100,7 @@ export default function ClassroomDetailPage() {
   ], []);
 
   const lessonColumns = useMemo(() => [
-    { key: 'date', header: 'Date', render: (r: any) => new Date(r.lesson_date).toLocaleDateString() },
+    { key: 'date', header: 'Date', render: (r: any) => new Date(r.lesson_date).toLocaleDateString('en-NG') },
     { key: 'title', header: 'Lesson', render: (r: any) => r.title },
     { key: 'time', header: 'Time', render: (r: any) => `${r.start_time} – ${r.end_time}` },
     { key: 'tutor', header: 'Tutor', render: (r: any) => r.staff?.full_name || '—' },
@@ -1162,8 +1162,8 @@ export default function ClassroomDetailPage() {
     { key: 'students', header: 'Students', render: (r: any) => r.cohort_students?.[0]?.count ?? 0 },
     { key: 'capacity', header: 'Capacity', render: (r: any) => r.capacity || '—' },
     { key: 'scope', header: 'Scope', render: (r: any) => r.scope_type ? <span className="capitalize">{r.scope_type}</span> : 'Entire classroom' },
-    { key: 'start_date', header: 'Start', render: (r: any) => r.start_date ? new Date(r.start_date).toLocaleDateString() : '—' },
-    { key: 'end_date', header: 'End', render: (r: any) => r.end_date ? new Date(r.end_date).toLocaleDateString() : '—' },
+    { key: 'start_date', header: 'Start', render: (r: any) => r.start_date ? new Date(r.start_date).toLocaleDateString('en-NG') : '—' },
+    { key: 'end_date', header: 'End', render: (r: any) => r.end_date ? new Date(r.end_date).toLocaleDateString('en-NG') : '—' },
     { key: 'actions', header: '', render: (r: any) => (
       <div className="flex gap-1">
         <Button size="sm" variant="ghost" className="h-7 px-2" onClick={(event) => { event.stopPropagation(); setCohortStudentsModal({ open: true, cohort: r }); }}>
@@ -1180,7 +1180,7 @@ export default function ClassroomDetailPage() {
     { key: 'title', header: 'Assignment', render: (r: any) => <span className="font-medium">{r.title}</span> },
     { key: 'cohort', header: 'Cohort', render: (r: any) => r.cohorts?.cohort_label || 'All' },
     { key: 'unit', header: 'Unit', render: (r: any) => r.units?.title || '—' },
-    { key: 'due_date', header: 'Due', render: (r: any) => r.due_date ? new Date(r.due_date).toLocaleDateString() : '—' },
+    { key: 'due_date', header: 'Due', render: (r: any) => r.due_date ? new Date(r.due_date).toLocaleDateString('en-NG') : '—' },
     { key: 'status', header: 'Status', render: (r: any) => <Badge variant="outline" className="capitalize">{r.status}</Badge> },
     { key: 'actions', header: '', render: (r: any) => (
       <div className="flex items-center justify-end gap-1">
@@ -1208,7 +1208,7 @@ export default function ClassroomDetailPage() {
   const presentationColumns = useMemo(() => [
     { key: 'title', header: 'Presentation', render: (r: any) => <span className="font-medium">{r.title}</span> },
     { key: 'cohort', header: 'Cohort', render: (r: any) => r.cohorts?.cohort_label || '—' },
-    { key: 'date', header: 'Date', render: (r: any) => r.schedules?.scheduled_date ? `${new Date(`${r.schedules.scheduled_date}T00:00:00`).toLocaleDateString()} · ${r.schedules.start_time}–${r.schedules.end_time}` : '—' },
+    { key: 'date', header: 'Date', render: (r: any) => r.schedules?.scheduled_date ? `${new Date(`${r.schedules.scheduled_date}T00:00:00`).toLocaleDateString('en-NG')} · ${r.schedules.start_time}–${r.schedules.end_time}` : '—' },
     { key: 'pass_score', header: 'Pass Score', render: (r: any) => `${r.pass_score} / ${r.max_score}` },
     { key: 'status', header: 'Status', render: (r: any) => <Badge variant="outline" className="capitalize">{r.status}</Badge> },
     { key: 'actions', header: '', render: (r: any) => (

@@ -127,7 +127,7 @@ if (!isAdmin) return <div>Access denied</div>;
 
 - Status colour map: define once per file, reuse — `STATUS_COLOURS: Record<string, string>`
 - Currency: always `₦${Number(val).toLocaleString('en-NG', { maximumFractionDigits: 0 })}`
-- Dates: `new Date(iso).toLocaleDateString()` — never raw ISO strings in UI
+- Dates: `new Date(iso).toLocaleDateString('en-NG')` — always pass 'en-NG' explicitly (bare calls render American MM/DD for US-locale browsers); never raw ISO strings in UI
 - No comments unless the WHY is non-obvious
 - No `console.log` left in committed code
 - Tailwind only — no inline `style={}` unless computing dynamic values

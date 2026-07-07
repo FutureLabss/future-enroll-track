@@ -200,7 +200,7 @@ export default function HubsPage() {
                 </p>
               )}
               <p className="text-xs text-muted-foreground mb-4">
-                Created {new Date(hub.created_at).toLocaleDateString()}
+                Created {new Date(hub.created_at).toLocaleDateString('en-NG')}
               </p>
               <Button size="sm" variant="outline" className="w-full" onClick={() => openInvite(hub)}>
                 <Mail className="h-3.5 w-3.5 mr-1.5" />Invite Admin
@@ -224,7 +224,7 @@ export default function HubsPage() {
                   <p className="text-xs text-muted-foreground">
                     {inv.hubs?.name} · {inv.hub_role} ·{' '}
                     {new Date(inv.expires_at) > new Date()
-                      ? `Expires ${new Date(inv.expires_at).toLocaleDateString()}`
+                      ? `Expires ${new Date(inv.expires_at).toLocaleDateString('en-NG')}`
                       : <span className="text-destructive">Expired</span>
                     }
                   </p>

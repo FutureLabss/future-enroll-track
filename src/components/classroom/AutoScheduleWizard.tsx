@@ -161,7 +161,7 @@ export function AutoScheduleWizard({ open, onClose, classroomId, classroomName, 
                 <p className="font-semibold text-success">{generated.length} sessions scheduled</p>
                 {generated.length > 0 && (
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {new Date(generated[0].scheduled_date + 'T12:00:00').toLocaleDateString()} – {new Date(generated[generated.length - 1].scheduled_date + 'T12:00:00').toLocaleDateString()}
+                    {new Date(generated[0].scheduled_date + 'T12:00:00').toLocaleDateString('en-NG')} – {new Date(generated[generated.length - 1].scheduled_date + 'T12:00:00').toLocaleDateString('en-NG')}
                   </p>
                 )}
               </div>

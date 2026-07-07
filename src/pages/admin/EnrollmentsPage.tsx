@@ -148,7 +148,7 @@ export default function EnrollmentsPage() {
   };
 
   const formatEnrollmentDate = (r: any) => r.first_payment_date
-    ? new Date(r.first_payment_date).toLocaleDateString()
+    ? new Date(r.first_payment_date).toLocaleDateString('en-NG')
     : '—';
 
   const handleExport = async () => {
@@ -172,7 +172,7 @@ export default function EnrollmentsPage() {
         e.organizations?.organization_name || '',
         e.enrollment_status, getPaymentStatus(e),
         Number(e.total_amount), Number(e.amount_paid), Number(e.outstanding_balance),
-        e.created_at ? new Date(e.created_at).toLocaleDateString() : '',
+        e.created_at ? new Date(e.created_at).toLocaleDateString('en-NG') : '',
         ...exportCustomFields.map((f: any) => (cv[f.key] ?? '')),
       ];
     });

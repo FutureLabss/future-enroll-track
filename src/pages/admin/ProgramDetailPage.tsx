@@ -153,8 +153,8 @@ export default function ProgramDetailPage() {
       },
     },
     { key: 'students', header: 'Students', render: (row: any) => row.cohort_students?.[0]?.count ?? 0 },
-    { key: 'start_date', header: 'Start', render: (row: any) => row.start_date ? new Date(row.start_date).toLocaleDateString() : '—' },
-    { key: 'end_date', header: 'End', render: (row: any) => row.end_date ? new Date(row.end_date).toLocaleDateString() : '—' },
+    { key: 'start_date', header: 'Start', render: (row: any) => row.start_date ? new Date(row.start_date).toLocaleDateString('en-NG') : '—' },
+    { key: 'end_date', header: 'End', render: (row: any) => row.end_date ? new Date(row.end_date).toLocaleDateString('en-NG') : '—' },
   ], []);
 
   const enrollmentColumns = useMemo(() => [

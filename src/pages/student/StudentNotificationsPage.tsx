@@ -146,7 +146,7 @@ export default function StudentNotificationsPage() {
         <div className="glass-card rounded-xl border border-border p-4">
           <p className="text-sm font-medium">Latest</p>
           <p className="mt-2 truncate text-lg font-semibold">{notifications[0]?.title || 'No notifications'}</p>
-          <p className="text-xs text-muted-foreground">{notifications[0] ? new Date(notifications[0].created_at).toLocaleDateString() : 'You are all caught up'}</p>
+          <p className="text-xs text-muted-foreground">{notifications[0] ? new Date(notifications[0].created_at).toLocaleDateString('en-NG') : 'You are all caught up'}</p>
         </div>
       </div>
 

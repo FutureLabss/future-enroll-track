@@ -198,7 +198,7 @@ export default function OtherIncomePage() {
         ));
         if (dup && !dupAcknowledged) {
           setDupAcknowledged(true);
-          toast.warning(`${dup.payer_name} already has an active ${dup.frequency} recurring payment (next due ${new Date(dup.next_due_date).toLocaleDateString()}). Edit that one instead, or save again to create a second template anyway.`);
+          toast.warning(`${dup.payer_name} already has an active ${dup.frequency} recurring payment (next due ${new Date(dup.next_due_date).toLocaleDateString('en-NG')}). Edit that one instead, or save again to create a second template anyway.`);
           return;
         }
         // Create new recurring template
@@ -309,7 +309,7 @@ export default function OtherIncomePage() {
     : 'Record Income';
 
   const incomeColumns = useMemo(() => [
-    { key: 'payment_date', header: 'Date', render: (r: any) => new Date(r.payment_date).toLocaleDateString() },
+    { key: 'payment_date', header: 'Date', render: (r: any) => new Date(r.payment_date).toLocaleDateString('en-NG') },
     { key: 'category', header: 'Category', render: (r: any) => <span className="capitalize">{r.category}</span> },
     { key: 'payer_name', header: 'Payer' },
     { key: 'amount', header: 'Amount', render: (r: any) => fmt(Number(r.amount)) },
@@ -545,7 +545,7 @@ export default function OtherIncomePage() {
                           <div className="flex items-center gap-3 mt-1 flex-wrap">
                             <span className={`text-xs ${isOverdue || isDueToday ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
                               {isOverdue ? 'Overdue: ' : isDueToday ? 'Due today: ' : 'Next due: '}
-                              {new Date(r.next_due_date).toLocaleDateString()}
+                              {new Date(r.next_due_date).toLocaleDateString('en-NG')}
                             </span>
                             {r.payer_email && (
                               <span className="text-xs text-muted-foreground flex items-center gap-1">

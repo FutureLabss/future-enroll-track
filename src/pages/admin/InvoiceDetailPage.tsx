@@ -219,8 +219,8 @@ export default function InvoiceDetailPage() {
                   <div>
                     <p className="font-medium text-foreground">{formatCurrency(Number(inst.amount))}</p>
                     <p className="text-sm text-muted-foreground">
-                      Due: {new Date(inst.due_date).toLocaleDateString()}
-                      {inst.paid_at && ` · Paid: ${new Date(inst.paid_at).toLocaleDateString()}`}
+                      Due: {new Date(inst.due_date).toLocaleDateString('en-NG')}
+                      {inst.paid_at && ` · Paid: ${new Date(inst.paid_at).toLocaleDateString('en-NG')}`}
                     </p>
                   </div>
                 </div>

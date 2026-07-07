@@ -90,8 +90,8 @@ export default function StaffInvitationsPage() {
                   {inv.status === 'revoked' && <Badge variant="destructive" className="bg-destructive/10 text-destructive"><XCircle className="h-3 w-3 mr-1"/> Revoked</Badge>}
                 </div>
                 <p className="text-xs text-muted-foreground mt-3">
-                  Sent {new Date(inv.created_at).toLocaleDateString()}
-                  {inv.status === 'pending' && ` · Expires ${new Date(inv.expires_at).toLocaleDateString()}`}
+                  Sent {new Date(inv.created_at).toLocaleDateString('en-NG')}
+                  {inv.status === 'pending' && ` · Expires ${new Date(inv.expires_at).toLocaleDateString('en-NG')}`}
                 </p>
               </div>
               

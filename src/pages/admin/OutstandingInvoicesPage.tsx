@@ -124,7 +124,7 @@ export default function OutstandingInvoicesPage() {
                       <TableCell className="text-right">{fmt(r.total_amount)}</TableCell>
                       <TableCell className="text-right">{fmt(r.amount_paid)}</TableCell>
                       <TableCell className="text-right font-semibold">{fmt(r.outstanding)}</TableCell>
-                      <TableCell>{r.next_due_date ? new Date(r.next_due_date).toLocaleDateString() : '—'}</TableCell>
+                      <TableCell>{r.next_due_date ? new Date(r.next_due_date).toLocaleDateString('en-NG') : '—'}</TableCell>
                       <TableCell>
                         {r.is_overdue ? (
                           <Badge variant="destructive">Overdue {r.days_overdue}d</Badge>

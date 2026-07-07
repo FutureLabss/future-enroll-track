@@ -540,7 +540,7 @@ export default function CohortDetailPage() {
 
   const presentationColumns = useMemo(() => [
     { key: 'title', header: 'Presentation', render: (r: any) => <span className="font-medium">{r.title}</span> },
-    { key: 'date', header: 'Date', render: (r: any) => r.schedules?.scheduled_date ? `${new Date(`${r.schedules.scheduled_date}T00:00:00`).toLocaleDateString()} · ${r.schedules.start_time}–${r.schedules.end_time}` : '—' },
+    { key: 'date', header: 'Date', render: (r: any) => r.schedules?.scheduled_date ? `${new Date(`${r.schedules.scheduled_date}T00:00:00`).toLocaleDateString('en-NG')} · ${r.schedules.start_time}–${r.schedules.end_time}` : '—' },
     { key: 'pass_score', header: 'Pass Score', render: (r: any) => `${r.pass_score} / ${r.max_score}` },
     { key: 'status', header: 'Status', render: (r: any) => <Badge variant="outline" className={`capitalize ${STATUS_COLOURS[r.status] || ''}`}>{r.status}</Badge> },
     {
@@ -607,7 +607,7 @@ export default function CohortDetailPage() {
   const assignmentColumns = useMemo(() => [
     { key: 'title', header: 'Assignment', render: (r: any) => <span className="font-medium">{r.title}</span> },
     { key: 'unit', header: 'Unit', render: (r: any) => r.units?.title || r.old_lessons?.title || '—' },
-    { key: 'due_date', header: 'Due', render: (r: any) => r.due_date ? new Date(r.due_date).toLocaleDateString() : '—' },
+    { key: 'due_date', header: 'Due', render: (r: any) => r.due_date ? new Date(r.due_date).toLocaleDateString('en-NG') : '—' },
     { key: 'status', header: 'Status', render: (r: any) => <Badge variant="outline" className={STATUS_COLOURS[r.status] || ''}>{r.status}</Badge> },
     { key: 'actions', header: '', render: (r: any) => r.status !== 'published' ? (
       <Button size="sm" variant="outline" onClick={() => publishAssignment(r.id)}>
@@ -678,7 +678,7 @@ export default function CohortDetailPage() {
         <Badge variant="outline" className={`capitalize ${STATUS_COLOURS[cohort.status] || ''}`}>{cohort.status}</Badge>
         {cohort.scope_type && <Badge variant="outline" className="capitalize text-primary/80">Scope: {cohort.scope_type}</Badge>}
         <span className="text-sm text-muted-foreground">
-          {cohort.start_date ? new Date(cohort.start_date).toLocaleDateString() : 'No start date'} – {cohort.end_date ? new Date(cohort.end_date).toLocaleDateString() : 'ongoing'}
+          {cohort.start_date ? new Date(cohort.start_date).toLocaleDateString('en-NG') : 'No start date'} – {cohort.end_date ? new Date(cohort.end_date).toLocaleDateString('en-NG') : 'ongoing'}
         </span>
       </div>
 

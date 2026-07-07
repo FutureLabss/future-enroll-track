@@ -89,7 +89,7 @@ export default function ProgramsPage() {
     },
     {
       key: 'created_at', header: 'Created',
-      render: (r: any) => new Date(r.created_at).toLocaleDateString(),
+      render: (r: any) => new Date(r.created_at).toLocaleDateString('en-NG'),
     },
     {
       key: 'actions', header: '',

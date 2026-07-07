@@ -64,7 +64,7 @@ export default function StudentInvoicesPage() {
       const next = getNextInstallment(r);
       if (!next) return <span className="text-muted-foreground">—</span>;
       const overdue = next.status === 'overdue' || new Date(`${next.due_date}T00:00:00`) < new Date();
-      return <span className={overdue ? 'text-destructive' : ''}>{new Date(`${next.due_date}T00:00:00`).toLocaleDateString()}</span>;
+      return <span className={overdue ? 'text-destructive' : ''}>{new Date(`${next.due_date}T00:00:00`).toLocaleDateString('en-NG')}</span>;
     } },
     { key: 'status', header: 'Status', render: (r: any) => <StatusBadge status={r.status} /> },
     { key: 'action', header: '', render: (r: any) => (
@@ -111,7 +111,7 @@ export default function StudentInvoicesPage() {
             <Clock className="h-4 w-4 text-primary" />
           </div>
           <p className="mt-2 text-2xl font-semibold">{nextDue ? formatCurrency(Number(nextDue.amount || 0)) : '—'}</p>
-          <p className="text-xs text-muted-foreground">{nextDue ? `Due ${new Date(`${nextDue.due_date}T00:00:00`).toLocaleDateString()}` : 'No payment due'}</p>
+          <p className="text-xs text-muted-foreground">{nextDue ? `Due ${new Date(`${nextDue.due_date}T00:00:00`).toLocaleDateString('en-NG')}` : 'No payment due'}</p>
         </div>
       </div>
 

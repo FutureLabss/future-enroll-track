@@ -31,7 +31,7 @@ const monthOptions = () => {
     const dt = new Date(d.getFullYear(), d.getMonth() - i, 1);
     out.push({
       value: toMonthValue(dt),
-      label: dt.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+      label: dt.toLocaleDateString('en-NG', { month: 'long', year: 'numeric' }),
     });
   }
   return out;
@@ -207,7 +207,7 @@ export default function PayrollPage() {
     { key: 'status', header: 'Status', render: (r: any) => (
       <Badge variant={r.status === 'paid' ? 'default' : 'secondary'} className="capitalize">{r.status}</Badge>
     )},
-    { key: 'paid_at', header: 'Paid On', render: (r: any) => r.paid_at ? new Date(r.paid_at).toLocaleDateString() : '—' },
+    { key: 'paid_at', header: 'Paid On', render: (r: any) => r.paid_at ? new Date(r.paid_at).toLocaleDateString('en-NG') : '—' },
     { key: 'notes', header: 'Notes', render: (r: any) => r.notes || '—' },
     { key: 'actions', header: '', render: (r: any) => (
       <div className="flex gap-1 justify-end">

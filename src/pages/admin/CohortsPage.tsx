@@ -105,8 +105,8 @@ export default function CohortsPage() {
         ? <span className="capitalize text-primary/80 text-sm">{r.scope_type}</span>
         : <span className="text-muted-foreground text-xs">—</span>,
     },
-    { key: 'start_date', header: 'Start', render: (r: any) => r.start_date ? new Date(r.start_date).toLocaleDateString() : '—' },
-    { key: 'end_date', header: 'End', render: (r: any) => r.end_date ? new Date(r.end_date).toLocaleDateString() : '—' },
+    { key: 'start_date', header: 'Start', render: (r: any) => r.start_date ? new Date(r.start_date).toLocaleDateString('en-NG') : '—' },
+    { key: 'end_date', header: 'End', render: (r: any) => r.end_date ? new Date(r.end_date).toLocaleDateString('en-NG') : '—' },
   ], []);
 
   return (

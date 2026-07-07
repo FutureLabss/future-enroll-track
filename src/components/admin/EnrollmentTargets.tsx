@@ -19,7 +19,7 @@ type Perf = {
 };
 
 const formatMonth = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  new Date(iso).toLocaleDateString('en-NG', { month: 'short', year: 'numeric' });
 
 const monthInputValue = (iso: string) => iso.slice(0, 7); // yyyy-mm
 

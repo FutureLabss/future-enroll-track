@@ -343,7 +343,7 @@ export default function EnrollmentDetailPage() {
             ['Verification', enrollment.verification_status || 'pending'],
             ['Amount Paid', formatCurrency(Number(enrollment.amount_paid))],
             ['Outstanding', formatCurrency(Number(enrollment.outstanding_balance || 0))],
-            ['Enrolled', enrollment.first_payment_date ? new Date(enrollment.first_payment_date).toLocaleDateString() : '—'],
+            ['Enrolled', enrollment.first_payment_date ? new Date(enrollment.first_payment_date).toLocaleDateString('en-NG') : '—'],
           ].map(([label, value]) => (
             <div key={label as string}>
               <p className="text-xs text-muted-foreground">{label}</p>

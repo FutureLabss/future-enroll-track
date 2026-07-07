@@ -187,7 +187,7 @@ export default function PresentationDetailPage() {
           <Calendar className="h-5 w-5 text-primary mb-2" />
           <p className="text-xs text-muted-foreground">Date</p>
           <p className="font-medium">
-            {schedule?.scheduled_date ? new Date(`${schedule.scheduled_date}T00:00:00`).toLocaleDateString() : '—'}
+            {schedule?.scheduled_date ? new Date(`${schedule.scheduled_date}T00:00:00`).toLocaleDateString('en-NG') : '—'}
             {schedule?.start_time ? ` · ${schedule.start_time}–${schedule.end_time}` : ''}
           </p>
         </div>

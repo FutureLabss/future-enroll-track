@@ -157,7 +157,7 @@ export default function PaymentsPage() {
     { key: 'invoice', header: 'Invoice / Category', render: (r: any) => r.invoices?.invoice_number || '—' },
     { key: 'amount', header: 'Amount', render: (r: any) => formatCurrency(Number(r.amount)) },
     { key: 'payment_method', header: 'Method', render: (r: any) => r.payment_method || '—' },
-    { key: 'created_at', header: 'Date', render: (r: any) => new Date(r._date || r.created_at).toLocaleDateString() },
+    { key: 'created_at', header: 'Date', render: (r: any) => new Date(r._date || r.created_at).toLocaleDateString('en-NG') },
     { key: 'receipt', header: '', render: (r: any) => r._kind === 'tuition' ? (
       <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openReceipt(r); }}>
         <FileText className="h-4 w-4 mr-1" /> Receipt
@@ -195,7 +195,7 @@ export default function PaymentsPage() {
                       <SelectContent>
                         {installments.map(inst => (
                           <SelectItem key={inst.id} value={inst.id}>
-                            ₦{Number(inst.amount).toLocaleString()} — Due {new Date(inst.due_date).toLocaleDateString()}
+                            ₦{Number(inst.amount).toLocaleString()} — Due {new Date(inst.due_date).toLocaleDateString('en-NG')}
                           </SelectItem>
                         ))}
                       </SelectContent>

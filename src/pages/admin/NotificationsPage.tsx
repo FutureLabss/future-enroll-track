@@ -25,7 +25,7 @@ export default function NotificationsPage() {
     { key: 'message', header: 'Message', render: (r: any) => <span className="text-muted-foreground truncate max-w-[300px] block">{r.message}</span> },
     { key: 'channel', header: 'Channel', render: (r: any) => <StatusBadge status={r.channel === 'email' ? 'active' : 'pending'} /> },
     { key: 'read', header: 'Read', render: (r: any) => r.read ? 'Yes' : 'No' },
-    { key: 'created_at', header: 'Date', render: (r: any) => new Date(r.created_at).toLocaleDateString() },
+    { key: 'created_at', header: 'Date', render: (r: any) => new Date(r.created_at).toLocaleDateString('en-NG') },
   ], []);
 
   return (

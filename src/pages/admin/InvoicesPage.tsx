@@ -104,7 +104,7 @@ export default function InvoicesPage() {
     { key: 'currency', header: 'Currency' },
     { key: 'payment_plan_type', header: 'Plan', render: (r: any) => <span className="capitalize">{r.payment_plan_type}</span> },
     { key: 'status', header: 'Status', render: (r: any) => <StatusBadge status={r.status} /> },
-    { key: 'created_at', header: 'Created', render: (r: any) => new Date(r.created_at).toLocaleDateString() },
+    { key: 'created_at', header: 'Created', render: (r: any) => new Date(r.created_at).toLocaleDateString('en-NG') },
   ], []);
 
   return (

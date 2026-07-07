@@ -208,7 +208,7 @@ export default function StudentInvoiceDetailPage() {
           <div className="rounded-lg border border-border px-3 py-2">
             <p className="text-xs text-muted-foreground">Next Due</p>
             <p className="text-sm font-medium">
-              {nextInstallment ? `${formatCurrency(Number(nextInstallment.amount))} · ${new Date(`${nextInstallment.due_date}T00:00:00`).toLocaleDateString()}` : 'No due installment'}
+              {nextInstallment ? `${formatCurrency(Number(nextInstallment.amount))} · ${new Date(`${nextInstallment.due_date}T00:00:00`).toLocaleDateString('en-NG')}` : 'No due installment'}
             </p>
           </div>
           <div className="rounded-lg border border-border px-3 py-2">
@@ -237,7 +237,7 @@ export default function StudentInvoiceDetailPage() {
           <h3 className="font-heading font-semibold mb-1">Pay this invoice</h3>
           <p className="text-sm text-muted-foreground mb-4">
             {nextInstallment
-              ? `Next installment: ${formatCurrency(defaultPayAmount)} due ${new Date(nextInstallment.due_date).toLocaleDateString()}`
+              ? `Next installment: ${formatCurrency(defaultPayAmount)} due ${new Date(nextInstallment.due_date).toLocaleDateString('en-NG')}`
               : `Outstanding balance: ${formatCurrency(outstanding)}`}
           </p>
 
@@ -341,7 +341,7 @@ export default function StudentInvoiceDetailPage() {
                 <span className="text-sm text-muted-foreground w-6">{i + 1}.</span>
                 <div>
                   <p className="font-medium">{formatCurrency(Number(inst.amount))}</p>
-                  <p className="text-sm text-muted-foreground">Due {new Date(inst.due_date).toLocaleDateString()}</p>
+                  <p className="text-sm text-muted-foreground">Due {new Date(inst.due_date).toLocaleDateString('en-NG')}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">

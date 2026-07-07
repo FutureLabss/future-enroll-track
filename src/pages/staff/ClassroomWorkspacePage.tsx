@@ -609,7 +609,7 @@ export default function ClassroomWorkspacePage() {
   );
 
   const scheduleColumns = useMemo(() => [
-    { key: 'date', header: 'Date', render: (r: any) => new Date(r.scheduled_date + 'T00:00:00').toLocaleDateString() },
+    { key: 'date', header: 'Date', render: (r: any) => new Date(r.scheduled_date + 'T00:00:00').toLocaleDateString('en-NG') },
     { key: 'title', header: 'Session', render: (r: any) => r.title || r.lessons?.title || r.modules?.title || <span className="text-muted-foreground text-xs italic">Untitled</span> },
     { key: 'time', header: 'Time', render: (r: any) => `${r.start_time} – ${r.end_time}` },
     { key: 'instructor', header: 'Instructor', render: (r: any) => r.staff?.full_name || '—' },
@@ -831,7 +831,7 @@ export default function ClassroomWorkspacePage() {
                         <div>
                           <p className="font-medium">{c.cohort_label}</p>
                           <p className="text-xs text-muted-foreground">
-                            {c.start_date ? new Date(c.start_date).toLocaleDateString() : '—'} – {c.end_date ? new Date(c.end_date).toLocaleDateString() : '—'}
+                            {c.start_date ? new Date(c.start_date).toLocaleDateString('en-NG') : '—'} – {c.end_date ? new Date(c.end_date).toLocaleDateString('en-NG') : '—'}
                           </p>
                           {c.scope_type && (
                             <p className="text-xs text-primary/70 mt-0.5 capitalize">

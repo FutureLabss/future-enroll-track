@@ -117,9 +117,9 @@ export default function StaffInvitationsAdminPage() {
     }},
     { key: 'dates', header: 'Dates', render: (r: any) => (
       <div className="text-xs">
-        <p>Sent: {new Date(r.created_at).toLocaleDateString()}</p>
-        {r.status === 'pending' && <p className="text-muted-foreground">Expires: {new Date(r.expires_at).toLocaleDateString()}</p>}
-        {r.status === 'accepted' && <p className="text-success">Accepted: {new Date(r.accepted_at).toLocaleDateString()}</p>}
+        <p>Sent: {new Date(r.created_at).toLocaleDateString('en-NG')}</p>
+        {r.status === 'pending' && <p className="text-muted-foreground">Expires: {new Date(r.expires_at).toLocaleDateString('en-NG')}</p>}
+        {r.status === 'accepted' && <p className="text-success">Accepted: {new Date(r.accepted_at).toLocaleDateString('en-NG')}</p>}
       </div>
     )},
     { key: 'actions', header: '', render: (r: any) => (

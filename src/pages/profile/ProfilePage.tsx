@@ -268,7 +268,7 @@ export default function ProfilePage() {
                 <div>
                   <p className="font-medium">{enrollment.programs?.program_name || 'Program'}</p>
                   <p className="text-sm text-muted-foreground">
-                    {enrollment.cohorts?.cohort_label || 'No cohort assigned'} · Enrolled {new Date(enrollment.created_at).toLocaleDateString()}
+                    {enrollment.cohorts?.cohort_label || 'No cohort assigned'} · Enrolled {new Date(enrollment.created_at).toLocaleDateString('en-NG')}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">

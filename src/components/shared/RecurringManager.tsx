@@ -141,7 +141,7 @@ export function RecurringManager({ kind, categories, onPosted }: Props) {
     { key: 'frequency', header: 'Frequency', render: (r: any) => <span className="capitalize">{r.frequency}</span> },
     { key: 'next_due_date', header: 'Next Due', render: (r: any) => (
       <div className="flex items-center gap-2">
-        {new Date(r.next_due_date).toLocaleDateString()}
+        {new Date(r.next_due_date).toLocaleDateString('en-NG')}
         {r.next_due_date <= today && r.active && <Badge variant="destructive">Due</Badge>}
       </div>
     )},

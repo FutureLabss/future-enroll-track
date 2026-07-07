@@ -105,7 +105,7 @@ export default function ExpensesPage() {
     .reduce((s, r) => s + Number(r.amount), 0);
 
   const columns = useMemo(() => [
-    { key: 'payment_date', header: 'Date', render: (r: any) => new Date(r.payment_date).toLocaleDateString() },
+    { key: 'payment_date', header: 'Date', render: (r: any) => new Date(r.payment_date).toLocaleDateString('en-NG') },
     { key: 'category', header: 'Category', render: (r: any) => <span className="capitalize">{r.category}</span> },
     { key: 'vendor_name', header: 'Vendor', render: (r: any) => r.vendor_name || '—' },
     { key: 'amount', header: 'Amount', render: (r: any) => formatCurrency(Number(r.amount)) },

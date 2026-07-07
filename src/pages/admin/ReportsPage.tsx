@@ -151,7 +151,7 @@ export default function ReportsPage() {
         Number(e.total_amount),
         Number(e.amount_paid),
         Number(e.outstanding_balance),
-        e.created_at ? new Date(e.created_at).toLocaleDateString() : '',
+        e.created_at ? new Date(e.created_at).toLocaleDateString('en-NG') : '',
         ...customFields.filter(f => f.key !== 'profile_photo').map((f: any) => cv[f.key] ?? ''),
       ];
     });

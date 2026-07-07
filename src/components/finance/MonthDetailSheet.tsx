@@ -7,7 +7,7 @@ import { useMonthDetail } from '@/hooks/useMonthDetail';
 
 const fmt = (val: number) => `₦${Number(val || 0).toLocaleString('en-NG', { maximumFractionDigits: 0 })}`;
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' });
-const fmtMonth = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+const fmtMonth = (iso: string) => new Date(iso).toLocaleDateString('en-NG', { month: 'long', year: 'numeric' });
 
 const DISPLAY_CAP = 100;
 

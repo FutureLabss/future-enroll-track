@@ -506,9 +506,6 @@ export default function CohortDetailPage() {
     ];
   }, [members, attendanceSessions, assignments, cohort]);
 
-  if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
-  if (!cohort) return <div className="text-center py-20 text-muted-foreground">Cohort not found.</div>;
-
   const studentColumns = useMemo(() => [
     { key: 'name', header: 'Student', render: (r: any) => r.profile?.full_name || <span className="text-muted-foreground text-sm">—</span> },
     { key: 'email', header: 'Email', render: (r: any) => r.profile?.email || '—' },
@@ -618,6 +615,11 @@ export default function CohortDetailPage() {
       </Button>
     ) : null },
   ], []);
+
+  // Early returns must stay below every hook — returning during loading with
+  // the columns memoized above changes the hook count between renders
+  if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
+  if (!cohort) return <div className="text-center py-20 text-muted-foreground">Cohort not found.</div>;
 
   return (
     <div>

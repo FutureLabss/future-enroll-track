@@ -112,18 +112,6 @@ export default function ProgramDetailPage() {
     }, new Map<string, number>());
   }, [curricula]);
 
-  if (loading) {
-    return (
-      <div className="flex justify-center py-20">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-      </div>
-    );
-  }
-
-  if (!program) {
-    return <div className="text-center py-20 text-muted-foreground">Program not found.</div>;
-  }
-
   const classroomColumns = useMemo(() => [
     { key: 'name', header: 'Classroom', render: (row: any) => <span className="font-medium">{row.name}</span> },
     {
@@ -180,6 +168,20 @@ export default function ProgramDetailPage() {
     { key: 'amount_paid', header: 'Paid', render: (row: any) => formatCurrency(Number(row.amount_paid || 0)) },
     { key: 'outstanding_balance', header: 'Outstanding', render: (row: any) => formatCurrency(Number(row.outstanding_balance || 0)) },
   ], []);
+
+  // Early returns must stay below every hook — returning during loading with
+  // the columns memoized above changes the hook count between renders
+  if (loading) {
+    return (
+      <div className="flex justify-center py-20">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
+  if (!program) {
+    return <div className="text-center py-20 text-muted-foreground">Program not found.</div>;
+  }
 
   return (
     <div>

@@ -598,13 +598,10 @@ export default function ClassroomWorkspacePage() {
     openCohortStudents(cohort);
   };
 
-  if (dataLoading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
-  if (!classroomData) return <div className="text-center py-20 text-muted-foreground">Classroom not found or access denied.</div>;
-
-  const cls = classroomData.classrooms;
+  const cls = classroomData?.classrooms;
   const can = permissions || {};
   const canCreateAssignments = Boolean(can.can_create_assignments);
-  const canViewAssignments = canCreateAssignments || classroomData.staff_type === 'teaching';
+  const canViewAssignments = canCreateAssignments || classroomData?.staff_type === 'teaching';
   const today = new Date().toISOString().split('T')[0];
   const todaySchedules = schedules.filter(s => s.scheduled_date === today && s.status === 'scheduled');
   const unitOptions = Array.from(
@@ -666,6 +663,11 @@ export default function ClassroomWorkspacePage() {
       </div>
     )},
   ], [handleOpenScheduleEdit, handleScheduleStatus]);
+
+  // Early returns must stay below every hook — returning during loading with
+  // scheduleColumns memoized above changes the hook count between renders
+  if (dataLoading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
+  if (!classroomData) return <div className="text-center py-20 text-muted-foreground">Classroom not found or access denied.</div>;
 
   return (
     <div>

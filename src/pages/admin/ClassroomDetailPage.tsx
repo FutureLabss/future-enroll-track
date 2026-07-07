@@ -1052,10 +1052,7 @@ export default function ClassroomDetailPage() {
     }
   }, []);
 
-  if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
-  if (!classroom) return <div className="text-center py-20 text-muted-foreground">Classroom not found.</div>;
-
-  const programId = (classroom as any).program_id || null;
+  const programId = (classroom as any)?.program_id || null;
 
   const staffColumns = useMemo(() => [
     { key: 'name', header: 'Name', render: (r: any) => r.staff?.full_name || '—' },
@@ -1234,6 +1231,12 @@ export default function ClassroomDetailPage() {
     { key: 'can_start_attendance', label: 'Start attendance sessions' },
     { key: 'can_view_students', label: 'View student list' },
   ] as const;
+
+  // Early returns must stay below every hook — when the columns above became
+  // useMemo, returning during loading changed the hook count between renders
+  // and crashed the page ("Rendered more hooks than during the previous render")
+  if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
+  if (!classroom) return <div className="text-center py-20 text-muted-foreground">Classroom not found.</div>;
 
   return (
     <div>

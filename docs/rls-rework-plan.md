@@ -1,8 +1,80 @@
-# Classroom RLS Rework — Staged Plan (awaiting approval)
+# Classroom RLS Rework — Staged Plan
 
-Status: **planned 2026-07-09, not yet approved, nothing applied to prod.**
+Status: **APPLIED TO PROD 2026-07-09 (~14:50–15:35 UTC, user-confirmed free period),
+all per-stage gates passed.** Plus hardening migration 20260709000010 (revoke helper
+EXECUTE from anon/public, flagged by the security advisor post-apply).
+
+## Prod results (2026-07-09)
+
+- schedules: planning 245 ms → 0.41 ms; staff sees exactly 3, student 0 (parity).
+- assignments (the brief's measured query): planning 273 ms → 0.67 ms.
+- lessons as student: previously could not plan within the 8 s timeout; now 1.25 ms
+  planning, 264 ms execution over a full 331-row scan, student sees exactly the 52
+  lessons of their classroom (ground-truth verified at all 5 chain levels: 4/6/31/94/52).
+- field_values: student parity (0), hub admin sees all 422; planning 1.3 ms.
+- Backup: `_rls_policy_backup_classroom` holds all 58 pre-rework policies (matched the
+  07-09 dump exactly). Restore script unchanged: `docs/rls-rollback-classroom.sql`.
+- Advisors: only INFO for the (intentionally) policy-less backup table remains for
+  rework objects; the anon-EXECUTE WARNs on the 12 helpers were fixed by 000010. The
+  same WARN pattern exists on ~105 pre-existing SECURITY DEFINER functions — separate
+  cleanup candidate.
+
+## Follow-up closeout (2026-07-09, later same day)
+
+- **field_values anon-policy mystery CLOSED**: the public EnrollPage only inserts
+  `enrollments` (anon self-enroll policy); field values are written via SECURITY
+  DEFINER RPCs (`submit_enrollment_fields` et al.) and authenticated profile pages.
+  The two "Public …" field_values policies are dead code, kept verbatim; nothing to fix.
+- **20260709000011**: locked down the RPC surface — 82 pre-existing SECURITY DEFINER
+  functions revoked from anon/PUBLIC with explicit grants to authenticated +
+  service_role. Keep-list (still anon-executable, 23 functions): policy helpers used
+  by roles={public} policies + the 6 pre-auth RPCs called from public pages. Verified
+  via has_function_privilege in all three directions.
+- **20260709000012**: dropped `_rls_policy_backup_20260705` (perf-audit artifact,
+  soak passed). `_rls_policy_backup_classroom` stays until the rework has soaked.
+- Migration tracking backfilled for 20260708000002 (was applied 07-08 untracked).
+- `src/integrations/supabase/types.ts` regenerated from the live schema (56 tables);
+  `tsc --noEmit` clean.
+- Still open: watch the first class-hours session post-rework; Nano→Micro decision;
+  frontend retry back-off PR; drop `_rls_policy_backup_classroom` after ~a week.
 Source: `docs/rls-rework-brief.md`, `docs/database-change-policy.md`, live prod state
 verified read-only on 2026-07-09.
+
+## Local verification results (2026-07-09)
+
+Shadow DB: local Postgres 16 (no Docker on this machine), Supabase auth shim
+(`auth.uid()` via `request.jwt.claims`, anon/authenticated roles), schema/indexes/
+functions/policies mirrored from LIVE prod (not repo migrations), synthetic data for
+11 identities across 2 hubs. Migrations 20260709000001–000009 applied in order.
+
+- **159/159 gate checks pass**: per-identity SELECT count matrix over all 13 tables
+  (5 student variants, 3 staff variants, 2 hub admins, superadmin), write-direction
+  tests (grader-perm staff can update, perm-less staff blocked, inactive staff
+  blocked, cross-hub admin blocked, student can't insert attendance for another
+  student), anon paths, helper spot checks.
+- **Planning time** (student identity, same queries as the prod baseline):
+  assignments 679 ms → 1.0 ms, schedules 365 ms → 0.35 ms. SubPlans 290 → 0.
+  Staff identity and lessons/submissions/sessions/field_values all < 1 ms.
+- **Rollback tested**: `docs/rls-rollback-classroom.sql` restores all 58 original
+  policies (verified transactionally); `_rls_policy_backup_classroom` captures 58 rows.
+- Policy count on the 13 tables: 58 → 41.
+- Helper design note: shipped per-row boolean helpers (finance shape) instead of the
+  brief's `uuid[]` sketch — arrays would be re-evaluated per row and degenerate for
+  admin/superadmin on the content chain.
+
+**Pre-existing prod bug found (not caused by, and not fixed by, this rework):** the
+two "Public …" policies on `field_values` reference `enrollments`, which has no anon
+SELECT policy — so the anon pre-auth-form path is dead in prod today (insert blocked
+by RLS, update matches 0 rows). Reproduced identically under original and reworked
+policies. The enrollment form presumably writes through another path. Follow up
+separately; the rework recreates these policies verbatim.
+
+Deliberate semantic normalizations (all asserted in the gates): superadmin no longer
+hub-restricted on submissions/attendance/presentations admin policies; content-chain
+staff writes now require `status='active'` (was unfiltered — inactive staff could
+write); student/staff read paths unified via `classroom_read_access` (e.g. active
+staff without attendance permission now SEE open sessions; program-enrolled students
+see content they previously couldn't).
 
 ## Phase 0 findings (live-verified)
 

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { getFunctionErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatusBadge } from '@/components/shared/StatusBadge';
@@ -73,10 +74,10 @@ export default function EnrollmentDetailPage() {
     if (!enrollment) return;
     setDeleting(true);
     try {
-      const { data, error } = await supabase.functions.invoke('delete-user-account', {
+      const { error } = await supabase.functions.invoke('delete-user-account', {
         body: { account_type: 'enrollment', id: enrollment.id },
       });
-      if (error) throw new Error((data as any)?.error || error.message);
+      if (error) throw new Error(await getFunctionErrorMessage(error));
       toast.success('Enrollment and login account deleted');
       navigate('/admin/enrollments');
     } catch (err: any) {
@@ -92,7 +93,7 @@ export default function EnrollmentDetailPage() {
       const { data, error } = await supabase.functions.invoke('impersonate-user', {
         body: { user_id: enrollment.user_id },
       });
-      if (error || data?.error) throw new Error(data?.error || error?.message);
+      if (error) throw new Error(await getFunctionErrorMessage(error));
       window.open(data.action_link, '_blank', 'noopener,noreferrer');
     } catch (err: any) {
       toast.error('Could not generate preview link: ' + err.message);

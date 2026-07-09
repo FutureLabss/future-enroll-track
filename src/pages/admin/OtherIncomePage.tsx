@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { getFunctionErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable } from '@/components/shared/DataTable';
@@ -280,7 +281,7 @@ export default function OtherIncomePage() {
     setSendingReminder(true);
     try {
       const { data, error } = await supabase.functions.invoke('send-recurring-reminders');
-      if (error) throw error;
+      if (error) throw new Error(await getFunctionErrorMessage(error));
       const sent = data?.sent ?? 0;
       if (sent > 0) toast.success(`${sent} reminder${sent === 1 ? '' : 's'} sent`);
       else toast.info('No reminders due — payers are up to date or already reminded');

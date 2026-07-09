@@ -109,7 +109,7 @@ export function useAttendanceSession(sessionId: string) {
     queryKey: ['attendance-session', sessionId],
     queryFn: async () => {
       const [recordsRes, sessionRes] = await Promise.all([
-        supabase.from('attendance_records').select('id, session_id, student_id, attendance_status, marked_at, lat, lng').eq('session_id', sessionId).order('marked_at'),
+        supabase.from('attendance_records').select('id, session_id, student_id, attendance_status, marked_at, student_lat, student_lng').eq('session_id', sessionId).order('marked_at'),
         supabase.from('attendance_sessions').select('cohort_id, classroom_id').eq('id', sessionId).single(),
       ]);
 
@@ -176,7 +176,7 @@ export function useAttendanceReport(sessionId: string) {
   const { data: records = [], isLoading: loading } = useQuery({
     queryKey: ['attendance-report', sessionId],
     queryFn: async () => {
-      const { data } = await supabase.from('attendance_records').select('id, session_id, student_id, attendance_status, marked_at, lat, lng').eq('session_id', sessionId);
+      const { data } = await supabase.from('attendance_records').select('id, session_id, student_id, attendance_status, marked_at, student_lat, student_lng').eq('session_id', sessionId);
       const rows = data || [];
       const studentIds = [...new Set(rows.map((r: any) => r.student_id).filter(Boolean))];
       const { data: profileRows } = studentIds.length

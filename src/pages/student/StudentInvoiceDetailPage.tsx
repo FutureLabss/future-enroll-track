@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { getFunctionErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatusBadge } from '@/components/shared/StatusBadge';
@@ -100,7 +101,7 @@ export default function StudentInvoiceDetailPage() {
       const { data, error } = await supabase.functions.invoke('paystack-init', {
         body: { invoice_id: id, installment_id: installment_id || null, amount, callback_url },
       });
-      if (error) throw error;
+      if (error) throw new Error(await getFunctionErrorMessage(error, 'Could not start payment'));
       if (!data?.authorization_url) throw new Error('No checkout URL returned');
       window.location.href = data.authorization_url;
     } catch (err: any) {

@@ -341,7 +341,7 @@ function AttendanceDrillDown({ session }: { session: any }) {
                   <span className="text-muted-foreground ml-2 text-xs">{r.profiles?.email}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  {r.lat && <span className="text-xs text-muted-foreground">GPS</span>}
+                  {r.student_lat && <span className="text-xs text-muted-foreground">GPS</span>}
                   <Badge variant="outline" className={`${STATUS_COLOURS[r.attendance_status] || ''} capitalize`}>{r.attendance_status}</Badge>
                   <span className="text-xs text-muted-foreground">{new Date(r.marked_at).toLocaleTimeString()}</span>
                 </div>

@@ -1,5 +1,28 @@
 # CLAUDE.md — LMS Codebase Rules
 
+## Working style
+
+**Investigate before acting.** Never modify code or produce a solution based on assumptions. Read the relevant files, trace the actual data flow, and confirm how things currently work before changing anything. If a bug is reported, find the root cause rather than patching the symptom. State what you verified and what you assumed.
+
+**Work toward the outcome, not the instruction.** Treat the request as a goal state, not a task list. If the stated steps will not achieve the goal, say so and propose the path that will. Keep working until the outcome actually holds, not until the steps are technically complete.
+
+**Verify your own work before presenting it.** After writing or changing code, check it yourself: re-read it against the requirements, trace edge cases, run tests or the code itself where possible. Do not hand back work you have not checked. If you cannot verify something, flag it explicitly rather than staying silent.
+
+**Take notes on long tasks.** For multi-step work, maintain a running summary of decisions made, things tried and rejected, and open questions. Refer back to these notes rather than re-deriving context. Update them as understanding improves.
+
+**Handle ambiguity by investigating, not guessing.** When something is unclear, first check whether the answer exists in the codebase, docs, or prior context. Only ask the user if investigation cannot resolve it, and then ask one precise question, not a list.
+
+**Plan at the right scale.** For large tasks, produce a short plan first: what will change, in what order, and how you will know each part works. Then execute in coherent chunks rather than tiny fragments that lose the thread.
+
+**Be token-efficient.** Do not restate the problem, pad with caveats, or re-explain unchanged code. Show only what changed and why. Precision over volume.
+
+**Own the failure modes.** Before finishing, ask: what would break this? Race conditions, empty states, auth edge cases, bad input. Address the plausible ones, name the ones you deliberately deferred.
+
+### Long, multi-step tasks
+For anything sustained or multi-stage (new features, migrations touching more than one table, cross-cutting refactors), follow @LONG_TASK_PROTOCOL.md in full: Orient → Plan → Execute → Verify, with gates between phases and a running notes block. Don't skip straight to editing because the fix looks obvious — the RLS/hooks incidents below happened because changes shipped without that discipline.
+
+---
+
 ## Stack
 - **Frontend**: React + TypeScript, Vite, Tailwind, shadcn/ui
 - **Backend**: Supabase (Postgres + RLS + Edge Functions)
@@ -63,6 +86,14 @@ const map = new Map(profiles.map(p => [p.user_id, p]));
 - Name: `YYYYMMDDNNNNNN_snake_case_description.sql`
 - Every new table needs: `hub_id`, RLS enabled, hub-scoped policies, `set_hub_id_from_context()` trigger
 - Apply via MCP (`mcp__supabase__apply_migration`) not CLI unless explicitly asked
+- **Repo first, always**: no DDL via the SQL editor or ad-hoc queries; every prod change
+  exists as a migration file before it's applied. Prod has already diverged from the
+  repo once (deployed `lessons` has no `cohort_id`) and it cost five days of a broken
+  RPC plus a misdiagnosed outage — see @docs/database-change-policy.md
+- Role timeouts are enforced (postgres: 2min statement / 10s lock). A migration that
+  legitimately needs longer starts with `SET LOCAL statement_timeout = '10min';`
+- **Trust the live schema over repo migrations** when they disagree; verify columns via
+  a live query before writing functions/policies against them
 
 ### RLS policy structure
 ```sql

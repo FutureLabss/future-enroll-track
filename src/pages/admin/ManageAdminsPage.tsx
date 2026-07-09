@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { getFunctionErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { Navigate } from 'react-router-dom';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -96,7 +97,7 @@ export default function ManageAdminsPage() {
     setSubmitting(true);
     const { data, error } = await supabase.functions.invoke('invite-admin', { body: { email } });
     if (error) {
-      toast.error(error.message || 'Failed to send invite');
+      toast.error(await getFunctionErrorMessage(error, 'Failed to send invite'));
     } else if (data?.error) {
       toast.error(data.error);
     } else if (data?.already_existed) {

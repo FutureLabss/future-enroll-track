@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { getFunctionErrorMessage } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 
@@ -17,7 +18,7 @@ export default function PaymentCallbackPage() {
     (async () => {
       try {
         const { data, error } = await supabase.functions.invoke('paystack-verify', { body: { reference } });
-        if (error) throw error;
+        if (error) throw new Error(await getFunctionErrorMessage(error, 'Verification error'));
         if (data?.status === 'success') {
           setStatus('success');
           setMessage(data.fully_paid ? 'Invoice fully paid. Thank you!' : 'Payment received. Thank you!');

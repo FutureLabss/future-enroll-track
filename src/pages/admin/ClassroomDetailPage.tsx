@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { getFunctionErrorMessage } from '@/lib/utils';
 import { useClassroom, useClassroomCohorts } from '@/hooks/useClassroom';
 import { useAttendance, useAttendanceSession } from '@/hooks/useAttendance';
 import { useAssignments } from '@/hooks/useAssignments';
@@ -439,7 +440,7 @@ function AttendanceDrillDown({ session }: { session: any }) {
                   <span className="text-muted-foreground ml-2">{r.profiles?.email}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  {r.lat && <span className="text-xs text-muted-foreground">GPS</span>}
+                  {r.student_lat && <span className="text-xs text-muted-foreground">GPS</span>}
                   <Badge variant="outline" className={STATUS_COLOURS[r.attendance_status] || ''}>
                     {r.attendance_status}
                   </Badge>
@@ -856,8 +857,7 @@ export default function ClassroomDetailPage() {
       const { data, error } = await supabase.functions.invoke('send-account-reminders', {
         body: { program_id: classroom!.program_id },
       });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      if (error) throw new Error(await getFunctionErrorMessage(error));
       toast.success(`Sent ${data.signup_sent} account setup + ${data.profile_sent} profile reminders${data.failed ? ` (${data.failed} failed)` : ''}`);
     } catch (e: any) {
       toast.error(e.message);
@@ -896,7 +896,14 @@ export default function ClassroomDetailPage() {
             staffType: inviteForm.staff_type,
           }
         });
-        if (emailError) throw emailError;
+        if (emailError) {
+          // The RPC above already assigned the staff member — only the email failed.
+          // Say so explicitly so the admin doesn't think the assignment itself failed.
+          toast.error(`Staff assigned, but invitation email failed: ${await getFunctionErrorMessage(emailError)}`);
+          setInviteOpen(false);
+          loadAll();
+          return;
+        }
       }
 
       toast.success('Staff assigned and invitation email sent');

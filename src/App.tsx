@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect } from "react";
 import { Toaster as Sonner } from "@/components/ui/sonner";
+import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation, useParams } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
@@ -78,6 +79,23 @@ const PageSpinner = () => (
   </div>
 );
 
+// Shown when the signed-in user's roles could not be fetched (DB timeout/outage).
+// Routing on unknown roles would dump admins into the student view.
+function RolesErrorScreen() {
+  const { retryRoles, signOut } = useAuth();
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen gap-4 p-4 text-center">
+      <p className="text-muted-foreground max-w-sm">
+        Signed in, but your account permissions couldn't be loaded — the server may be busy. Try again in a moment.
+      </p>
+      <div className="flex gap-3">
+        <Button onClick={() => retryRoles()}>Try again</Button>
+        <Button variant="outline" onClick={() => signOut()}>Sign out</Button>
+      </div>
+    </div>
+  );
+}
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) return <PageSpinner />;
@@ -86,12 +104,15 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AdminGuard() {
-  const { isAdmin, isStaff, isHubManager, loading, rolesReady } = useAuth();
+  const { isAdmin, isStaff, isHubManager, loading, rolesReady, rolesError } = useAuth();
   const location = useLocation();
   if (loading || !rolesReady) return <PageSpinner />;
   // Hub managers (CEO, training manager) can access classroom management only
   if (!isAdmin && isHubManager && location.pathname.startsWith('/admin/classrooms')) return <Outlet />;
-  if (!isAdmin) return <Navigate to={isStaff ? '/staff/classrooms' : '/student'} replace />;
+  if (!isAdmin) {
+    if (rolesError) return <RolesErrorScreen />;
+    return <Navigate to={isStaff ? '/staff/classrooms' : '/student'} replace />;
+  }
   return <Outlet />;
 }
 
@@ -128,11 +149,12 @@ function PrefetchChunks() {
 }
 
 function RoleRedirect() {
-  const { isAdmin, isOrganization, isStaff, loading, rolesReady } = useAuth();
+  const { isAdmin, isOrganization, isStaff, loading, rolesReady, rolesError } = useAuth();
   if (loading || !rolesReady) return <PageSpinner />;
   if (isAdmin) return <Navigate to="/admin" replace />;
   if (isOrganization) return <Navigate to="/org" replace />;
   if (isStaff) return <Navigate to="/staff/classrooms" replace />;
+  if (rolesError) return <RolesErrorScreen />;
   return <Navigate to="/student" replace />;
 }
 

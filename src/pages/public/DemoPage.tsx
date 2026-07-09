@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/lib/supabase';
+import { getFunctionErrorMessage } from '@/lib/utils';
 import {
   LayoutDashboard, BookOpen, Calendar, Users, Layers,
   CheckCircle, Clock, Radio, Play, FileText, Video, Link2,
@@ -233,7 +234,7 @@ function GetStartedModal({ open, onClose }: { open: boolean; onClose: () => void
         body: { email: email.trim().toLowerCase() },
       });
 
-      if (res.error) throw new Error(res.error.message || 'Failed to send invite');
+      if (res.error) throw new Error(await getFunctionErrorMessage(res.error, 'Failed to send invite'));
       if (res.data?.alreadyInvited) {
         setError('This email has already received a demo invitation. Check your inbox (and spam folder).');
         return;

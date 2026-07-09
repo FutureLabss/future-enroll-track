@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { getFunctionErrorMessage } from '@/lib/utils';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable } from '@/components/shared/DataTable';
 import { Badge } from '@/components/ui/badge';
@@ -82,12 +83,7 @@ export default function StaffInvitationsAdminPage() {
           staffType: invitation.staff_type
         }
       });
-      if (error) {
-        // FunctionsHttpError wraps the real message inside the response body
-        let msg = error.message;
-        try { const b = await (error as any).context?.json?.(); if (b?.error) msg = b.error; } catch (_) {}
-        throw new Error(msg);
-      }
+      if (error) throw new Error(await getFunctionErrorMessage(error));
       toast.success('Invitation email resent — valid for 7 days');
       fetchInvitations();
     } catch (e: any) {

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { getFunctionErrorMessage } from '@/lib/utils';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -130,7 +131,7 @@ export default function BulkEmailPage() {
         },
       };
       const { data, error } = await supabase.functions.invoke('send-bulk-email', { body: payload });
-      if (error) throw error;
+      if (error) throw new Error(await getFunctionErrorMessage(error, 'Failed to send'));
       toast.success(`Sent ${data.sent} email${data.sent === 1 ? '' : 's'}${data.failed ? ` · ${data.failed} failed` : ''}`);
       if (data.failed) toast.error(`${data.failed} email(s) failed to send`);
       setSubject('');

@@ -7,7 +7,7 @@ test('enrollment page renders', async ({ page }) => {
 
 test('demo page renders', async ({ page }) => {
   await page.goto('/demo');
-  await expect(page.getByText(/demo|futurelabs/i)).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText(/demo|futurelabs/i).first()).toBeVisible({ timeout: 10000 });
 });
 
 test('not-found page shows 404', async ({ page }) => {

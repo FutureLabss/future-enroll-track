@@ -20,6 +20,7 @@ interface AuthContextType {
   roles: AppRole[];
   loading: boolean;
   rolesReady: boolean;
+  rolesError: boolean;
   hubId: string | null;
   isAdmin: boolean;
   isOrganization: boolean;
@@ -31,6 +32,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
+  retryRoles: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -45,9 +47,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [demoExpiresAt, setDemoExpiresAt] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
   const [rolesReady, setRolesReady] = useState(false);
+  const [rolesError, setRolesError] = useState(false);
   const currentUserRef = useRef<{ id: string; email?: string } | null>(null);
 
-  const fetchRoles = async (userId: string) => {
+  // Returns false when the role lookups failed (DB down/timeout) — callers must
+  // surface that instead of treating the user as role-less. See docs/database-change-policy.md.
+  const fetchRoles = async (userId: string): Promise<boolean> => {
     try {
       const [rolesRes, saRes, memberRes] = await Promise.all([
         supabase.from('user_roles').select('role').eq('user_id', userId),
@@ -57,13 +62,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!rolesRes.error && rolesRes.data) {
         setRoles(rolesRes.data.map(r => r.role as AppRole));
       }
-      setIsSuperadmin(!!saRes.data);
-      setIsHubManager(memberRes.data?.hub_role === 'manager');
-      setHubId(memberRes.data?.hub_id ?? null);
-      const exp = memberRes.data?.demo_expires_at;
-      setDemoExpiresAt(exp ? new Date(exp) : null);
+      if (!saRes.error) setIsSuperadmin(!!saRes.data);
+      if (!memberRes.error) {
+        setIsHubManager(memberRes.data?.hub_role === 'manager');
+        setHubId(memberRes.data?.hub_id ?? null);
+        const exp = memberRes.data?.demo_expires_at;
+        setDemoExpiresAt(exp ? new Date(exp) : null);
+      }
+      // hub_members failure only degrades hub scoping; roles/superadmin decide routing
+      return !rolesRes.error && !saRes.error;
     } catch (_e) {
+      return false;
     }
+  };
+
+  const retryRoles = async () => {
+    const userId = currentUserRef.current?.id;
+    if (!userId) return;
+    setRolesReady(false);
+    const ok = await fetchRoles(userId);
+    setRolesError(!ok);
+    setRolesReady(true);
   };
 
   useEffect(() => {
@@ -76,7 +95,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       initialised = true;
       if (session?.user) {
         currentUserRef.current = { id: session.user.id, email: session.user.email };
-        await fetchRoles(session.user.id);
+        const ok = await fetchRoles(session.user.id);
+        setRolesError(!ok);
       }
       setRolesReady(true);
     }).catch(() => { setLoading(false); setRolesReady(true); });
@@ -96,7 +116,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           currentUserRef.current = { id: newUserId, email: session!.user.email };
           setRolesReady(false);
-          await fetchRoles(newUserId);
+          const ok = await fetchRoles(newUserId);
+          setRolesError(!ok);
           setRolesReady(true);
         } else if (!newUserId && prevUserId) {
           if (event === 'SIGNED_OUT') {
@@ -107,6 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setIsSuperadmin(false);
           setIsHubManager(false);
           setHubId(null);
+          setRolesError(false);
           setRolesReady(true);
         }
       }
@@ -136,26 +158,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
   };
 
-  const value = useMemo<AuthContextType>(() => ({
-    user,
-    session,
-    roles,
-    loading,
-    rolesReady,
-    hubId,
-    isAdmin: roles.includes('admin') || isSuperadmin,
-    isOrganization: roles.includes('organization'),
-    isStaff: roles.includes('staff') && !roles.includes('admin') && !isSuperadmin,
-    isSuperadmin,
-    isHubManager,
-    isDemo: !!demoExpiresAt && demoExpiresAt > new Date(),
-    demoExpiresAt,
-    signIn,
-    signOut,
-    signUp,
-  // signIn/signOut/signUp are defined once and never change
+  const value = useMemo<AuthContextType>(() => {
+    // Synchronous fallback so a failed superadmins lookup (DB timeout/outage)
+    // can't demote the superadmin to the student view. Display-only; RLS still
+    // decides what data any session can actually read.
+    const isSA = isSuperadmin || user?.email?.toLowerCase() === 'manassehudim@gmail.com';
+    return {
+      user,
+      session,
+      roles,
+      loading,
+      rolesReady,
+      rolesError,
+      hubId,
+      isAdmin: roles.includes('admin') || isSA,
+      isOrganization: roles.includes('organization'),
+      isStaff: roles.includes('staff') && !roles.includes('admin') && !isSA,
+      isSuperadmin: isSA,
+      isHubManager,
+      isDemo: !!demoExpiresAt && demoExpiresAt > new Date(),
+      demoExpiresAt,
+      signIn,
+      signOut,
+      signUp,
+      retryRoles,
+    };
+  // signIn/signOut/signUp/retryRoles are defined once and never change
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [user, session, roles, loading, rolesReady, hubId, isSuperadmin, isHubManager, demoExpiresAt]);
+  }, [user, session, roles, loading, rolesReady, rolesError, hubId, isSuperadmin, isHubManager, demoExpiresAt]);
 
   return (
     <AuthContext.Provider value={value}>

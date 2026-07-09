@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { getFunctionErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable } from '@/components/shared/DataTable';
@@ -151,10 +152,10 @@ export default function PayrollPage() {
 
   const removeStaff = useCallback(async (id: string) => {
     if (!confirm('Remove this staff member? Their payroll history and login account will be deleted too.')) return;
-    const { data, error } = await supabase.functions.invoke('delete-user-account', {
+    const { error } = await supabase.functions.invoke('delete-user-account', {
       body: { account_type: 'staff', id },
     });
-    if (error) return toast.error((data as any)?.error || error.message);
+    if (error) return toast.error(await getFunctionErrorMessage(error));
     toast.success('Staff member and login account removed');
     fetchAll();
   }, []);

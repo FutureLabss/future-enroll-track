@@ -439,7 +439,7 @@ function AttendanceDrillDown({ session }: { session: any }) {
                   <span className="text-muted-foreground ml-2">{r.profiles?.email}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  {r.lat && <span className="text-xs text-muted-foreground">GPS</span>}
+                  {r.student_lat && <span className="text-xs text-muted-foreground">GPS</span>}
                   <Badge variant="outline" className={STATUS_COLOURS[r.attendance_status] || ''}>
                     {r.attendance_status}
                   </Badge>

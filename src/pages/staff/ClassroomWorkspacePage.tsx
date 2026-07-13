@@ -324,6 +324,18 @@ export default function ClassroomWorkspacePage() {
   const handleStartAttendance = async () => {
     setGeneratingSession(true);
     try {
+      if (sessionForm.cohort_id) {
+        // mark_attendance rejects students outside the session's cohort, so an
+        // empty cohort produces a session nobody can ever check in to
+        const { count } = await supabase
+          .from('cohort_students')
+          .select('id', { count: 'exact', head: true })
+          .eq('cohort_id', sessionForm.cohort_id);
+        if (!count) {
+          toast.error('This cohort has no students yet — add students to the cohort before starting attendance');
+          return;
+        }
+      }
       await generateSession(null, sessionForm.cohort_id || null, parseInt(sessionForm.duration), sessionForm.schedule_id || null);
       setSessionOpen(false);
       toast.success('Attendance session started');

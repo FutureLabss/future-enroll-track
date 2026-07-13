@@ -113,6 +113,8 @@ export function useAttendanceSession(sessionId: string) {
         supabase.from('attendance_sessions').select('cohort_id, classroom_id').eq('id', sessionId).single(),
       ]);
 
+      // A failed records query must not render as "everyone absent"
+      if (recordsRes.error) throw recordsRes.error;
       const rows = recordsRes.data || [];
       const recordStudentIds = [...new Set(rows.map((r: any) => r.student_id).filter(Boolean))];
       const { data: recordProfiles } = recordStudentIds.length

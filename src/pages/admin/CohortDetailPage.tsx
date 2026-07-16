@@ -701,12 +701,28 @@ export default function CohortDetailPage() {
       <Tabs defaultValue="students">
         <TabsList className="mb-6 flex-wrap h-auto gap-1">
           <TabsTrigger value="students"><GraduationCap className="h-4 w-4 mr-1.5" />Students ({members.length})</TabsTrigger>
+          <TabsTrigger value="schedule"><CalendarDays className="h-4 w-4 mr-1.5" />Schedule</TabsTrigger>
+          <TabsTrigger value="announcements"><Megaphone className="h-4 w-4 mr-1.5" />Announcements</TabsTrigger>
+          <TabsTrigger value="chat"><MessageCircle className="h-4 w-4 mr-1.5" />Chat</TabsTrigger>
           <TabsTrigger value="attendance"><ClipboardList className="h-4 w-4 mr-1.5" />Attendance ({attendanceSessions.length})</TabsTrigger>
           <TabsTrigger value="assignments"><ClipboardCheck className="h-4 w-4 mr-1.5" />Assignments ({assignments.length})</TabsTrigger>
           <TabsTrigger value="presentations"><Presentation className="h-4 w-4 mr-1.5" />Presentations ({presentations.length})</TabsTrigger>
           {cohort.classrooms && <TabsTrigger value="classroom"><School className="h-4 w-4 mr-1.5" />Classroom</TabsTrigger>}
           <TabsTrigger value="analytics"><BarChart2 className="h-4 w-4 mr-1.5" />Analytics</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="schedule">
+          <CohortScheduleTab cohortId={id!} />
+        </TabsContent>
+
+        <TabsContent value="announcements">
+          <CohortAnnouncementsTab cohortId={id!} />
+        </TabsContent>
+
+        <TabsContent value="chat">
+          <CohortChatTab cohortId={id!} />
+        </TabsContent>
+
 
         <TabsContent value="students">
           <div className="flex items-center justify-end gap-2 mb-4">

@@ -42,6 +42,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CohortAnalyticsTab } from '@/components/cohort/CohortAnalyticsTab';
+import { CohortScheduleTab, CohortAnnouncementsTab, CohortChatTab } from '@/components/cohort/CohortCollaboration';
+import { CalendarDays as CalendarIcon2, Megaphone, MessageCircle } from 'lucide-react';
 
 const GRADUATION_COLOURS: Record<string, string> = {
   graduated: 'bg-success/15 text-success border-success/30',

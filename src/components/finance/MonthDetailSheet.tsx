@@ -54,10 +54,11 @@ function DetailRow({ left, right, sub }: RowProps) {
 interface Props {
   month: string | null;
   onClose: () => void;
+  basis?: 'due' | 'paid';
 }
 
-export function MonthDetailSheet({ month, onClose }: Props) {
-  const { payments, otherIncome, expenses, payroll, loading } = useMonthDetail(month);
+export function MonthDetailSheet({ month, onClose, basis = 'due' }: Props) {
+  const { payments, otherIncome, expenses, payroll, loading } = useMonthDetail(month, basis);
 
   const totalPayments = useMemo(() => payments.reduce((s, p) => s + Number(p.amount || 0), 0), [payments]);
   const totalOtherIncome = useMemo(() => otherIncome.reduce((s, o) => s + Number(o.amount || 0), 0), [otherIncome]);

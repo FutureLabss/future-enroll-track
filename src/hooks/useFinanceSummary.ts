@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 export type FinanceRow = {
   month: string;
   revenue: number;
+  revenue_cash: number;
   other_income_total: number;
   payroll_total: number;
   expenses_total: number;
@@ -39,6 +40,7 @@ export function useFinanceSummary({ mode, months, startDate, endDate }: Params) 
       return (data || []).map((r: any) => ({
         month: r.month,
         revenue: Number(r.revenue) || 0,
+        revenue_cash: Number(r.revenue_cash) || 0,
         other_income_total: Number(r.other_income_total) || 0,
         payroll_total: Number(r.payroll_total) || 0,
         expenses_total: Number(r.expenses_total) || 0,
@@ -54,12 +56,13 @@ export function useFinanceSummary({ mode, months, startDate, endDate }: Params) 
   const totals = useMemo(() => rows.reduce(
     (acc, r) => {
       acc.revenue += r.revenue + r.other_income_total;
+      acc.revenueCash += r.revenue_cash + r.other_income_total;
       acc.payroll += r.payroll_total;
       acc.expenses += r.expenses_total;
       acc.profit += r.profit;
       return acc;
     },
-    { revenue: 0, payroll: 0, expenses: 0, profit: 0 }
+    { revenue: 0, revenueCash: 0, payroll: 0, expenses: 0, profit: 0 }
   ), [rows]);
 
   return { rows, loading, error, totals };

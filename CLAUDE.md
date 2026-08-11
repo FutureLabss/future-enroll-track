@@ -50,9 +50,12 @@ const map = new Map(profiles.map(p => [p.user_id, p]));
 ```
 
 ### Finance bucketing (critical)
-- **FutureLabs**: revenue bucketed by `installments.due_date` where `status = 'paid'`
-- **RhemaHub**: revenue bucketed by `payments.created_at`
+- **FutureLabs**: `get_finance_summary` returns two bases for the same installments — `revenue` bucketed by `installments.due_date` (accrual) and `revenue_cash` bucketed by `paid_at` (cash-basis, when the money actually landed) — both where `status = 'paid'`.
+- **The Finance Dashboard defaults to cash basis** (`revenueBasis = 'paid'` in `FinanceDashboardPage.tsx`) — deliberate: expenses/payroll here are already bucketed by `payment_date`/`pay_month` (cash-basis), so cash-basis revenue is the internally-consistent choice for `profit`. Due-date stays available as a toggle for accrual-style/audit purposes, and because `paid_at` is less trustworthy on old backfilled rows (see below).
+- **RhemaHub**: revenue bucketed by `payments.created_at` (already a real payment date, same in both bases)
 - Always fetch both legs and merge client-side — never query only one table
+- **`paid_at` accuracy matters now that it drives the default view.** Every "mark installment paid" action must stamp the real approval moment (`new Date().toISOString()`), never `due_date` or any other placeholder — `EditInvoicePage.tsx`'s "Auto-populate paid_at" used to default to `due_date` and got fixed (2026-08-11); 17 historical installments still carry that bad value (`paid_at::date = due_date` at midnight — a detectable signature if you need to find them again) and their true payment dates aren't recoverable from this system's audit trail.
+- `useMonthDetail`'s `basis` param follows the dashboard's toggle for the month drill-down.
 
 ---
 

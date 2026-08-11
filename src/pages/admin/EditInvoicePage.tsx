@@ -58,9 +58,11 @@ export default function EditInvoicePage() {
     setInstallments(prev => prev.map((p, i) => {
       if (i !== idx) return p;
       const updated = { ...p, ...patch };
-      // Auto-populate paid_at with due_date when status flips to paid and paid_at is not set
+      // Auto-populate paid_at with today when status flips to paid and paid_at is not set —
+      // matches every other "mark paid" flow (PendingPaymentsPage, PaymentsPage,
+      // InvoiceDetailPage), which all stamp the actual action time, not due_date.
       if (patch.status === 'paid' && !updated.paid_at) {
-        updated.paid_at = updated.due_date;
+        updated.paid_at = new Date().toISOString().slice(0, 10);
       }
       if (patch.status === 'pending') updated.paid_at = null;
       return updated;

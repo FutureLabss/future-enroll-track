@@ -38,8 +38,8 @@ export function useMonthDetail(month: string | null, basis: 'due' | 'paid' = 'du
             .order('created_at', { ascending: false }),
         ]).then(([instRes, payRes]) => ({
           data: [
-            ...(instRes.data || []).map((r: any) => ({ ...r, _source: 'installment', _date: r[instDateCol] })),
-            ...(payRes.data || []).map((r: any) => ({ ...r, _source: 'payment', _date: r.created_at })),
+            ...(instRes.data || []).map((r: Record<string, unknown>) => ({ ...r, _source: 'installment', _date: r[instDateCol] })),
+            ...(payRes.data || []).map((r: Record<string, unknown>) => ({ ...r, _source: 'payment', _date: r.created_at })),
           ].sort((a, b) => new Date(b._date).getTime() - new Date(a._date).getTime()),
         })),
         supabase

@@ -610,7 +610,7 @@ export default function ClassroomDetailPage() {
 
   const [sessionModal, setSessionModal] = useState<{ open: boolean; session?: any }>({ open: false });
   const [activeSession, setActiveSession] = useState<any>(null);
-  const [sessionForm, setSessionForm] = useState({ cohort_id: '', duration: '30', schedule_id: '' });
+  const [sessionForm, setSessionForm] = useState({ cohort_id: '', duration: '30', schedule_id: '', late_after: '10' });
   const [sessionOpen, setSessionOpen] = useState(false);
   const [generatingSession, setGeneratingSession] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -706,7 +706,7 @@ export default function ClassroomDetailPage() {
           return;
         }
       }
-      await generateSession(null, sessionForm.cohort_id || null, parseInt(sessionForm.duration), sessionForm.schedule_id || null);
+      await generateSession(null, sessionForm.cohort_id || null, parseInt(sessionForm.duration), sessionForm.schedule_id || null, parseInt(sessionForm.late_after));
       setSessionOpen(false);
       toast.success('Attendance session started');
     } catch (e: any) {
@@ -1546,10 +1546,18 @@ export default function ClassroomDetailPage() {
                     </div>
                     <div>
                       <Label>Duration (minutes)</Label>
-                      <Select value={sessionForm.duration} onValueChange={v => setSessionForm(f => ({ ...f, duration: v }))}>
+                      <Select value={sessionForm.duration} onValueChange={v => setSessionForm(f => ({ ...f, duration: v, late_after: parseInt(f.late_after) > parseInt(v) ? v : f.late_after }))}>
                         <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
                         <SelectContent>{['10', '15', '20', '30', '45', '60'].map(d => <SelectItem key={d} value={d}>{d} minutes</SelectItem>)}</SelectContent>
                       </Select>
+                    </div>
+                    <div>
+                      <Label>Mark "late" after (minutes)</Label>
+                      <Select value={sessionForm.late_after} onValueChange={v => setSessionForm(f => ({ ...f, late_after: v }))}>
+                        <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+                        <SelectContent>{['5', '10', '15', '20', '30', '45', '60'].filter(v => parseInt(v) <= parseInt(sessionForm.duration)).map(d => <SelectItem key={d} value={d}>{d} minutes</SelectItem>)}</SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground mt-1">Students who check in after this many minutes are marked late instead of present.</p>
                     </div>
                     <Button onClick={handleStartAttendance} disabled={generatingSession || !sessionForm.cohort_id} className="w-full">
                       {generatingSession ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Radio className="h-4 w-4 mr-2" />}

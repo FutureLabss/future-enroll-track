@@ -79,18 +79,26 @@ Deno.serve(async (req) => {
       parts = [{ text: `Document content:\n\n${text}\n\nConvert this into a structured curriculum JSON.${suffix}` }];
     }
 
-    const aiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-          contents: [{ role: 'user', parts }],
-          generationConfig: { responseMimeType: 'application/json' },
-        }),
-      }
-    );
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const geminiRequestInit = {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents: [{ role: 'user', parts }],
+        generationConfig: { responseMimeType: 'application/json' },
+      }),
+    };
+
+    // Gemini's free-tier rate limit is per-minute and clears quickly, so a couple
+    // of short backoff retries avoids surfacing a 429 to the user for a transient spike.
+    const maxAttempts = 3;
+    let aiRes = await fetch(geminiUrl, geminiRequestInit);
+    for (let attempt = 2; aiRes.status === 429 && attempt <= maxAttempts; attempt++) {
+      const waitSec = Number(aiRes.headers.get('retry-after')) || (attempt - 1) * 2;
+      await new Promise(resolve => setTimeout(resolve, waitSec * 1000));
+      aiRes = await fetch(geminiUrl, geminiRequestInit);
+    }
 
     if (!aiRes.ok) {
       const errText = await aiRes.text();

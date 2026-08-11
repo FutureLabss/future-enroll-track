@@ -50,9 +50,10 @@ const map = new Map(profiles.map(p => [p.user_id, p]));
 ```
 
 ### Finance bucketing (critical)
-- **FutureLabs**: revenue bucketed by `installments.due_date` where `status = 'paid'`
-- **RhemaHub**: revenue bucketed by `payments.created_at`
+- **FutureLabs**: revenue (`revenue` column) bucketed by `installments.due_date` where `status = 'paid'` — this is the default/underlying rule, do not change it. It was deliberately kept over `paid_at` because `paid_at` is unreliable for backfilled data (see `20260518000025_fix_enrollment_performance_use_due_date_not_paid_at.sql`) and because ~36% of paid installments land in a different month under the two bases.
+- **RhemaHub**: revenue bucketed by `payments.created_at` (already a real payment date, same in both bases)
 - Always fetch both legs and merge client-side — never query only one table
+- `get_finance_summary` also returns `revenue_cash` — the same FutureLabs installments bucketed by `paid_at` instead of `due_date`. This is an opt-in second view (Finance Dashboard's "Payment date" toggle, `FinanceDashboardPage.tsx`), not a replacement — `revenue`/`profit` must keep meaning due-date basis. `useMonthDetail`'s `basis` param follows the same toggle for the month drill-down.
 
 ---
 

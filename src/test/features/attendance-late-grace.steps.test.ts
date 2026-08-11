@@ -12,16 +12,28 @@ vi.mock('@/lib/supabase', () => ({
   supabase: { rpc: mockRpc, from: mockFrom },
 }));
 
-function makeChain(data: any, error: any = null): any {
-  const result = { data, error };
-  const self: any = {
+type ChainResult = { data: unknown; error: unknown };
+
+interface MockChain {
+  select: () => MockChain;
+  eq: () => MockChain;
+  in: () => MockChain;
+  order: () => Promise<ChainResult>;
+  single: () => Promise<ChainResult>;
+  then: (fn: (result: ChainResult) => void, rej?: (err: unknown) => void) => Promise<void>;
+  catch: (fn: (err: unknown) => void) => Promise<void>;
+}
+
+function makeChain(data: unknown, error: unknown = null): MockChain {
+  const result: ChainResult = { data, error };
+  const self: MockChain = {
     select: () => self,
     eq: () => self,
     in: () => self,
     order: () => Promise.resolve(result),
     single: () => Promise.resolve(result),
-    then: (fn: any, rej: any) => Promise.resolve(result).then(fn, rej),
-    catch: (fn: any) => Promise.resolve(result).catch(fn),
+    then: (fn, rej) => Promise.resolve(result).then(fn, rej),
+    catch: (fn) => Promise.resolve(result).catch(fn),
   };
   return self;
 }
@@ -45,7 +57,7 @@ describeFeature(feature, ({ Scenario, BeforeEachScenario }) => {
 
   Scenario('Staff choose a grace window shorter than the session duration', ({ Given, When, Then }) => {
     let generateSession: ReturnType<typeof useAttendance>['generateSession'];
-    let rpcArgs: any;
+    let rpcArgs: Record<string, unknown> | undefined;
 
     Given('staff are starting a 30 minute attendance session', () => {
       const { result } = renderHook(() => useAttendance('classroom-1'), { wrapper: createQueryWrapper() });
@@ -64,7 +76,7 @@ describeFeature(feature, ({ Scenario, BeforeEachScenario }) => {
 
   Scenario('No grace window is chosen', ({ Given, When, Then }) => {
     let generateSession: ReturnType<typeof useAttendance>['generateSession'];
-    let rpcArgs: any;
+    let rpcArgs: Record<string, unknown> | undefined;
 
     Given('staff are starting a 30 minute attendance session', () => {
       const { result } = renderHook(() => useAttendance('classroom-1'), { wrapper: createQueryWrapper() });

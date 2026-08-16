@@ -18,12 +18,14 @@ export default function FinanceDashboardPage() {
   const [startDate, setStartDate] = useState<Date | undefined>();
   const [endDate, setEndDate] = useState<Date | undefined>();
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
-  const [revenueBasis, setRevenueBasis] = useState<RevenueBasis>('due');
+  // Cash-basis (paid_at) is the default: revenue counts when the money actually lands,
+  // matching how expenses/payroll are already bucketed here (payment_date/pay_month) —
+  // due-date (accrual) stays available as a second view. See CLAUDE.md "Finance bucketing".
+  const [revenueBasis, setRevenueBasis] = useState<RevenueBasis>('paid');
 
   const { rows, loading, error, totals } = useFinanceSummary({ mode, months, startDate, endDate });
 
-  // Due-date basis is the documented default (installments.due_date) — see CLAUDE.md.
-  // Payment-date basis re-buckets the same FutureLabs installments by paid_at instead,
+  // Payment-date basis re-buckets FutureLabs installments by paid_at instead of due_date,
   // so a payment approved this month shows up this month rather than under whenever it
   // was originally due. Derived once here so the chart/cards/table below stay unchanged.
   const displayRows = useMemo(() => rows.map(r => {

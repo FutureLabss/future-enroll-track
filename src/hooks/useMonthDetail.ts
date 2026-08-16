@@ -23,23 +23,28 @@ export function useMonthDetail(month: string | null, basis: 'due' | 'paid' = 'du
 
       const [paymentsResult, otherIncomeRes, expensesRes, payrollRes] = await Promise.all([
         Promise.all([
+          // invoices!inner + neq('invoices.status', 'cancelled') mirrors get_finance_summary's
+          // "i.status != 'cancelled'" filter — without it this drill-down can show money for a
+          // month the RPC's summary card has already excluded. See CLAUDE.md.
           supabase
             .from('installments')
-            .select('id, amount, due_date, paid_at, invoices(invoice_number, enrollments(full_name, email, programs(program_name)))')
+            .select('id, amount, due_date, paid_at, invoices!inner(status, invoice_number, enrollments(full_name, email, programs(program_name)))')
             .eq('status', 'paid')
+            .neq('invoices.status', 'cancelled')
             .gte(instDateCol, month!)
             .lt(instDateCol, end)
             .order(instDateCol, { ascending: false }),
           supabase
             .from('payments')
-            .select('id, amount, created_at, payment_method, payment_reference, invoices(invoice_number, enrollments(full_name, email, programs(program_name)))')
-            .gte('created_at', month!)
-            .lt('created_at', end)
-            .order('created_at', { ascending: false }),
+            .select('id, amount, payment_date, payment_method, payment_reference, invoices!inner(status, invoice_number, enrollments(full_name, email, programs(program_name)))')
+            .neq('invoices.status', 'cancelled')
+            .gte('payment_date', month!)
+            .lt('payment_date', end)
+            .order('payment_date', { ascending: false }),
         ]).then(([instRes, payRes]) => ({
           data: [
             ...(instRes.data || []).map((r: Record<string, unknown>) => ({ ...r, _source: 'installment', _date: r[instDateCol] })),
-            ...(payRes.data || []).map((r: Record<string, unknown>) => ({ ...r, _source: 'payment', _date: r.created_at })),
+            ...(payRes.data || []).map((r: Record<string, unknown>) => ({ ...r, _source: 'payment', _date: r.payment_date })),
           ].sort((a, b) => new Date(b._date).getTime() - new Date(a._date).getTime()),
         })),
         supabase

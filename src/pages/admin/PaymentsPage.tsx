@@ -70,6 +70,7 @@ export default function PaymentsPage() {
         payment_reference: form.payment_reference,
         payment_method: form.payment_method || null,
         payment_date: form.payment_date,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
       if (error) throw error;
 

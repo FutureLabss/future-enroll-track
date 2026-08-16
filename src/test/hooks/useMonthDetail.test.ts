@@ -11,20 +11,31 @@ vi.mock('@/lib/supabase', () => ({
 import { useMonthDetail } from '@/hooks/useMonthDetail';
 
 type Call = { method: string; args: unknown[] };
+type QueryResult = { data: unknown[]; error: null };
+
+interface MockChain extends PromiseLike<QueryResult> {
+  select: (...args: unknown[]) => MockChain;
+  eq: (...args: unknown[]) => MockChain;
+  neq: (...args: unknown[]) => MockChain;
+  gte: (...args: unknown[]) => MockChain;
+  lt: (...args: unknown[]) => MockChain;
+  order: (...args: unknown[]) => Promise<QueryResult>;
+  catch: (fn: (reason: unknown) => unknown) => Promise<unknown>;
+}
 
 // Chainable mock that records every method call (so tests can assert on
 // exactly which columns/filters a query used) and resolves with `data`
 // whenever the chain is awaited or `.order()` is called.
-function makeChain(data: unknown[] = []): { calls: Call[]; builder: any } {
+function makeChain(data: unknown[] = []): { calls: Call[]; builder: MockChain } {
   const calls: Call[] = [];
-  const result = { data, error: null };
-  const builder: any = {};
-  for (const method of ['select', 'eq', 'neq', 'gte', 'lt']) {
+  const result: QueryResult = { data, error: null };
+  const builder = {} as MockChain;
+  for (const method of ['select', 'eq', 'neq', 'gte', 'lt'] as const) {
     builder[method] = (...args: unknown[]) => { calls.push({ method, args }); return builder; };
   }
   builder.order = (...args: unknown[]) => { calls.push({ method: 'order', args }); return Promise.resolve(result); };
-  builder.then = (fn: any, rej: any) => Promise.resolve(result).then(fn, rej);
-  builder.catch = (fn: any) => Promise.resolve(result).catch(fn);
+  builder.then = ((fn: (r: QueryResult) => unknown, rej: (reason: unknown) => unknown) => Promise.resolve(result).then(fn, rej)) as MockChain['then'];
+  builder.catch = (fn: (reason: unknown) => unknown) => Promise.resolve(result).catch(fn);
   return { calls, builder };
 }
 
@@ -93,9 +104,9 @@ describe('useMonthDetail', () => {
     const { result } = renderHook(() => useMonthDetail('2026-03-01'), { wrapper: createQueryWrapper() });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    const sources = result.current.payments.map((p: any) => p._source).sort();
+    const sources = result.current.payments.map((p: { _source: string }) => p._source).sort();
     expect(sources).toEqual(['installment', 'payment']);
-    const paymentRow = result.current.payments.find((p: any) => p._source === 'payment');
+    const paymentRow = result.current.payments.find((p: { _source: string }) => p._source === 'payment');
     expect(paymentRow._date).toBe('2026-03-10');
   });
 

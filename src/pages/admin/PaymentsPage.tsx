@@ -43,17 +43,6 @@ export default function PaymentsPage() {
     setInstallments(data || []);
   };
 
-  const getInvoiceEnrollmentDate = async (invoiceId: string) => {
-    const { data } = await supabase
-      .from('installments')
-      .select('due_date')
-      .eq('invoice_id', invoiceId)
-      .order('due_date', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    return data?.due_date ? new Date(`${data.due_date}T00:00:00`).toISOString() : new Date().toISOString();
-  };
-
   const handleRecord = async () => {
     try {
       const amount = parseFloat(form.amount);
@@ -80,14 +69,17 @@ export default function PaymentsPage() {
 
       const { data: invoice } = await supabase.from('invoices').select('enrollment_id').eq('id', form.invoice_id).single();
       if (invoice) {
-        const { data: enrollment } = await supabase.from('enrollments').select('amount_paid').eq('id', invoice.enrollment_id).single();
+        const { data: enrollment } = await supabase.from('enrollments').select('amount_paid, first_payment_date').eq('id', invoice.enrollment_id).single();
         if (enrollment) {
           const newPaid = Number(enrollment.amount_paid) + amount;
-          const enrollmentDate = await getInvoiceEnrollmentDate(form.invoice_id);
+          const paymentTimestamp = `${form.payment_date}T00:00:00.000Z`;
           await supabase.from('enrollments').update({
             amount_paid: newPaid,
-            last_payment_date: new Date().toISOString(),
-            first_payment_date: enrollmentDate,
+            last_payment_date: paymentTimestamp,
+            // first_payment_date is set once, on the actual first payment — not
+            // overwritten by every later payment (that used to happen when this
+            // read a static due_date instead of the real date being recorded here)
+            ...(!enrollment.first_payment_date ? { first_payment_date: paymentTimestamp } : {}),
             ...(!enrollment.amount_paid || Number(enrollment.amount_paid) === 0 ? { enrollment_status: 'active' } : {}),
           }).eq('id', invoice.enrollment_id);
         }

@@ -38,17 +38,6 @@ export default function PendingPaymentsPage() {
 
   const formatCurrency = (val: number) => `₦${Number(val).toLocaleString('en-NG')}`;
 
-  const getInvoiceEnrollmentDate = async (invoiceId: string) => {
-    const { data } = await supabase
-      .from('installments')
-      .select('due_date')
-      .eq('invoice_id', invoiceId)
-      .order('due_date', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    return data?.due_date ? new Date(`${data.due_date}T00:00:00`).toISOString() : new Date().toISOString();
-  };
-
   const approve = async (p: PendingPayment, paymentDate: string) => {
     setBusyId(p.id);
     try {
@@ -71,12 +60,18 @@ export default function PendingPaymentsPage() {
       const { data: enr } = await supabase.from('enrollments').select('amount_paid, first_payment_date').eq('id', p.enrollment_id).single();
       if (enr) {
         const newPaid = Number(enr.amount_paid || 0) + Number(p.amount);
-        const updates: any = {
+        const paymentTimestamp = `${paymentDate}T00:00:00.000Z`;
+        // first_payment_date is set once, on the actual first payment — not
+        // overwritten by every later approval (that used to happen when this
+        // read a static due_date instead of the real date being recorded here)
+        const updates: { amount_paid: number; last_payment_date: string; first_payment_date?: string; enrollment_status?: string } = {
           amount_paid: newPaid,
-          first_payment_date: await getInvoiceEnrollmentDate(p.invoice_id),
-          last_payment_date: new Date().toISOString(),
+          last_payment_date: paymentTimestamp,
         };
-        if (!enr.first_payment_date) { updates.enrollment_status = 'active'; }
+        if (!enr.first_payment_date) {
+          updates.first_payment_date = paymentTimestamp;
+          updates.enrollment_status = 'active';
+        }
         await supabase.from('enrollments').update(updates).eq('id', p.enrollment_id);
       }
 

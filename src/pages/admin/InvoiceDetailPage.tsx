@@ -106,9 +106,13 @@ export default function InvoiceDetailPage() {
           return sum + (isPaidAfterToggle ? Number(i.amount) : 0);
         }, 0);
 
+        const paymentTimestamp = newStatus === 'paid' ? `${paidDate}T00:00:00.000Z` : null;
+        const { data: enr } = await supabase.from('enrollments').select('first_payment_date').eq('id', invoice.enrollment_id).single();
         await supabase.from('enrollments').update({
           amount_paid: adjustedPaid,
-          last_payment_date: newStatus === 'paid' ? new Date().toISOString() : null,
+          last_payment_date: paymentTimestamp,
+          // set once, on the actual first payment — not overwritten by every later toggle
+          ...(newStatus === 'paid' && !enr?.first_payment_date ? { first_payment_date: paymentTimestamp } : {}),
         }).eq('id', invoice.enrollment_id);
 
         const allPaidAfter = (allInstallments || []).every(i =>

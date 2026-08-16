@@ -12,10 +12,24 @@ import { Label } from '@/components/ui/label';
 import { CheckCircle, XCircle, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 
+interface PendingPayment {
+  id: string;
+  invoice_id: string;
+  installment_id: string | null;
+  enrollment_id: string;
+  amount: number | string;
+  payment_reference: string | null;
+  notes: string | null;
+  status: string;
+  created_at: string;
+  evidence_url: string;
+  invoices?: { invoice_number?: string; enrollments?: { full_name?: string; programs?: { program_name?: string } } };
+}
+
 export default function PendingPaymentsPage() {
   const queryClient = useQueryClient();
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [approveTarget, setApproveTarget] = useState<any>(null);
+  const [approveTarget, setApproveTarget] = useState<PendingPayment | null>(null);
   const [approveDate, setApproveDate] = useState(new Date().toISOString().slice(0, 10));
 
   const { data: items = [], isLoading: loading } = usePendingPayments();
@@ -35,7 +49,7 @@ export default function PendingPaymentsPage() {
     return data?.due_date ? new Date(`${data.due_date}T00:00:00`).toISOString() : new Date().toISOString();
   };
 
-  const approve = async (p: any, paymentDate: string) => {
+  const approve = async (p: PendingPayment, paymentDate: string) => {
     setBusyId(p.id);
     try {
       const reference = p.payment_reference || `BANK-${Date.now()}-${p.id.slice(0, 6).toUpperCase()}`;

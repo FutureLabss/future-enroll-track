@@ -16,13 +16,21 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/useAuth';
 
+interface Installment {
+  id: string;
+  amount: number | string;
+  due_date: string;
+  paid_at: string | null;
+  status: string;
+}
+
 export default function InvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [toggling, setToggling] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [payTarget, setPayTarget] = useState<any>(null);
+  const [payTarget, setPayTarget] = useState<Installment | null>(null);
   const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
   const { isAdmin, isSuperadmin } = useAuth();
 
@@ -69,12 +77,12 @@ export default function InvoiceDetailPage() {
 
   const formatCurrency = (val: number) => `₦${Number(val).toLocaleString('en-NG')}`;
 
-  const openMarkPaid = (installment: any) => {
+  const openMarkPaid = (installment: Installment) => {
     setPayDate(new Date().toISOString().slice(0, 10));
     setPayTarget(installment);
   };
 
-  const toggleInstallmentStatus = async (installment: any, paidDate?: string) => {
+  const toggleInstallmentStatus = async (installment: Installment, paidDate?: string) => {
     setToggling(installment.id);
     const isPaid = installment.status === 'paid';
     const newStatus = isPaid ? 'pending' : 'paid';

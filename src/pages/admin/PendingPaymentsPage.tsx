@@ -6,12 +6,17 @@ import { usePendingPayments } from '@/hooks/usePayments';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/shared/StatusBadge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { CheckCircle, XCircle, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function PendingPaymentsPage() {
   const queryClient = useQueryClient();
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [approveTarget, setApproveTarget] = useState<any>(null);
+  const [approveDate, setApproveDate] = useState(new Date().toISOString().slice(0, 10));
 
   const { data: items = [], isLoading: loading } = usePendingPayments();
 
@@ -30,7 +35,7 @@ export default function PendingPaymentsPage() {
     return data?.due_date ? new Date(`${data.due_date}T00:00:00`).toISOString() : new Date().toISOString();
   };
 
-  const approve = async (p: any) => {
+  const approve = async (p: any, paymentDate: string) => {
     setBusyId(p.id);
     try {
       const reference = p.payment_reference || `BANK-${Date.now()}-${p.id.slice(0, 6).toUpperCase()}`;
@@ -41,11 +46,12 @@ export default function PendingPaymentsPage() {
         payment_reference: reference,
         payment_method: 'bank_transfer',
         notes: p.notes ? `Bank transfer · ${p.notes}` : 'Bank transfer',
+        payment_date: paymentDate,
       });
       if (pErr) throw pErr;
 
       if (p.installment_id) {
-        await supabase.from('installments').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', p.installment_id);
+        await supabase.from('installments').update({ status: 'paid', paid_at: `${paymentDate}T00:00:00.000Z` }).eq('id', p.installment_id);
       }
 
       const { data: enr } = await supabase.from('enrollments').select('amount_paid, first_payment_date').eq('id', p.enrollment_id).single();
@@ -87,6 +93,7 @@ export default function PendingPaymentsPage() {
       } catch (_e) { }
 
       toast.success('Payment approved & recorded');
+      setApproveTarget(null);
       refetchItems();
     } catch (err: any) {
       toast.error(err.message || 'Approve failed');
@@ -142,7 +149,11 @@ export default function PendingPaymentsPage() {
             </div>
             {p.status === 'pending' && (
               <div className="flex gap-2">
-                <Button size="sm" disabled={busyId === p.id} onClick={() => approve(p)}>
+                <Button
+                  size="sm"
+                  disabled={busyId === p.id}
+                  onClick={() => { setApproveDate(new Date().toISOString().slice(0, 10)); setApproveTarget(p); }}
+                >
                   <CheckCircle className="h-4 w-4 mr-1.5" /> Approve
                 </Button>
                 <Button size="sm" variant="outline" disabled={busyId === p.id} onClick={() => reject(p)}>
@@ -153,6 +164,29 @@ export default function PendingPaymentsPage() {
           </div>
         ))}
       </div>
+
+      <Dialog open={!!approveTarget} onOpenChange={o => !o && setApproveTarget(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Approve Payment</DialogTitle></DialogHeader>
+          <div className="space-y-4 mt-2">
+            <p className="text-sm text-muted-foreground">
+              {formatCurrency(Number(approveTarget?.amount || 0))} from {approveTarget?.invoices?.enrollments?.full_name || '—'}
+            </p>
+            <div>
+              <Label>Payment Date *</Label>
+              <Input type="date" value={approveDate} onChange={e => setApproveDate(e.target.value)} className="mt-1.5" />
+              <p className="text-xs text-muted-foreground mt-1">When the student actually paid — not today's date if this submission sat unreviewed for a while.</p>
+            </div>
+            <Button
+              onClick={() => approve(approveTarget, approveDate)}
+              disabled={!approveDate || busyId === approveTarget?.id}
+              className="w-full"
+            >
+              Confirm & Approve
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -11,6 +11,9 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/useAuth';
 
 export default function InvoiceDetailPage() {
@@ -19,6 +22,8 @@ export default function InvoiceDetailPage() {
   const queryClient = useQueryClient();
   const [toggling, setToggling] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [payTarget, setPayTarget] = useState<any>(null);
+  const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
   const { isAdmin, isSuperadmin } = useAuth();
 
   const { data, isLoading: loading } = useQuery({
@@ -64,7 +69,12 @@ export default function InvoiceDetailPage() {
 
   const formatCurrency = (val: number) => `₦${Number(val).toLocaleString('en-NG')}`;
 
-  const toggleInstallmentStatus = async (installment: any) => {
+  const openMarkPaid = (installment: any) => {
+    setPayDate(new Date().toISOString().slice(0, 10));
+    setPayTarget(installment);
+  };
+
+  const toggleInstallmentStatus = async (installment: any, paidDate?: string) => {
     setToggling(installment.id);
     const isPaid = installment.status === 'paid';
     const newStatus = isPaid ? 'pending' : 'paid';
@@ -72,7 +82,7 @@ export default function InvoiceDetailPage() {
     try {
       const { error } = await supabase.from('installments').update({
         status: newStatus,
-        paid_at: isPaid ? null : new Date().toISOString(),
+        paid_at: isPaid ? null : `${paidDate}T00:00:00.000Z`,
       }).eq('id', installment.id);
       if (error) throw error;
 
@@ -117,6 +127,7 @@ export default function InvoiceDetailPage() {
       }
 
       toast.success(`Installment marked as ${newStatus}`);
+      setPayTarget(null);
       fetchData();
     } catch (err: any) {
       toast.error(err.message);
@@ -230,7 +241,7 @@ export default function InvoiceDetailPage() {
                     variant={inst.status === 'paid' ? 'outline' : 'default'}
                     size="sm"
                     disabled={toggling === inst.id}
-                    onClick={() => toggleInstallmentStatus(inst)}
+                    onClick={() => inst.status === 'paid' ? toggleInstallmentStatus(inst) : openMarkPaid(inst)}
                   >
                     {inst.status === 'paid' ? (
                       <><XCircle className="h-3.5 w-3.5 mr-1.5" /> Mark Unpaid</>
@@ -244,6 +255,27 @@ export default function InvoiceDetailPage() {
           )}
         </div>
       </div>
+
+      <Dialog open={!!payTarget} onOpenChange={o => !o && setPayTarget(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Mark Installment Paid</DialogTitle></DialogHeader>
+          <div className="space-y-4 mt-2">
+            <p className="text-sm text-muted-foreground">{formatCurrency(Number(payTarget?.amount || 0))}</p>
+            <div>
+              <Label>Payment Date *</Label>
+              <Input type="date" value={payDate} onChange={e => setPayDate(e.target.value)} className="mt-1.5" />
+              <p className="text-xs text-muted-foreground mt-1">When it was actually paid — not today's date if you're catching up on a backlog.</p>
+            </div>
+            <Button
+              onClick={() => toggleInstallmentStatus(payTarget, payDate)}
+              disabled={!payDate || toggling === payTarget?.id}
+              className="w-full"
+            >
+              Confirm
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

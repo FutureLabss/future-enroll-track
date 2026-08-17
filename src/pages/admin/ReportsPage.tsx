@@ -146,8 +146,8 @@ export default function ReportsPage() {
         if (filters.dateTo) payQuery = payQuery.lte('payment_date', filters.dateTo);
 
         const [instRes, payRes] = await Promise.all([instQuery, payQuery]);
-        total += (instRes.data || []).reduce((s: number, i: any) => s + Number(i.amount), 0);
-        total += (payRes.data || []).reduce((s: number, p: any) => s + Number(p.amount), 0);
+        total += (instRes.data || []).reduce((s: number, i: { amount: number }) => s + Number(i.amount), 0);
+        total += (payRes.data || []).reduce((s: number, p: { amount: number }) => s + Number(p.amount), 0);
       }
       return total;
     },

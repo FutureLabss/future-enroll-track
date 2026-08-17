@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { enrichSchedules, SCHEDULE_COLUMNS } from '@/hooks/useSchedules';
 
-const ATTENDANCE_SESSION_COLUMNS = 'id, classroom_id, cohort_id, lesson_id, schedule_id, code, status, created_at, closed_at, duration_mins, code_expires_at, generated_by';
+const ATTENDANCE_SESSION_COLUMNS = 'id, classroom_id, cohort_id, lesson_id, schedule_id, code, status, created_at, closed_at, duration_mins, late_after_mins, code_expires_at, generated_by';
 
 async function enrichAttendanceSessions(rows: any[]) {
   if (!rows.length) return [];
@@ -58,13 +58,14 @@ export function useAttendance(classroomId: string) {
   const refetch = () => queryClient.invalidateQueries({ queryKey: ['attendance-sessions', classroomId] });
 
   const generateMutation = useMutation({
-    mutationFn: async ({ lessonId, cohortId, durationMins, scheduleId }: { lessonId: string | null; cohortId: string | null; durationMins: number; scheduleId?: string | null }) => {
+    mutationFn: async ({ lessonId, cohortId, durationMins, scheduleId, lateAfterMins }: { lessonId: string | null; cohortId: string | null; durationMins: number; scheduleId?: string | null; lateAfterMins?: number }) => {
       const { data, error } = await supabase.rpc('generate_attendance_session', {
         p_classroom_id: classroomId,
         p_lesson_id: lessonId,
         p_cohort_id: cohortId,
         p_duration_mins: durationMins,
         p_schedule_id: scheduleId ?? null,
+        p_late_after_mins: lateAfterMins ?? 10,
       });
       if (error) throw error;
       return data;
@@ -97,8 +98,8 @@ export function useAttendance(classroomId: string) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['attendance-sessions', classroomId] }),
   });
 
-  const generateSession = (lessonId: string | null, cohortId: string | null, durationMins: number, scheduleId?: string | null) =>
-    generateMutation.mutateAsync({ lessonId, cohortId, durationMins, scheduleId });
+  const generateSession = (lessonId: string | null, cohortId: string | null, durationMins: number, scheduleId?: string | null, lateAfterMins?: number) =>
+    generateMutation.mutateAsync({ lessonId, cohortId, durationMins, scheduleId, lateAfterMins });
   const closeSession = (sessionId: string) => closeMutation.mutateAsync(sessionId);
   const regenerateCode = (sessionId: string, durationMins: number) => regenMutation.mutateAsync({ sessionId, durationMins });
 

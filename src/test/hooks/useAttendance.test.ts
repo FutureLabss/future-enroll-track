@@ -31,11 +31,45 @@ function makeChain(data: any, error: any = null): any {
   return self;
 }
 
-import { useMarkAttendance, useAttendanceSession } from '@/hooks/useAttendance';
+import { useAttendance, useMarkAttendance, useAttendanceSession } from '@/hooks/useAttendance';
 
 beforeEach(() => {
   mockRpc.mockReset();
   mockFrom.mockReset();
+});
+
+// ---------------------------------------------------------------------------
+// useAttendance — generateSession
+// ---------------------------------------------------------------------------
+describe('useAttendance.generateSession', () => {
+  it('passes the chosen late-grace window to generate_attendance_session', async () => {
+    mockFrom.mockReturnValue(makeChain([])); // initial sessions list query
+    mockRpc.mockResolvedValue({ data: { id: 'session-1' }, error: null });
+
+    const { result } = renderHook(() => useAttendance('classroom-1'), { wrapper: createQueryWrapper() });
+    await result.current.generateSession(null, 'cohort-1', 30, null, 15);
+
+    expect(mockRpc).toHaveBeenCalledWith('generate_attendance_session', {
+      p_classroom_id: 'classroom-1',
+      p_lesson_id: null,
+      p_cohort_id: 'cohort-1',
+      p_duration_mins: 30,
+      p_schedule_id: null,
+      p_late_after_mins: 15,
+    });
+  });
+
+  it('defaults the late-grace window to 10 minutes when not specified', async () => {
+    mockFrom.mockReturnValue(makeChain([]));
+    mockRpc.mockResolvedValue({ data: { id: 'session-1' }, error: null });
+
+    const { result } = renderHook(() => useAttendance('classroom-1'), { wrapper: createQueryWrapper() });
+    await result.current.generateSession(null, 'cohort-1', 30, null);
+
+    expect(mockRpc).toHaveBeenCalledWith('generate_attendance_session', expect.objectContaining({
+      p_late_after_mins: 10,
+    }));
+  });
 });
 
 // ---------------------------------------------------------------------------

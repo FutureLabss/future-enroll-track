@@ -99,8 +99,67 @@ export default function ReportsPage() {
     return true;
   }), [enrollments, filters]);
 
-  const { totalRevenue, totalCollected, totalOutstanding, pieData, barData } = useMemo(() => {
-    const totalRevenue = filtered.reduce((s, e) => s + Number(e.total_amount), 0);
+  // Structural-only filters (no date) — scopes which enrollments' actual
+  // payment activity counts toward "Total Revenue" below. Deliberately
+  // separate from `filtered`: an enrollment whose FIRST payment landed
+  // outside the selected range can still have later installments/payments
+  // that land inside it, and those need to count (that's exactly the gap
+  // that made this page disagree with the Finance Dashboard — see
+  // CLAUDE.md "Finance bucketing").
+  const structuralIds = useMemo(() => enrollments.filter(e => {
+    if (filters.program_id !== 'all' && e.program_id !== filters.program_id) return false;
+    if (filters.cohort_id !== 'all' && e.cohort_id !== filters.cohort_id) return false;
+    if (filters.organization_id !== 'all' && e.organization_id !== filters.organization_id) return false;
+    if (filters.enrollment_status !== 'all' && e.enrollment_status !== filters.enrollment_status) return false;
+    return true;
+  }).map(e => e.id), [enrollments, filters.program_id, filters.cohort_id, filters.organization_id, filters.enrollment_status]);
+
+  // Total Revenue for the period — same per-row logic as get_finance_summary
+  // (paid installments by paid_at, payments by payment_date, cancelled
+  // invoices excluded) so this tallies with the Finance Dashboard for the
+  // same date range, rather than the enrollment-level total_amount sum
+  // that used to live here.
+  const { data: periodRevenue = 0 } = useQuery({
+    queryKey: ['reports-period-revenue', structuralIds, filters.dateFrom, filters.dateTo],
+    queryFn: async () => {
+      if (structuralIds.length === 0) return 0;
+      const CHUNK = 100;
+      let total = 0;
+      for (let i = 0; i < structuralIds.length; i += CHUNK) {
+        const idsChunk = structuralIds.slice(i, i + CHUNK);
+
+        let instQuery = supabase
+          .from('installments')
+          .select('amount, paid_at, invoices!inner(status, enrollment_id)')
+          .eq('status', 'paid')
+          .neq('invoices.status', 'cancelled')
+          .in('invoices.enrollment_id', idsChunk);
+        if (filters.dateFrom) instQuery = instQuery.gte('paid_at', filters.dateFrom);
+        if (filters.dateTo) instQuery = instQuery.lte('paid_at', filters.dateTo + 'T23:59:59');
+
+        let payQuery = supabase
+          .from('payments')
+          .select('amount, payment_date, invoices!inner(status, enrollment_id)')
+          .neq('invoices.status', 'cancelled')
+          .in('invoices.enrollment_id', idsChunk);
+        if (filters.dateFrom) payQuery = payQuery.gte('payment_date', filters.dateFrom);
+        if (filters.dateTo) payQuery = payQuery.lte('payment_date', filters.dateTo);
+
+        const [instRes, payRes] = await Promise.all([instQuery, payQuery]);
+        total += (instRes.data || []).reduce((s: number, i: { amount: number }) => s + Number(i.amount), 0);
+        total += (payRes.data || []).reduce((s: number, p: { amount: number }) => s + Number(p.amount), 0);
+      }
+      return total;
+    },
+    enabled: !loading,
+    staleTime: 1000 * 60,
+  });
+
+  const { invoicedTotal, totalCollected, totalOutstanding, pieData, barData } = useMemo(() => {
+    // Total invoiced value of the filtered cohort — Outstanding still means
+    // "how much do these enrollments still owe", independent of the
+    // period-accurate Revenue figure above.
+    const invoicedTotal = filtered.reduce((s, e) => s + Number(e.total_amount), 0);
     const totalCollected = filtered.reduce((s, e) => s + Number(e.amount_paid), 0);
 
     const statusCounts = filtered.reduce((acc: Record<string, number>, e) => {
@@ -116,7 +175,7 @@ export default function ReportsPage() {
     }, {});
     const barData = Object.entries(programRevenue).map(([name, total]) => ({ name: name.length > 20 ? name.slice(0, 20) + '…' : name, total }));
 
-    return { totalRevenue, totalCollected, totalOutstanding: totalRevenue - totalCollected, pieData, barData };
+    return { invoicedTotal, totalCollected, totalOutstanding: invoicedTotal - totalCollected, pieData, barData };
   }, [filtered]);
 
   const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
@@ -238,7 +297,7 @@ export default function ReportsPage() {
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard title="Total Enrollments" value={filtered.length} icon={Users} />
-        <StatCard title="Total Revenue" value={formatCurrency(totalRevenue)} icon={TrendingUp} />
+        <StatCard title="Total Revenue" value={formatCurrency(periodRevenue)} icon={TrendingUp} />
         <StatCard title="Collected" value={formatCurrency(totalCollected)} icon={CreditCard} />
         <StatCard title="Outstanding" value={formatCurrency(totalOutstanding)} icon={FileText} />
       </div>

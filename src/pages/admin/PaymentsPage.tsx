@@ -17,7 +17,7 @@ export default function PaymentsPage() {
   const queryClient = useQueryClient();
   const [installments, setInstallments] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ invoice_id: '', installment_id: '', amount: '', payment_reference: '', payment_method: '' });
+  const [form, setForm] = useState({ invoice_id: '', installment_id: '', amount: '', payment_reference: '', payment_method: '', payment_date: new Date().toISOString().slice(0, 10) });
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
 
@@ -43,45 +43,43 @@ export default function PaymentsPage() {
     setInstallments(data || []);
   };
 
-  const getInvoiceEnrollmentDate = async (invoiceId: string) => {
-    const { data } = await supabase
-      .from('installments')
-      .select('due_date')
-      .eq('invoice_id', invoiceId)
-      .order('due_date', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    return data?.due_date ? new Date(`${data.due_date}T00:00:00`).toISOString() : new Date().toISOString();
-  };
-
   const handleRecord = async () => {
     try {
       const amount = parseFloat(form.amount);
       if (!form.invoice_id || isNaN(amount) || amount <= 0 || !form.payment_reference) throw new Error('Fill required fields');
 
+      if (!form.payment_date) throw new Error('Payment date is required');
+
+      // payment_date isn't in the generated Supabase types yet (added directly via
+      // migration 20260812000001, types not regenerated — see CLAUDE.md typegen note)
       const { error } = await supabase.from('payments').insert({
         invoice_id: form.invoice_id,
         installment_id: form.installment_id || null,
         amount,
         payment_reference: form.payment_reference,
         payment_method: form.payment_method || null,
-      });
+        payment_date: form.payment_date,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
       if (error) throw error;
 
       if (form.installment_id) {
-        await supabase.from('installments').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', form.installment_id);
+        await supabase.from('installments').update({ status: 'paid', paid_at: `${form.payment_date}T00:00:00.000Z` }).eq('id', form.installment_id);
       }
 
       const { data: invoice } = await supabase.from('invoices').select('enrollment_id').eq('id', form.invoice_id).single();
       if (invoice) {
-        const { data: enrollment } = await supabase.from('enrollments').select('amount_paid').eq('id', invoice.enrollment_id).single();
+        const { data: enrollment } = await supabase.from('enrollments').select('amount_paid, first_payment_date').eq('id', invoice.enrollment_id).single();
         if (enrollment) {
           const newPaid = Number(enrollment.amount_paid) + amount;
-          const enrollmentDate = await getInvoiceEnrollmentDate(form.invoice_id);
+          const paymentTimestamp = `${form.payment_date}T00:00:00.000Z`;
           await supabase.from('enrollments').update({
             amount_paid: newPaid,
-            last_payment_date: new Date().toISOString(),
-            first_payment_date: enrollmentDate,
+            last_payment_date: paymentTimestamp,
+            // first_payment_date is set once, on the actual first payment — not
+            // overwritten by every later payment (that used to happen when this
+            // read a static due_date instead of the real date being recorded here)
+            ...(!enrollment.first_payment_date ? { first_payment_date: paymentTimestamp } : {}),
             ...(!enrollment.amount_paid || Number(enrollment.amount_paid) === 0 ? { enrollment_status: 'active' } : {}),
           }).eq('id', invoice.enrollment_id);
         }
@@ -123,7 +121,7 @@ export default function PaymentsPage() {
 
       toast.success('Payment recorded');
       setOpen(false);
-      setForm({ invoice_id: '', installment_id: '', amount: '', payment_reference: '', payment_method: '' });
+      setForm({ invoice_id: '', installment_id: '', amount: '', payment_reference: '', payment_method: '', payment_date: new Date().toISOString().slice(0, 10) });
       queryClient.invalidateQueries({ queryKey: ['payments-all'] });
       queryClient.invalidateQueries({ queryKey: ['invoices-unpaid'] });
     } catch (err: any) {
@@ -221,6 +219,11 @@ export default function PaymentsPage() {
                       <SelectItem value="other">Other</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                <div>
+                  <Label>Payment Date *</Label>
+                  <Input type="date" value={form.payment_date} onChange={e => setForm({ ...form, payment_date: e.target.value })} className="mt-1.5" />
+                  <p className="text-xs text-muted-foreground mt-1">When the payment actually happened — not today's date if you're recording it late.</p>
                 </div>
                 <Button onClick={handleRecord} className="w-full">Record Payment</Button>
               </div>

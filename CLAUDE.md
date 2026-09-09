@@ -57,6 +57,21 @@ const map = new Map(profiles.map(p => [p.user_id, p]));
 - **`paid_at` accuracy matters now that it drives the default view.** Every "mark installment paid" action must stamp the real approval moment (`new Date().toISOString()`), never `due_date` or any other placeholder — `EditInvoicePage.tsx`'s "Auto-populate paid_at" used to default to `due_date` and got fixed (2026-08-11); 17 historical installments still carry that bad value (`paid_at::date = due_date` at midnight — a detectable signature if you need to find them again) and their true payment dates aren't recoverable from this system's audit trail.
 - `useMonthDetail`'s `basis` param follows the dashboard's toggle for the month drill-down.
 
+### Four dates, and which one is revenue
+There are four distinct dates in play and conflating any two of them is how revenue lands in the wrong month:
+
+| Date | Means | Trust |
+|------|-------|-------|
+| `installments.due_date` | when payment was *scheduled* | exact, but not when money moved |
+| `payments.created_at` | when the row was typed in | exact, and almost never the payment date |
+| `payments.payment_date` / `installments.paid_at` | what staff entered / stamped | a recollection; `now()` on old rows |
+| `paid_at_actual` (+ `bank_transactions.occurred_at`) | when the bank says money landed | the only real evidence |
+
+- `paid_at_actual` is **NULL until proven**, and `paid_at_source` records the provenance (`bank_statement`/`paystack` are evidence; `staff_entered` is not). Never populate it with a guess — a NULL that falls back to the old basis is honest, a wrong timestamp is not.
+- `bank_transactions` is the imported Moniepoint ledger (`scripts/import-bank-statement.py`, idempotent on `(account_number, transaction_ref)`). The importer refuses to emit unless its extracted credits and debits equal the totals the statement prints for itself.
+- **Matching is never automatic.** In Jan–Sep 2026, 275 of 291 external deposits share their exact amount with another deposit (74 separate deposits of ₦2,000). Amount cannot identify a payer, so `suggest_bank_matches()` scores candidates and `confirm_bank_match()` is the only thing that writes `paid_at_actual`.
+- **Credits from account `8288325467` are the company's own second Moniepoint account, not income.** They total ₦1,019,600 over Jan–Sep 2026; counting bank credits as revenue without excluding `kind = 'internal_transfer'` overstates by that much.
+
 ---
 
 ## Supabase / Database Rules

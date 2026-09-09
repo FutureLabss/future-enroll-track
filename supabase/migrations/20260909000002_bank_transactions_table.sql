@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS public.bank_transactions (
 COMMENT ON TABLE public.bank_transactions IS
   'Immutable bank statement rows. occurred_at is the only trustworthy answer to "when did this money arrive". Imported via scripts/import-bank-statement.mjs; re-import is idempotent on (account_number, transaction_ref).';
 COMMENT ON COLUMN public.bank_transactions.amount IS
-  'Signed. Positive = credit. Internal transfers between the company''s own accounts are kind=internal_transfer and must be excluded from revenue.';
+  'Signed. Positive = credit. kind=internal_transfer marks credits from the company''s own second account for REVIEW, not exclusion: over Jan-Sep 2026 only N230,900 of the N1,019,600 received that way was money going back the other direction, so most of it is real income.';
 
 CREATE INDEX IF NOT EXISTS idx_bank_transactions_hub_occurred
   ON public.bank_transactions (hub_id, occurred_at DESC);

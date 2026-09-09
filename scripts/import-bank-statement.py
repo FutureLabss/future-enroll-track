@@ -79,8 +79,12 @@ def payer(text):
 
 def classify(text, own_accounts):
     u = text.upper()
-    # Money moved between the company's own two Moniepoint accounts is not income.
-    # Counting it as revenue overstates Jan-Sep 2026 by ~N1.02m.
+    # Credits from the company's own second account are NOT simply internal shuffling.
+    # Jan-Sep 2026: that account sent in N1,019,600 while this one only ever sent it
+    # N230,900, so at most N230,900 is money coming back - the other N788,700 is real
+    # income (other income, and refunds of funds sent over earlier). This tag means
+    # "needs review", not "exclude from revenue"; excluding it wholesale understates
+    # January by N261,500 and March by N187,200.
     if any(a in u for a in own_accounts) \
        or "FUTURE LABS LTD TO FUTURE LABS LTD" in u \
        or "FUTURE LABS HQ TO FUTURE LABS LTD" in u:

@@ -6,5 +6,8 @@ verify_jwt = false  # called server-to-server from other edge functions without 
 [functions.check-due-reminders]
 verify_jwt = false  # cron-style invocation by scheduler — no user auth context
 
+[functions.superadmin-daily-brief]
+verify_jwt = false  # cron-style invocation by scheduler — no user auth context
+
 [functions.paystack-verify]
 verify_jwt = false  # receives webhook POST from Paystack servers, no JWT supplied

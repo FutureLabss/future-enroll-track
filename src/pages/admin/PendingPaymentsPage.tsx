@@ -1,5 +1,5 @@
 // @ts-nocheck — pre-existing schema/typegen mismatch (LMS tables not in DB); unblocks build.
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { usePendingPayments } from '@/hooks/usePayments';
@@ -11,6 +11,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { CheckCircle, XCircle, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
+
+interface BankMatch {
+  id: string;
+  occurred_at: string;
+  amount: number;
+  payer: string | null;
+  transaction_ref: string;
+  basis: 'reference' | 'amount';
+}
 
 interface PendingPayment {
   id: string;
@@ -31,6 +40,47 @@ export default function PendingPaymentsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [approveTarget, setApproveTarget] = useState<PendingPayment | null>(null);
   const [approveDate, setApproveDate] = useState(new Date().toISOString().slice(0, 10));
+  // The student typed a reference off their own receipt. bank_transactions holds the
+  // imported statement. Matching the two is the difference between a date somebody
+  // asserts and a date the bank recorded — so look it up rather than trusting the input.
+  const [bankMatch, setBankMatch] = useState<BankMatch | null>(null);
+  const [bankLookup, setBankLookup] = useState<'idle' | 'searching' | 'none'>('idle');
+
+  useEffect(() => {
+    if (!approveTarget) { setBankMatch(null); setBankLookup('idle'); return; }
+    let cancelled = false;
+    (async () => {
+      setBankMatch(null); setBankLookup('searching');
+      const amount = Number(approveTarget.amount);
+      const ref = (approveTarget.payment_reference || '').trim();
+      let hit: BankMatch | null = null;
+
+      // The receipt reference is usually a fragment of the bank's own ref (a session
+      // id), so match on containment rather than equality.
+      if (ref.length >= 6) {
+        const { data } = await supabase.from('bank_transactions')
+          .select('id, occurred_at, amount, payer, transaction_ref')
+          .eq('kind', 'external').gt('amount', 0)
+          .or(`transaction_ref.ilike.%${ref}%,narration.ilike.%${ref}%`)
+          .limit(2);
+        if (data?.length === 1) hit = { ...data[0], basis: 'reference' };
+      }
+      // No usable reference: fall back to a same-amount deposit, but only when exactly
+      // one exists. Amounts collide heavily here, so anything else is a guess.
+      if (!hit) {
+        const { data } = await supabase.from('bank_transactions')
+          .select('id, occurred_at, amount, payer, transaction_ref')
+          .eq('kind', 'external').eq('amount', amount)
+          .limit(2);
+        if (data?.length === 1) hit = { ...data[0], basis: 'amount' };
+      }
+      if (cancelled) return;
+      setBankMatch(hit);
+      setBankLookup(hit ? 'idle' : 'none');
+      if (hit) setApproveDate(hit.occurred_at.slice(0, 10));
+    })();
+    return () => { cancelled = true; };
+  }, [approveTarget]);
 
   const { data: items = [], isLoading: loading } = usePendingPayments();
 
@@ -38,7 +88,7 @@ export default function PendingPaymentsPage() {
 
   const formatCurrency = (val: number) => `₦${Number(val).toLocaleString('en-NG')}`;
 
-  const approve = async (p: PendingPayment, paymentDate: string) => {
+  const approve = async (p: PendingPayment, paymentDate: string, match: BankMatch | null) => {
     setBusyId(p.id);
     try {
       const reference = p.payment_reference || `BANK-${Date.now()}-${p.id.slice(0, 6).toUpperCase()}`;
@@ -49,12 +99,24 @@ export default function PendingPaymentsPage() {
         payment_reference: reference,
         payment_method: 'bank_transfer',
         notes: p.notes ? `Bank transfer · ${p.notes}` : 'Bank transfer',
-        payment_date: paymentDate,
+        payment_date: match ? match.occurred_at.slice(0, 10) : paymentDate,
+        paid_at_actual: match ? match.occurred_at : null,
+        paid_at_source: match ? 'bank_statement' : 'staff_entered',
+        bank_transaction_id: match ? match.id : null,
       });
       if (pErr) throw pErr;
 
       if (p.installment_id) {
-        await supabase.from('installments').update({ status: 'paid', paid_at: `${paymentDate}T00:00:00.000Z` }).eq('id', p.installment_id);
+        // paid_at stays the operator-facing date. paid_at_actual is only written when a
+        // bank row actually corroborates it — a NULL there is honest, a guessed
+        // timestamp is what put this system's revenue in the wrong months.
+        await supabase.from('installments').update({
+          status: 'paid',
+          paid_at: match ? match.occurred_at : `${paymentDate}T00:00:00.000Z`,
+          paid_at_actual: match ? match.occurred_at : null,
+          paid_at_source: match ? 'bank_statement' : 'staff_entered',
+          bank_transaction_id: match ? match.id : null,
+        }).eq('id', p.installment_id);
       }
 
       const { data: enr } = await supabase.from('enrollments').select('amount_paid, first_payment_date').eq('id', p.enrollment_id).single();
@@ -181,17 +243,54 @@ export default function PendingPaymentsPage() {
             <p className="text-sm text-muted-foreground">
               {formatCurrency(Number(approveTarget?.amount || 0))} from {approveTarget?.invoices?.enrollments?.full_name || '—'}
             </p>
+            {bankLookup === 'searching' && (
+              <p className="text-xs text-muted-foreground">Checking the bank statement…</p>
+            )}
+            {bankMatch && (
+              <div className="rounded-md border border-emerald-600/30 bg-emerald-600/10 p-3 text-sm">
+                <p className="font-medium text-emerald-700 dark:text-emerald-400">Matched to a bank deposit</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {new Date(bankMatch.occurred_at).toLocaleString('en-NG')} · {formatCurrency(Number(bankMatch.amount))}
+                  {bankMatch.payer ? ` · ${bankMatch.payer}` : ''}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {bankMatch.basis === 'reference'
+                    ? 'Matched on the reference the student supplied.'
+                    : 'Matched on amount — the only deposit of this value in the statement.'}
+                  {' '}The bank's timestamp will be recorded, not the date below.
+                </p>
+              </div>
+            )}
+            {bankLookup === 'none' && (
+              <div className="rounded-md border border-amber-600/30 bg-amber-600/10 p-3 text-sm">
+                <p className="font-medium text-amber-700 dark:text-amber-400">No matching bank deposit</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Nothing in the imported statement matches this reference or amount. Approving is
+                  still fine — the date below is recorded as staff-entered rather than verified.
+                </p>
+              </div>
+            )}
             <div>
               <Label>Payment Date *</Label>
-              <Input type="date" value={approveDate} onChange={e => setApproveDate(e.target.value)} className="mt-1.5" />
-              <p className="text-xs text-muted-foreground mt-1">When the student actually paid — not today's date if this submission sat unreviewed for a while.</p>
+              <Input
+                type="date"
+                value={approveDate}
+                onChange={e => setApproveDate(e.target.value)}
+                disabled={!!bankMatch}
+                className="mt-1.5"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                {bankMatch
+                  ? 'Taken from the bank statement.'
+                  : "When the student actually paid — not today's date if this submission sat unreviewed for a while."}
+              </p>
             </div>
             <Button
-              onClick={() => approve(approveTarget, approveDate)}
+              onClick={() => approve(approveTarget, approveDate, bankMatch)}
               disabled={!approveDate || busyId === approveTarget?.id}
               className="w-full"
             >
-              Confirm & Approve
+              Confirm &amp; Approve
             </Button>
           </div>
         </DialogContent>

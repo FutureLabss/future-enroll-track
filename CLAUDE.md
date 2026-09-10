@@ -63,6 +63,22 @@ const map = new Map(profiles.map(p => [p.user_id, p]));
 - `admin_update_invoice` recalculates `amount_paid` correctly on every edit but, until 2026-08-17, never touched `total_amount` — so editing an invoice's total (adding/removing installments) left the enrollment's cached total frozen at whatever it was before the edit, forever. Concrete case: `INV-001019` edited down to ₦50,000 on 2026-07-15 — invoice and `amount_paid` both correctly showed ₦50,000, `enrollments.total_amount` stayed at the pre-edit ₦100,000, so the Cohort students table showed ₦50,000 outstanding on an invoice that was actually fully paid. 6 enrollments found drifted this way (both directions — some too high, some too low), backfilled in `20260817000001`.
 - If you add or touch any invoice-editing path, it must recompute **both** `amount_paid` (sum of paid installments) and `total_amount` (sum of that enrollment's non-cancelled invoices) — not just one. `admin_update_invoice` is the reference implementation.
 
+### Four dates, and which one is revenue
+There are four distinct dates in play and conflating any two of them is how revenue lands in the wrong month:
+
+| Date | Means | Trust |
+|------|-------|-------|
+| `installments.due_date` | when payment was *scheduled* | exact, but not when money moved |
+| `payments.created_at` | when the row was typed in | exact, and almost never the payment date |
+| `payments.payment_date` / `installments.paid_at` | what staff entered / stamped | a recollection; `now()` on old rows |
+| `paid_at_actual` (+ `bank_transactions.occurred_at`) | when the bank says money landed | the only real evidence |
+
+- `paid_at_actual` is **NULL until proven**, and `paid_at_source` records the provenance (`bank_statement`/`paystack` are evidence; `staff_entered` is not). Never populate it with a guess — a NULL that falls back to the old basis is honest, a wrong timestamp is not.
+- `bank_transactions` is the imported Moniepoint ledger (`scripts/import-bank-statement.py`, idempotent on `(account_number, transaction_ref)`). The importer refuses to emit unless its extracted credits and debits equal the totals the statement prints for itself.
+- **Matching is never automatic.** In Jan–Sep 2026, 275 of 291 external deposits share their exact amount with another deposit (74 separate deposits of ₦2,000). Amount cannot identify a payer, so `suggest_bank_matches()` scores candidates and `confirm_bank_match()` is the only thing that writes `paid_at_actual`.
+- **Credits from account `8288325467` (the company's second Moniepoint account) are mostly real income, not internal shuffling.** Over Jan–Sep 2026 that account sent in ₦1,019,600 while this one only ever sent it ₦230,900 — so at most ₦230,900 is money coming back, and the remaining **₦788,700 is income** (other income, and refunds of funds previously sent over). `kind = 'internal_transfer'` marks these for review; **do not blanket-exclude them from revenue** — doing so understates Jan by ₦261,500 and Mar by ₦187,200.
+- Counting all money in (₦7,615,468 net of the ₦230,900 round trip) against what the LMS records (₦7,094,600) leaves **₦520,868 of income that reached the bank but isn't in the system** — the gap to chase, and it runs the opposite way to what a naive "bank credits = revenue" read suggests.
+
 ---
 
 ## Supabase / Database Rules

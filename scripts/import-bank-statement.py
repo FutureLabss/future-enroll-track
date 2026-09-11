@@ -35,7 +35,11 @@ SKIP = ("Account Statement", "Business Name", "Account Number", "Opening Balance
 def to_text(pdf):
     out = tempfile.mktemp(suffix=".txt")
     subprocess.run(["pdftotext", "-layout", pdf, out], check=True)
-    return open(out).read()
+    # pdftotext marks each page break with a form feed on the first line of the new
+    # page, which pushes that line's date out of column zero. The detailed layout
+    # tolerated it by accident (its leading \s* matches a form feed); anchored
+    # matching does not, and the record silently merged into its predecessor.
+    return open(out).read().replace("\x0c", "")
 
 
 def header_figures(text):
@@ -49,12 +53,45 @@ def account_number(text):
     return re.search(r"Account Number\s+(\d+)", text).group(1)
 
 
-def blocks(text):
+# Moniepoint exports two different statement layouts and they parse nothing alike.
+#
+#   DETAILED - one column per settlement field (Settlement Debit/Credit, Balance
+#     Before, Balance After, Charge). The date wraps across three lines inside a
+#     9-character column ("2026-" / "01-" / "13T10:").
+#   SIMPLE   - only Debit, Credit, Balance. The date wraps across two lines inside
+#     a 14-character column ("2025-05-23T12:" / "21:38").
+#
+# The 2025 statements come out simple, the 2026 ones detailed, so a parser that
+# assumes either one silently returns zero rows on the other - which is how this
+# was found. DATE_COL is the width of the date column and DATE_HEAD matches the
+# part of the timestamp that lands on a record's first line.
+# In SIMPLE the date column's width drifts between pages too ("2025-09-08T18:" on
+# one page, "2025-09-08T18" on the next), so that layout is split on line CONTENT -
+# a record opens on a line that is nothing but a date fragment, and its time tail is
+# a line that is nothing but MM:SS (or just MM when the seconds are dropped).
+DETAILED = {"name": "detailed", "date_col": 9, "head": r"\s*\d{4}-\s*"}
+SIMPLE   = {"name": "simple"}
+# A SIMPLE record opens with a date fragment at the very start of a line. That
+# fragment sometimes sits alone and sometimes shares the line with the narration
+# ("2025-09-08T18:   PAYSTACK CHECKOUT|..."), and the column it occupies is not a
+# fixed width across pages - so anchor on the token, never on a slice.
+SIMPLE_DATE = re.compile(r"(\d{4}-\d{2}-\d{2}T\d{2}):?\s*(.*)$")
+SIMPLE_TIME = re.compile(r"\d{2}(?::\d{2})?")
+
+
+def layout(text):
+    """Detailed exports carry settlement columns; simple ones never do."""
+    return DETAILED if "Settlement" in text and "Balance" in text else SIMPLE
+
+
+def blocks(text, lay):
     lines = [l for l in text.split("\n")
              if l.strip() and not any(s in l for s in SKIP)]
     out, cur = [], []
     for l in lines:
-        if re.fullmatch(r"\s*\d{4}-\s*", l[0:9]):
+        start = (SIMPLE_DATE.match(l) if lay is SIMPLE
+                 else re.fullmatch(lay["head"], l[0:lay["date_col"]]))
+        if start:
             if cur:
                 out.append(cur)
             cur = [l]
@@ -94,27 +131,71 @@ def classify(text, own_accounts):
     return "external"
 
 
+def split_simple(b):
+    """Date and narration for one SIMPLE record.
+
+    The record opens with a date fragment ("2025-05-23T15:"), which may sit alone on
+    its line or be followed on the same line by the narration. The minutes/seconds
+    tail ("40:07", or "49" when the seconds are dropped) follows on a line of its
+    own; a record whose tail never appears is timestamped on the hour.
+    """
+    m = SIMPLE_DATE.match(b[0])
+    frag, head = m.group(1), ([m.group(2)] if m.group(2).strip() else [])
+    rest = b[1:]
+    # Preferred: the tail is a line of its own.
+    for i, l in enumerate(rest):
+        if SIMPLE_TIME.fullmatch(l.strip()):
+            return frag + ":" + l.strip(), head + rest[:i] + rest[i + 1:]
+    # Otherwise it leads a narration continuation ("10:24  SIMON|TRF|..."). Checked
+    # only after the standalone form is ruled out, so it cannot strip a leading
+    # figure off an ordinary narration line.
+    for i, l in enumerate(rest):
+        lead = re.match(r"\s*(\d{2}(?::\d{2})?)\s+(\S.*)$", l)
+        if lead:
+            return (frag + ":" + lead.group(1),
+                    head + rest[:i] + [lead.group(2)] + rest[i + 1:])
+    return frag + ":00", head + rest
+
+
 def parse(pdf, own_accounts):
     text = to_text(pdf)
     acct = account_number(text)
+    lay = layout(text)
     opening, tot_debit, tot_credit, closing = header_figures(text)
     rows, unverified = [], 0
-    for b in blocks(text):
-        date = "".join(l[0:9].strip() for l in b)
+    running = opening
+    for b in blocks(text, lay):
+        if lay is SIMPLE:
+            date, body = split_simple(b)
+        else:
+            date = "".join(l[0:lay["date_col"]].strip() for l in b)
         # A handful of rows render without seconds (e.g. 2026-03-05T15:27). Pad rather
         # than drop them - the minute is still the bank's, and these are real money.
         if re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}", date):
             date += ":00"
         if not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", date):
             raise SystemExit(f"unparseable timestamp {date!r}")
-        flat = re.sub(r"\s+", " ", " ".join(l[9:] for l in b)).strip()
+        if lay is not SIMPLE:
+            body = [l[lay["date_col"]:] for l in b]
+        flat = re.sub(r"\s+", " ", " ".join(body)).strip()
         vals = [Decimal(t.replace(",", "")) for t in NUM.findall(flat)]
-        has_na = " N/A " in f" {flat} "
-        bb, ba = (vals[-3], vals[-2]) if has_na else (vals[-2], vals[-1])
-        delta = ba - bb
-        if not (any(abs(abs(delta) - v) < Decimal("0.005") for v in vals[:-2])
-                or abs(delta) < Decimal("0.005")):
-            unverified += 1
+        if lay is SIMPLE:
+            # Debit, Credit, Balance - in that order, last three on the row. There is
+            # no balance-before column to difference against, so the running balance
+            # carried from the opening figure is what proves each row: it must land
+            # exactly on the balance the statement prints.
+            debit, credit, ba = vals[-3], vals[-2], vals[-1]
+            delta = credit - debit
+            if abs((running + delta) - ba) >= Decimal("0.005"):
+                unverified += 1
+            running = ba
+        else:
+            has_na = " N/A " in f" {flat} "
+            bb, ba = (vals[-3], vals[-2]) if has_na else (vals[-2], vals[-1])
+            delta = ba - bb
+            if not (any(abs(abs(delta) - v) < Decimal("0.005") for v in vals[:-2])
+                    or abs(delta) < Decimal("0.005")):
+                unverified += 1
         # The transaction reference is the token ending in _CREDIT_n / _DEBIT_n
         # (optionally _RVSL for reversals). Matching on the scheme prefix instead
         # (TRF, MIT, ...) silently picks up the bare word "TRF" out of narration

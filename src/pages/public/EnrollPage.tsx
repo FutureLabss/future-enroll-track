@@ -76,15 +76,41 @@ export default function EnrollPage() {
       const totalAmount = parseFloat(form.total_amount);
       if (isNaN(totalAmount) || totalAmount <= 0) throw new Error('Invalid amount');
 
-      // Check for existing active enrollment with same email + program
-      const { data: existing } = await supabase
+      // Duplicate guard. This used to check email alone, which never fired: every
+      // duplicate we found in Jan-Sep 2026 used a second email address, while the
+      // phone number stayed the same. Six students were enrolled twice that way and
+      // N380,000 of income was counted twice.
+      //
+      // Phone is checked within the same programme only. Siblings share a parent's
+      // number and enrol on different courses (the Udomah children are on three),
+      // so a bare phone check would reject them. Same number AND same course is the
+      // duplicate signature - with the one exception of twins on one course, who
+      // are told to call the desk rather than being silently turned away.
+      const phoneDigits = (form.phone || '').replace(/[^0-9]/g, '').slice(-10);
+      const { data: byEmail } = await supabase
         .from('enrollments')
-        .select('id, enrollment_status')
+        .select('id')
         .eq('program_id', form.program_id)
         .ilike('email', form.email.trim())
         .not('enrollment_status', 'in', '("cancelled","withdrawn")')
         .maybeSingle();
-      if (existing) throw new Error('An enrollment for this email already exists for the selected program.');
+      if (byEmail) throw new Error('An enrollment for this email already exists for the selected program.');
+
+      if (phoneDigits.length === 10) {
+        const { data: byPhone } = await supabase
+          .from('enrollments')
+          .select('id, full_name')
+          .eq('program_id', form.program_id)
+          .eq('phone_normalized', phoneDigits)
+          .not('enrollment_status', 'in', '("cancelled","withdrawn")')
+          .maybeSingle();
+        if (byPhone) {
+          throw new Error(
+            `This phone number is already enrolled on this programme (${byPhone.full_name}). ` +
+            'If you are enrolling a brother or sister on the same course, please call the front desk so we can set it up without creating a duplicate.'
+          );
+        }
+      }
 
       const { data: enrollment, error } = await supabase.from('enrollments').insert({
         full_name: form.full_name,

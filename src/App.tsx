@@ -24,6 +24,7 @@ const OrganizationsPage = lazy(() => import("@/pages/admin/OrganizationsPage"));
 const CustomFieldsPage = lazy(() => import("@/pages/admin/CustomFieldsPage"));
 const NotificationsPage = lazy(() => import("@/pages/admin/NotificationsPage"));
 const ReportsPage = lazy(() => import("@/pages/admin/ReportsPage"));
+const PartnerReportPage = lazy(() => import("@/pages/admin/PartnerReportPage"));
 const AuditLogPage = lazy(() => import("@/pages/admin/AuditLogPage"));
 const ManageAdminsPage = lazy(() => import("@/pages/admin/ManageAdminsPage"));
 const PayrollPage = lazy(() => import("@/pages/admin/PayrollPage"));
@@ -179,6 +180,7 @@ const App = () => (
                   <Route path="/admin/custom-fields" element={<CustomFieldsPage />} />
                   <Route path="/admin/notifications" element={<NotificationsPage />} />
                   <Route path="/admin/reports" element={<ReportsPage />} />
+                  <Route path="/admin/reports/pind" element={<PartnerReportPage />} />
                   <Route path="/admin/audit-logs" element={<AuditLogPage />} />
                   <Route path="/admin/manage-admins" element={<ManageAdminsPage />} />
                   <Route path="/admin/payroll" element={<PayrollPage />} />

@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Download, Users, FileText, CreditCard, TrendingUp } from 'lucide-react';
+import { Download, Users, FileText, CreditCard, TrendingUp, ClipboardList } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
@@ -243,9 +244,16 @@ export default function ReportsPage() {
         title="Reports & Analytics"
         description="Visualize data and export enrollment reports"
         actions={
-          <Button onClick={openExport}>
-            <Download className="h-4 w-4 mr-2" /> Export
-          </Button>
+          <>
+            <Button variant="outline" asChild>
+              <Link to="/admin/reports/pind">
+                <ClipboardList className="h-4 w-4 mr-2" /> PIND Partner Report
+              </Link>
+            </Button>
+            <Button onClick={openExport}>
+              <Download className="h-4 w-4 mr-2" /> Export
+            </Button>
+          </>
         }
       />
 

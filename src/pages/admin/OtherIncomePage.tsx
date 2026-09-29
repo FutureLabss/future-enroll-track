@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -41,43 +42,49 @@ const blankForm = {
 
 export default function OtherIncomePage() {
   const { user } = useAuth();
-
-  const [rows, setRows] = useState<any[]>([]);
-  const [loadingRows, setLoadingRows] = useState(true);
-  const [recurring, setRecurring] = useState<any[]>([]);
-  const [loadingRecurring, setLoadingRecurring] = useState(true);
+  const queryClient = useQueryClient();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<typeof blankForm>(blankForm);
   // null = creating new; string = editing existing one-off; 'recurring:id' = editing existing recurring
   const [editingKey, setEditingKey] = useState<string | null>(null);
+  // Set after warning about a duplicate payer; a second save proceeds anyway
+  const [dupAcknowledged, setDupAcknowledged] = useState(false);
 
   const [markingPaid, setMarkingPaid] = useState<string | null>(null);
   const [sendingReminder, setSendingReminder] = useState(false);
 
-  const fetchRows = async () => {
-    setLoadingRows(true);
-    const { data } = await supabase.from('other_income').select('*').order('payment_date', { ascending: false });
-    setRows(data || []);
-    setLoadingRows(false);
-  };
+  const { data: rows = [], isLoading: loadingRows } = useQuery({
+    queryKey: ['other-income'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('other_income').select('*').order('payment_date', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 30_000,
+  });
 
-  const fetchRecurring = async () => {
-    setLoadingRecurring(true);
-    const { data } = await (supabase as any).from('recurring_income').select('*').order('next_due_date', { ascending: true });
-    setRecurring(data || []);
-    setLoadingRecurring(false);
-  };
+  const { data: recurring = [], isLoading: loadingRecurring } = useQuery({
+    queryKey: ['recurring-income'],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from('recurring_income').select('*').order('next_due_date', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 30_000,
+  });
 
-  useEffect(() => { fetchRows(); fetchRecurring(); }, []);
+  const refetchRows = () => queryClient.invalidateQueries({ queryKey: ['other-income'] });
+  const refetchRecurring = () => queryClient.invalidateQueries({ queryKey: ['recurring-income'] });
 
   const openNew = () => {
     setEditingKey(null);
+    setDupAcknowledged(false);
     setForm({ ...blankForm, payment_date: todayStr(), next_due_date: todayStr() });
     setDialogOpen(true);
   };
 
-  const openEditIncome = (r: any) => {
+  const openEditIncome = useCallback((r: any) => {
     setEditingKey(r.id);
     setForm({
       category: r.category || 'workspace',
@@ -95,10 +102,11 @@ export default function OtherIncomePage() {
       end_date: '',
     });
     setDialogOpen(true);
-  };
+  }, []);
 
-  const openSetAsRecurring = (r: any) => {
+  const openSetAsRecurring = useCallback((r: any) => {
     setEditingKey(null);
+    setDupAcknowledged(false);
     setForm({
       category: r.category || 'workspace',
       payer_name: r.payer_name || '',
@@ -115,7 +123,7 @@ export default function OtherIncomePage() {
       end_date: '',
     });
     setDialogOpen(true);
-  };
+  }, []);
 
   const openEditRecurring = (r: any) => {
     setEditingKey(`recurring:${r.id}`);
@@ -146,6 +154,10 @@ export default function OtherIncomePage() {
       if (editingKey?.startsWith('recurring:')) {
         // Edit existing recurring template
         const id = editingKey.replace('recurring:', '');
+        const original = recurring.find((r: any) => r.id === id);
+        // A changed due date starts a new cycle — clear the sent-flags so the
+        // new cycle gets its own reminders instead of inheriting stale ones
+        const dueDateChanged = original && original.next_due_date !== form.next_due_date;
         const { error } = await (supabase as any).from('recurring_income').update({
           category: form.category,
           payer_name: form.payer_name,
@@ -157,10 +169,11 @@ export default function OtherIncomePage() {
           end_date: form.end_date || null,
           payment_method: form.payment_method || null,
           notes: form.notes || null,
+          ...(dueDateChanged ? { reminder_1d_sent_at: null, reminder_3d_sent_at: null, overdue_sent_at: null } : {}),
         }).eq('id', id);
         if (error) throw error;
         toast.success('Recurring payment updated');
-        fetchRecurring();
+        refetchRecurring();
       } else if (editingKey) {
         // Edit existing one-off income
         const { error } = await supabase.from('other_income').update({
@@ -174,8 +187,20 @@ export default function OtherIncomePage() {
         }).eq('id', editingKey);
         if (error) throw error;
         toast.success('Income updated');
-        fetchRows();
+        refetchRows();
       } else if (form.is_recurring) {
+        // Warn if an active template already exists for this payer — duplicates
+        // send double reminders and don't get silenced when the other is paid
+        const digits = (s: string) => s.replace(/\D/g, '').slice(-10);
+        const dup = recurring.find((r: any) => r.active && (
+          (form.payer_email && r.payer_email && r.payer_email.toLowerCase() === form.payer_email.toLowerCase()) ||
+          (form.payer_phone && r.payer_phone && digits(r.payer_phone) === digits(form.payer_phone))
+        ));
+        if (dup && !dupAcknowledged) {
+          setDupAcknowledged(true);
+          toast.warning(`${dup.payer_name} already has an active ${dup.frequency} recurring payment (next due ${new Date(dup.next_due_date).toLocaleDateString('en-NG')}). Edit that one instead, or save again to create a second template anyway.`);
+          return;
+        }
         // Create new recurring template
         const { error } = await (supabase as any).from('recurring_income').insert({
           category: form.category,
@@ -194,7 +219,7 @@ export default function OtherIncomePage() {
         });
         if (error) throw error;
         toast.success('Recurring payment set up');
-        fetchRecurring();
+        refetchRecurring();
       } else {
         // Create new one-off income
         const { error } = await supabase.from('other_income').insert({
@@ -209,19 +234,19 @@ export default function OtherIncomePage() {
         });
         if (error) throw error;
         toast.success('Income recorded');
-        fetchRows();
+        refetchRows();
       }
 
       setDialogOpen(false);
     } catch (err: any) { toast.error(err.message); }
   };
 
-  const removeIncome = async (id: string) => {
+  const removeIncome = useCallback(async (id: string) => {
     const { error } = await supabase.from('other_income').delete().eq('id', id);
     if (error) return toast.error(error.message);
     toast.success('Deleted');
-    fetchRows();
-  };
+    refetchRows();
+  }, []);
 
   const markPaid = async (id: string) => {
     setMarkingPaid(id);
@@ -229,8 +254,8 @@ export default function OtherIncomePage() {
       const { error } = await (supabase as any).rpc('post_recurring_income', { p_id: id });
       if (error) throw error;
       toast.success('Marked paid — income recorded');
-      fetchRows();
-      fetchRecurring();
+      refetchRows();
+      refetchRecurring();
     } catch (err: any) { toast.error(err.message); }
     finally { setMarkingPaid(null); }
   };
@@ -240,7 +265,7 @@ export default function OtherIncomePage() {
       const { error } = await (supabase as any).rpc('stop_recurring_income', { p_id: id });
       if (error) throw error;
       toast.success('Recurring payment stopped');
-      fetchRecurring();
+      refetchRecurring();
     } catch (err: any) { toast.error(err.message); }
   };
 
@@ -248,15 +273,17 @@ export default function OtherIncomePage() {
     const { error } = await (supabase as any).from('recurring_income').delete().eq('id', id);
     if (error) return toast.error(error.message);
     toast.success('Recurring payment deleted');
-    fetchRecurring();
+    refetchRecurring();
   };
 
   const sendReminders = async () => {
     setSendingReminder(true);
     try {
-      const { error } = await supabase.functions.invoke('send-recurring-reminders');
+      const { data, error } = await supabase.functions.invoke('send-recurring-reminders');
       if (error) throw error;
-      toast.success('Reminders sent to payers with due payments');
+      const sent = data?.sent ?? 0;
+      if (sent > 0) toast.success(`${sent} reminder${sent === 1 ? '' : 's'} sent`);
+      else toast.info('No reminders due — payers are up to date or already reminded');
     } catch (err: any) { toast.error(err.message); }
     finally { setSendingReminder(false); }
   };
@@ -281,8 +308,8 @@ export default function OtherIncomePage() {
     ? 'Set Up Recurring Payment'
     : 'Record Income';
 
-  const incomeColumns = [
-    { key: 'payment_date', header: 'Date', render: (r: any) => new Date(r.payment_date).toLocaleDateString() },
+  const incomeColumns = useMemo(() => [
+    { key: 'payment_date', header: 'Date', render: (r: any) => new Date(r.payment_date).toLocaleDateString('en-NG') },
     { key: 'category', header: 'Category', render: (r: any) => <span className="capitalize">{r.category}</span> },
     { key: 'payer_name', header: 'Payer' },
     { key: 'amount', header: 'Amount', render: (r: any) => fmt(Number(r.amount)) },
@@ -317,7 +344,7 @@ export default function OtherIncomePage() {
         </div>
       ),
     },
-  ];
+  ], [openEditIncome, openSetAsRecurring, removeIncome]);
 
   return (
     <div>
@@ -499,12 +526,13 @@ export default function OtherIncomePage() {
           ) : (
             <div className="space-y-2">
               {recurring.map(r => {
-                const isOverdue = r.active && r.next_due_date <= today;
+                const isOverdue = r.active && r.next_due_date < today;
+                const isDueToday = r.active && r.next_due_date === today;
                 return (
-                  <Card key={r.id} className={isOverdue ? 'border-destructive/40' : ''}>
+                  <Card key={r.id} className={isOverdue || isDueToday ? 'border-destructive/40' : ''}>
                     <CardContent className="py-3 px-4">
                       <div className="flex items-center gap-3 flex-wrap">
-                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${r.active ? (isOverdue ? 'bg-destructive' : 'bg-green-500') : 'bg-muted-foreground'}`} />
+                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${r.active ? (isOverdue || isDueToday ? 'bg-destructive' : 'bg-green-500') : 'bg-muted-foreground'}`} />
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -515,9 +543,9 @@ export default function OtherIncomePage() {
                             {!r.active && <Badge variant="secondary" className="text-xs">Stopped</Badge>}
                           </div>
                           <div className="flex items-center gap-3 mt-1 flex-wrap">
-                            <span className={`text-xs ${isOverdue ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
-                              {isOverdue ? 'Overdue: ' : 'Next due: '}
-                              {new Date(r.next_due_date).toLocaleDateString()}
+                            <span className={`text-xs ${isOverdue || isDueToday ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
+                              {isOverdue ? 'Overdue: ' : isDueToday ? 'Due today: ' : 'Next due: '}
+                              {new Date(r.next_due_date).toLocaleDateString('en-NG')}
                             </span>
                             {r.payer_email && (
                               <span className="text-xs text-muted-foreground flex items-center gap-1">
@@ -536,7 +564,7 @@ export default function OtherIncomePage() {
                           {r.active && (
                             <Button
                               size="sm"
-                              variant={isOverdue ? 'default' : 'outline'}
+                              variant={isOverdue || isDueToday ? 'default' : 'outline'}
                               className="h-7 text-xs"
                               disabled={markingPaid === r.id}
                               onClick={() => markPaid(r.id)}

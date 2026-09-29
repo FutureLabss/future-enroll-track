@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { Pencil, Plus, Trash2, Target } from 'lucide-react';
 
@@ -18,7 +19,7 @@ type Perf = {
 };
 
 const formatMonth = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  new Date(iso).toLocaleDateString('en-NG', { month: 'short', year: 'numeric' });
 
 const monthInputValue = (iso: string) => iso.slice(0, 7); // yyyy-mm
 
@@ -27,6 +28,7 @@ export default function EnrollmentTargets() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editingMonth, setEditingMonth] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [form, setForm] = useState({ month: '', target_count: '', notes: '' });
 
   const load = async () => {
@@ -54,15 +56,11 @@ export default function EnrollmentTargets() {
 
   const save = async () => {
     if (!form.month || !form.target_count) { toast.error('Month and target are required'); return; }
-    const target_month = `${form.month}-01`;
-    const payload = {
-      target_month,
-      target_count: Number(form.target_count),
-      notes: form.notes || null,
-    };
-    const { error } = await supabase
-      .from('enrollment_targets')
-      .upsert(payload, { onConflict: 'target_month' });
+    const { error } = await supabase.rpc('upsert_enrollment_target' as any, {
+      p_month: `${form.month}-01`,
+      p_target_count: Number(form.target_count),
+      p_notes: form.notes || null,
+    });
     if (error) { toast.error(error.message); return; }
     toast.success('Target saved');
     setOpen(false);
@@ -70,20 +68,20 @@ export default function EnrollmentTargets() {
   };
 
   const remove = async (month: string) => {
-    if (!confirm('Delete target for ' + formatMonth(month) + '?')) return;
     const { error } = await supabase
       .from('enrollment_targets')
       .delete()
       .eq('target_month', month.slice(0, 10));
+    setDeleteTarget(null);
     if (error) { toast.error(error.message); return; }
     toast.success('Deleted');
     load();
   };
 
-  const totals = rows.reduce(
+  const totals = useMemo(() => rows.reduce(
     (a, r) => ({ target: a.target + (r.target_count || 0), actual: a.actual + (r.actual_count || 0) }),
     { target: 0, actual: 0 }
-  );
+  ), [rows]);
   const overallPct = totals.target > 0 ? Math.round((totals.actual / totals.target) * 1000) / 10 : null;
 
   return (
@@ -145,7 +143,7 @@ export default function EnrollmentTargets() {
                       <TableCell className="text-right">
                         <Button size="icon" variant="ghost" onClick={() => openEdit(r)}><Pencil className="h-4 w-4" /></Button>
                         {r.target_count > 0 && (
-                          <Button size="icon" variant="ghost" onClick={() => remove(r.month)}><Trash2 className="h-4 w-4" /></Button>
+                          <Button size="icon" variant="ghost" onClick={() => setDeleteTarget(r.month)}><Trash2 className="h-4 w-4" /></Button>
                         )}
                       </TableCell>
                     </TableRow>
@@ -156,6 +154,23 @@ export default function EnrollmentTargets() {
           </>
         )}
       </CardContent>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={o => { if (!o) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete target?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove the target for {deleteTarget ? formatMonth(deleteTarget) : ''}. Actual data is unaffected.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deleteTarget && remove(deleteTarget)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>

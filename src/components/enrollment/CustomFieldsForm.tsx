@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -73,7 +73,7 @@ function groupFields(fields: CustomField[]) {
 
 export function CustomFieldsForm({ fields, values, onChange }: CustomFieldsFormProps) {
   const [uploadingKey, setUploadingKey] = useState<string | null>(null);
-  const groups = groupFields(fields);
+  const groups = useMemo(() => groupFields(fields), [fields]);
 
   const handleFileUpload = async (key: string, file: File) => {
     if (!file) return;

@@ -115,39 +115,57 @@ Deno.serve(async (req) => {
       incompleteProfile = hasAccount.filter((e: any) => emptyNames.has(e.user_id));
     }
 
+    // Send in bounded concurrent batches; record audit rows in one insert
+    const CONCURRENCY = 10;
     let signupSent = 0, profileSent = 0, failed = 0;
     const errors: string[] = [];
+    const notifRows: Record<string, unknown>[] = [];
 
-    for (const e of noAccount) {
-      try {
-        const url = `${FRONTEND_URL}/students/${e.id}`;
-        await sendEmail(e.email, "Complete your FutureLabs account setup", signupEmail(e.full_name, url));
-        signupSent++;
-        await admin.from("notifications").insert({
-          user_id: null, enrollment_id: e.id, type: "account_reminder",
-          title: "Account setup reminder sent", message: `Signup link sent to ${e.email}`,
-          channel: "email", sent_at: new Date().toISOString(),
-        });
-      } catch (err) {
-        failed++;
-        errors.push(`${e.email}: ${(err as Error).message}`);
+    const jobs = [
+      ...noAccount.map((e: any) => ({ e, kind: "signup" as const })),
+      ...incompleteProfile.map((e: any) => ({ e, kind: "profile" as const })),
+    ];
+
+    for (let i = 0; i < jobs.length; i += CONCURRENCY) {
+      const batch = jobs.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(batch.map(async ({ e, kind }) => {
+        try {
+          if (kind === "signup") {
+            await sendEmail(e.email, "Complete your FutureLabs account setup", signupEmail(e.full_name, `${FRONTEND_URL}/students/${e.id}`));
+          } else {
+            await sendEmail(e.email, "Please complete your FutureLabs profile", profileEmail(e.full_name, `${FRONTEND_URL}/profile`));
+          }
+          return { ok: true as const, e, kind };
+        } catch (err) {
+          return { ok: false as const, e, err: (err as Error).message };
+        }
+      }));
+      for (const res of results) {
+        if (!res.ok) {
+          failed++;
+          errors.push(`${res.e.email}: ${res.err}`);
+          continue;
+        }
+        if (res.kind === "signup") {
+          signupSent++;
+          notifRows.push({
+            user_id: null, enrollment_id: res.e.id, type: "account_reminder",
+            title: "Account setup reminder sent", message: `Signup link sent to ${res.e.email}`,
+            channel: "email", sent_at: new Date().toISOString(),
+          });
+        } else {
+          profileSent++;
+          notifRows.push({
+            user_id: res.e.user_id, enrollment_id: res.e.id, type: "profile_reminder",
+            title: "Profile completion reminder sent", message: `Profile reminder sent to ${res.e.email}`,
+            channel: "email", sent_at: new Date().toISOString(),
+          });
+        }
       }
     }
 
-    for (const e of incompleteProfile) {
-      try {
-        const url = `${FRONTEND_URL}/profile`;
-        await sendEmail(e.email, "Please complete your FutureLabs profile", profileEmail(e.full_name, url));
-        profileSent++;
-        await admin.from("notifications").insert({
-          user_id: e.user_id, enrollment_id: e.id, type: "profile_reminder",
-          title: "Profile completion reminder sent", message: `Profile reminder sent to ${e.email}`,
-          channel: "email", sent_at: new Date().toISOString(),
-        });
-      } catch (err) {
-        failed++;
-        errors.push(`${e.email}: ${(err as Error).message}`);
-      }
+    if (notifRows.length > 0) {
+      await admin.from("notifications").insert(notifRows);
     }
 
     await admin.from("audit_logs").insert({

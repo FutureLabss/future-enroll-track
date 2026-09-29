@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -16,42 +17,52 @@ type Inst = { id?: string; amount: string; due_date: string; status: 'pending' |
 export default function EditInvoicePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isAdmin, user } = useAuth();
-  const isSuperadmin = user?.email?.toLowerCase() === 'manassehudim@gmail.com';
-  const [loading, setLoading] = useState(true);
+  const { isAdmin, isSuperadmin } = useAuth();
   const [saving, setSaving] = useState(false);
-  const [invoice, setInvoice] = useState<any>(null);
   const [total, setTotal] = useState('');
   const [installments, setInstallments] = useState<Inst[]>([]);
+  const seeded = useRef(false);
+
+  const { data: pageData, isLoading: loading } = useQuery({
+    queryKey: ['edit-invoice', id],
+    queryFn: async () => {
+      const [inv, ins] = await Promise.all([
+        supabase.from('invoices').select('*, enrollments(full_name)').eq('id', id!).single(),
+        supabase.from('installments').select('*').eq('invoice_id', id!).order('due_date'),
+      ]);
+      if (inv.error) throw inv.error;
+      return { invoice: inv.data, installments: ins.data || [] };
+    },
+    enabled: !!id,
+    staleTime: 30_000,
+  });
+
+  const invoice = pageData?.invoice ?? null;
 
   useEffect(() => {
-    if (!id) return;
-    Promise.all([
-      supabase.from('invoices').select('*, enrollments(full_name)').eq('id', id).single(),
-      supabase.from('installments').select('*').eq('invoice_id', id).order('due_date'),
-    ]).then(([inv, ins]) => {
-      setInvoice(inv.data);
-      setTotal(String(inv.data?.total_amount ?? ''));
-      setInstallments(
-        (ins.data || []).map(i => ({
-          id: i.id,
-          amount: String(i.amount),
-          due_date: i.due_date,
-          status: i.status as 'pending' | 'paid',
-          paid_at: i.paid_at,
-        })),
-      );
-      setLoading(false);
-    });
-  }, [id]);
+    if (!pageData || seeded.current) return;
+    seeded.current = true;
+    setTotal(String(pageData.invoice?.total_amount ?? ''));
+    setInstallments(
+      (pageData.installments || []).map((i: any) => ({
+        id: i.id,
+        amount: String(i.amount),
+        due_date: i.due_date,
+        status: i.status as 'pending' | 'paid',
+        paid_at: i.paid_at,
+      })),
+    );
+  }, [pageData]);
 
   const updateInst = (idx: number, patch: Partial<Inst>) => {
     setInstallments(prev => prev.map((p, i) => {
       if (i !== idx) return p;
       const updated = { ...p, ...patch };
-      // Auto-populate paid_at with due_date when status flips to paid and paid_at is not set
+      // Auto-populate paid_at with today when status flips to paid and paid_at is not set —
+      // matches every other "mark paid" flow (PendingPaymentsPage, PaymentsPage,
+      // InvoiceDetailPage), which all stamp the actual action time, not due_date.
       if (patch.status === 'paid' && !updated.paid_at) {
-        updated.paid_at = updated.due_date;
+        updated.paid_at = new Date().toISOString().slice(0, 10);
       }
       if (patch.status === 'pending') updated.paid_at = null;
       return updated;

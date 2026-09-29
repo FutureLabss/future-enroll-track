@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -6,7 +7,18 @@ import { useMonthDetail } from '@/hooks/useMonthDetail';
 
 const fmt = (val: number) => `₦${Number(val || 0).toLocaleString('en-NG', { maximumFractionDigits: 0 })}`;
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' });
-const fmtMonth = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+const fmtMonth = (iso: string) => new Date(iso).toLocaleDateString('en-NG', { month: 'long', year: 'numeric' });
+
+const DISPLAY_CAP = 100;
+
+function OverflowNote({ total, cap }: { total: number; cap: number }) {
+  if (total <= cap) return null;
+  return (
+    <p className="text-center text-xs text-muted-foreground py-3 border-t border-border mt-2">
+      Showing first {cap} of {total} entries — export for the full list.
+    </p>
+  );
+}
 
 function EmptyState({ label }: { label: string }) {
   return <p className="text-center text-muted-foreground py-10 text-sm">No {label} this month.</p>;
@@ -42,15 +54,16 @@ function DetailRow({ left, right, sub }: RowProps) {
 interface Props {
   month: string | null;
   onClose: () => void;
+  basis?: 'due' | 'paid';
 }
 
-export function MonthDetailSheet({ month, onClose }: Props) {
-  const { payments, otherIncome, expenses, payroll, loading } = useMonthDetail(month);
+export function MonthDetailSheet({ month, onClose, basis = 'due' }: Props) {
+  const { payments, otherIncome, expenses, payroll, loading } = useMonthDetail(month, basis);
 
-  const totalPayments = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
-  const totalOtherIncome = otherIncome.reduce((s, o) => s + Number(o.amount || 0), 0);
-  const totalExpenses = expenses.reduce((s, e) => s + Number(e.amount || 0), 0);
-  const totalPayroll = payroll.reduce((s, r) => s + Number(r.amount || 0), 0);
+  const totalPayments = useMemo(() => payments.reduce((s, p) => s + Number(p.amount || 0), 0), [payments]);
+  const totalOtherIncome = useMemo(() => otherIncome.reduce((s, o) => s + Number(o.amount || 0), 0), [otherIncome]);
+  const totalExpenses = useMemo(() => expenses.reduce((s, e) => s + Number(e.amount || 0), 0), [expenses]);
+  const totalPayroll = useMemo(() => payroll.reduce((s, r) => s + Number(r.amount || 0), 0), [payroll]);
 
   return (
     <Sheet open={!!month} onOpenChange={open => { if (!open) onClose(); }}>
@@ -77,7 +90,7 @@ export function MonthDetailSheet({ month, onClose }: Props) {
               {payments.length > 0 && <SectionTotal label="Total tuition received" amount={totalPayments} />}
               {payments.length === 0 ? (
                 <EmptyState label="tuition payments" />
-              ) : payments.map((p: any) => (
+              ) : payments.slice(0, DISPLAY_CAP).map((p: any) => (
                 <DetailRow
                   key={`${p._source}-${p.id}`}
                   left={p.invoices?.enrollments?.full_name || 'Unknown student'}
@@ -85,6 +98,7 @@ export function MonthDetailSheet({ month, onClose }: Props) {
                   sub={`${p._date ? fmtDate(p._date) : '—'} · ${p.invoices?.invoice_number || '—'} · ${p.invoices?.enrollments?.programs?.program_name || '—'}`}
                 />
               ))}
+              <OverflowNote total={payments.length} cap={DISPLAY_CAP} />
             </TabsContent>
 
             {/* OTHER INCOME */}
@@ -92,7 +106,7 @@ export function MonthDetailSheet({ month, onClose }: Props) {
               {otherIncome.length > 0 && <SectionTotal label="Total other income" amount={totalOtherIncome} />}
               {otherIncome.length === 0 ? (
                 <EmptyState label="other income" />
-              ) : otherIncome.map(o => (
+              ) : otherIncome.slice(0, DISPLAY_CAP).map(o => (
                 <DetailRow
                   key={o.id}
                   left={o.payer_name || 'Unknown'}
@@ -100,6 +114,7 @@ export function MonthDetailSheet({ month, onClose }: Props) {
                   sub={`${fmtDate(o.payment_date)} · ${o.category} · ${o.payment_reference || '—'}`}
                 />
               ))}
+              <OverflowNote total={otherIncome.length} cap={DISPLAY_CAP} />
             </TabsContent>
 
             {/* EXPENSES */}
@@ -107,7 +122,7 @@ export function MonthDetailSheet({ month, onClose }: Props) {
               {expenses.length > 0 && <SectionTotal label="Total expenses" amount={totalExpenses} />}
               {expenses.length === 0 ? (
                 <EmptyState label="expenses" />
-              ) : expenses.map(e => (
+              ) : expenses.slice(0, DISPLAY_CAP).map(e => (
                 <DetailRow
                   key={e.id}
                   left={e.vendor_name || e.category}
@@ -115,6 +130,7 @@ export function MonthDetailSheet({ month, onClose }: Props) {
                   sub={`${fmtDate(e.payment_date)} · ${e.category} · ${e.notes || '—'}`}
                 />
               ))}
+              <OverflowNote total={expenses.length} cap={DISPLAY_CAP} />
             </TabsContent>
 
             {/* PAYROLL */}
@@ -122,7 +138,7 @@ export function MonthDetailSheet({ month, onClose }: Props) {
               {payroll.length > 0 && <SectionTotal label="Total payroll" amount={totalPayroll} />}
               {payroll.length === 0 ? (
                 <EmptyState label="payroll runs" />
-              ) : payroll.map(r => (
+              ) : payroll.slice(0, DISPLAY_CAP).map(r => (
                 <DetailRow
                   key={r.id}
                   left={r.staff?.full_name || 'Unknown staff'}
@@ -137,6 +153,7 @@ export function MonthDetailSheet({ month, onClose }: Props) {
                   }
                 />
               ))}
+              <OverflowNote total={payroll.length} cap={DISPLAY_CAP} />
             </TabsContent>
           </Tabs>
         )}

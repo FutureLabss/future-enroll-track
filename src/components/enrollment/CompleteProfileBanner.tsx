@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -20,6 +20,10 @@ export function CompleteProfileBanner() {
   const [completedFieldCount, setCompletedFieldCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  const handleFieldChange = useCallback((key: string, value: string) => {
+    setCustomValues(prev => ({ ...prev, [key]: value }));
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -163,7 +167,7 @@ export function CompleteProfileBanner() {
             <CustomFieldsForm
               fields={customFields}
               values={customValues}
-              onChange={(key, value) => setCustomValues(prev => ({ ...prev, [key]: value }))}
+              onChange={handleFieldChange}
             />
           </div>
 

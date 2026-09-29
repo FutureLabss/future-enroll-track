@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -10,19 +11,23 @@ import { CheckCircle2, CreditCard, FileText, ReceiptText } from 'lucide-react';
 
 export default function StudentPaymentsPage() {
   const { user } = useAuth();
-  const [payments, setPayments] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
 
-  useEffect(() => {
-    if (!user) return;
-    supabase.from('payments')
-      .select('*, invoices!inner(invoice_number, enrollments!inner(user_id, full_name, programs(program_name)))')
-      .eq('invoices.enrollments.user_id', user.id)
-      .order('created_at', { ascending: false })
-      .then(({ data }) => { setPayments(data || []); setLoading(false); });
-  }, [user]);
+  const { data: payments = [], isLoading: loading } = useQuery({
+    queryKey: ['student-payments', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('payments')
+        .select('*, invoices!inner(invoice_number, enrollments!inner(user_id, full_name, programs(program_name)))')
+        .eq('invoices.enrollments.user_id', user!.id)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user,
+    staleTime: 30_000,
+  });
 
   const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
   const totalPaid = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
@@ -34,7 +39,7 @@ export default function StudentPaymentsPage() {
   }, {});
   const mostUsedMethod = Object.entries(methodCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
 
-  const openReceipt = (r: any) => {
+  const openReceipt = useCallback((r: any) => {
     setSelectedReceipt({
       payment_reference: r.payment_reference,
       amount: Number(r.amount),
@@ -45,9 +50,9 @@ export default function StudentPaymentsPage() {
       program_name: r.invoices?.enrollments?.programs?.program_name || '',
     });
     setReceiptOpen(true);
-  };
+  }, []);
 
-  const columns = [
+  const columns = useMemo(() => [
     { key: 'payment_reference', header: 'Reference' },
     { key: 'invoice', header: 'Invoice', render: (r: any) => r.invoices?.invoice_number || '—' },
     { key: 'amount', header: 'Amount', render: (r: any) => formatCurrency(Number(r.amount)) },
@@ -55,13 +60,13 @@ export default function StudentPaymentsPage() {
     { key: 'payment_method', header: 'Method', render: (r: any) => (
       <Badge variant="outline" className="capitalize">{r.payment_method?.replace('_', ' ') || '—'}</Badge>
     ) },
-    { key: 'created_at', header: 'Date', render: (r: any) => new Date(r.created_at).toLocaleDateString() },
+    { key: 'created_at', header: 'Date', render: (r: any) => new Date(r.created_at).toLocaleDateString('en-NG') },
     { key: 'receipt', header: '', render: (r: any) => (
       <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openReceipt(r); }}>
         <FileText className="h-4 w-4 mr-1" /> Receipt
       </Button>
     )},
-  ];
+  ], [openReceipt]);
 
   if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
 
@@ -84,7 +89,7 @@ export default function StudentPaymentsPage() {
             <ReceiptText className="h-4 w-4 text-primary" />
           </div>
           <p className="mt-2 text-2xl font-semibold">{latestPayment ? formatCurrency(Number(latestPayment.amount || 0)) : '—'}</p>
-          <p className="text-xs text-muted-foreground">{latestPayment ? new Date(latestPayment.created_at).toLocaleDateString() : 'No payments yet'}</p>
+          <p className="text-xs text-muted-foreground">{latestPayment ? new Date(latestPayment.created_at).toLocaleDateString('en-NG') : 'No payments yet'}</p>
         </div>
         <div className="glass-card rounded-xl border border-border p-4">
           <div className="flex items-center justify-between gap-3">

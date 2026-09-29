@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
+import { createQueryWrapper } from '@/test/testUtils';
 
 const { mockRpc } = vi.hoisted(() => ({ mockRpc: vi.fn() }));
 
@@ -21,7 +22,10 @@ beforeEach(() => {
 describe('useFinanceSummary', () => {
   it('normalises raw string numbers from RPC into Numbers', async () => {
     mockRpc.mockResolvedValue({ data: RAW_ROWS, error: null });
-    const { result } = renderHook(() => useFinanceSummary({ mode: 'preset', months: 12 }));
+    const { result } = renderHook(
+      () => useFinanceSummary({ mode: 'preset', months: 12 }),
+      { wrapper: createQueryWrapper() }
+    );
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -31,7 +35,10 @@ describe('useFinanceSummary', () => {
 
   it('computes totals: revenue = tuition + other_income_total', async () => {
     mockRpc.mockResolvedValue({ data: RAW_ROWS, error: null });
-    const { result } = renderHook(() => useFinanceSummary({ mode: 'preset', months: 12 }));
+    const { result } = renderHook(
+      () => useFinanceSummary({ mode: 'preset', months: 12 }),
+      { wrapper: createQueryWrapper() }
+    );
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -44,7 +51,10 @@ describe('useFinanceSummary', () => {
 
   it('sets error and clears rows on RPC failure', async () => {
     mockRpc.mockResolvedValue({ data: null, error: { message: 'permission denied' } });
-    const { result } = renderHook(() => useFinanceSummary({ mode: 'preset', months: 12 }));
+    const { result } = renderHook(
+      () => useFinanceSummary({ mode: 'preset', months: 12 }),
+      { wrapper: createQueryWrapper() }
+    );
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -54,7 +64,10 @@ describe('useFinanceSummary', () => {
 
   it('calls RPC with p_months in preset mode', async () => {
     mockRpc.mockResolvedValue({ data: [], error: null });
-    renderHook(() => useFinanceSummary({ mode: 'preset', months: 6 }));
+    renderHook(
+      () => useFinanceSummary({ mode: 'preset', months: 6 }),
+      { wrapper: createQueryWrapper() }
+    );
 
     await waitFor(() => expect(mockRpc).toHaveBeenCalled());
     expect(mockRpc).toHaveBeenCalledWith('get_finance_summary', { p_months: 6 });
@@ -65,7 +78,10 @@ describe('useFinanceSummary', () => {
     const start = new Date('2026-01-01');
     const end   = new Date('2026-03-31');
 
-    renderHook(() => useFinanceSummary({ mode: 'custom', months: 12, startDate: start, endDate: end }));
+    renderHook(
+      () => useFinanceSummary({ mode: 'custom', months: 12, startDate: start, endDate: end }),
+      { wrapper: createQueryWrapper() }
+    );
 
     await waitFor(() => expect(mockRpc).toHaveBeenCalled());
     expect(mockRpc).toHaveBeenCalledWith('get_finance_summary', {
@@ -80,7 +96,10 @@ describe('useFinanceSummary', () => {
       data: [{ month: '2026-01-01', revenue: null, other_income_total: undefined, payroll_total: '', expenses_total: null, profit: null }],
       error: null,
     });
-    const { result } = renderHook(() => useFinanceSummary({ mode: 'preset', months: 12 }));
+    const { result } = renderHook(
+      () => useFinanceSummary({ mode: 'preset', months: 12 }),
+      { wrapper: createQueryWrapper() }
+    );
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 

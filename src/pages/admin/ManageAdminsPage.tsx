@@ -9,8 +9,10 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { ShieldCheck, Trash2, UserPlus, Clock, ArrowUpCircle, School } from 'lucide-react';
-
-const SUPERADMIN_EMAIL = 'manassehudim@gmail.com';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface AdminRow {
   user_id: string | null;
@@ -27,7 +29,7 @@ interface StaffRow {
 }
 
 export default function ManageAdminsPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { isSuperadmin, rolesReady } = useAuth();
   const [admins, setAdmins] = useState<AdminRow[]>([]);
   const [staffUsers, setStaffUsers] = useState<StaffRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,8 +37,11 @@ export default function ManageAdminsPage() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [promoting, setPromoting] = useState<string | null>(null);
-
-  const isSuperadmin = user?.email?.toLowerCase() === SUPERADMIN_EMAIL;
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    title: string;
+    description: string;
+    onConfirm: () => Promise<void>;
+  } | null>(null);
 
   const loadAdmins = async () => {
     setLoading(true);
@@ -56,25 +61,32 @@ export default function ManageAdminsPage() {
     setStaffLoading(false);
   };
 
-  const promoteToAdmin = async (row: StaffRow) => {
-    if (!confirm(`Promote ${row.full_name} to Admin? They will get full admin access to this hub.`)) return;
-    setPromoting(row.user_id);
-    const { error } = await supabase.rpc('promote_staff_to_admin' as any, { p_user_id: row.user_id });
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success(`${row.full_name} promoted to admin`);
-      loadAdmins();
-      loadStaff();
-    }
-    setPromoting(null);
+  const promoteToAdmin = (row: StaffRow) => {
+    setPendingConfirm({
+      title: 'Promote to Admin?',
+      description: `${row.full_name} will get full admin access to this hub.`,
+      onConfirm: async () => {
+        setPromoting(row.user_id);
+        const { error } = await supabase.rpc('promote_staff_to_admin' as any, { p_user_id: row.user_id });
+        if (error) {
+          toast.error(error.message);
+        } else {
+          toast.success(`${row.full_name} promoted to admin`);
+          loadAdmins();
+          loadStaff();
+        }
+        setPromoting(null);
+      },
+    });
   };
 
   useEffect(() => {
     if (isSuperadmin) { loadAdmins(); loadStaff(); }
   }, [isSuperadmin]);
 
-  if (authLoading) return null;
+  // Wait for the async role fetch — redirecting on the initial false value
+  // bounced real superadmins off this page before roles resolved
+  if (!rolesReady) return null;
   if (!isSuperadmin) return <Navigate to="/admin" replace />;
 
   const handleInvite = async (e: React.FormEvent) => {
@@ -103,21 +115,32 @@ export default function ManageAdminsPage() {
     setSubmitting(false);
   };
 
-  const handleRevoke = async (row: AdminRow) => {
+  const handleRevoke = (row: AdminRow) => {
     if (row.pending) {
-      if (!confirm(`Cancel pending invite for ${row.email}?`)) return;
-      const { error } = await supabase.rpc('cancel_admin_invite' as any, { p_email: row.email });
-      if (error) toast.error(error.message);
-      else { toast.success('Invite cancelled.'); loadAdmins(); }
+      setPendingConfirm({
+        title: 'Cancel Invite?',
+        description: `Cancel the pending admin invite for ${row.email}?`,
+        onConfirm: async () => {
+          const { error } = await supabase.rpc('cancel_admin_invite' as any, { p_email: row.email });
+          if (error) toast.error(error.message);
+          else { toast.success('Invite cancelled.'); loadAdmins(); }
+        },
+      });
     } else {
-      if (!confirm(`Revoke admin access for ${row.email}?`)) return;
-      const { error } = await supabase.rpc('revoke_admin' as any, { p_email: row.email });
-      if (error) toast.error(error.message);
-      else { toast.success('Admin access revoked.'); loadAdmins(); }
+      setPendingConfirm({
+        title: 'Revoke Admin Access?',
+        description: `Revoke admin access for ${row.email}? This cannot be undone.`,
+        onConfirm: async () => {
+          const { error } = await supabase.rpc('revoke_admin' as any, { p_email: row.email });
+          if (error) toast.error(error.message);
+          else { toast.success('Admin access revoked.'); loadAdmins(); }
+        },
+      });
     }
   };
 
   return (
+    <>
     <div className="space-y-6">
       <PageHeader
         title="Manage Admins"
@@ -233,5 +256,21 @@ export default function ManageAdminsPage() {
         )}
       </div>
     </div>
+
+    <AlertDialog open={!!pendingConfirm} onOpenChange={open => { if (!open) setPendingConfirm(null); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{pendingConfirm?.title}</AlertDialogTitle>
+          <AlertDialogDescription>{pendingConfirm?.description}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={() => { pendingConfirm?.onConfirm(); setPendingConfirm(null); }}>
+            Confirm
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

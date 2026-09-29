@@ -13,21 +13,18 @@ Return ONLY a valid JSON object (no markdown, no explanation, no code fences) wi
   "description": "1-2 sentence summary of what this curriculum covers",
   "tracks": [
     {
-      "title": "Track title (major subject area or learning path)",
+      "title": "Track title",
       "description": "What this track covers",
       "modules": [
         {
-          "title": "Module title (themed grouping of related topics)",
+          "title": "Module title",
           "description": "What this module covers",
           "units": [
             {
-              "title": "Unit title (a focused topic)",
-              "description": "What learners will study in this unit",
+              "title": "Unit title",
+              "description": "What learners will study",
               "lessons": [
-                {
-                  "title": "Lesson title (a single session)",
-                  "content": "Key points, notes, or content for this lesson"
-                }
+                { "title": "Lesson title", "content": "Key points or notes" }
               ]
             }
           ]
@@ -37,13 +34,7 @@ Return ONLY a valid JSON object (no markdown, no explanation, no code fences) wi
   ]
 }
 
-Hierarchy rules:
-- Track = a major learning path or subject area (e.g., "Frontend Development", "Data Analysis")
-- Module = a themed group of related units within a track (e.g., "HTML & CSS Basics")
-- Unit = a focused topic within a module (e.g., "Box Model & Layout")
-- Lesson = a single class session within a unit (e.g., "Understanding Flexbox")
-
-Extract ALL relevant content from the document. If the document is already structured (has chapters, topics, weeks), map them to this hierarchy logically.`;
+Hierarchy: Track > Module > Unit > Lesson. Extract ALL relevant content. Map existing structure (chapters, weeks, topics) logically.`;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -51,8 +42,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
-    if (!apiKey) throw new Error('ANTHROPIC_API_KEY not configured');
+    const apiKey = Deno.env.get('GOOGLE_AI_KEY');
+    if (!apiKey) throw new Error('GOOGLE_AI_KEY not configured');
 
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
@@ -64,71 +55,91 @@ Deno.serve(async (req) => {
       ? `\n\nAdditional instructions from the tutor: ${instructions.trim()}`
       : '';
 
-    let messageContent: unknown[];
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 
-    const isPdf = file.type === 'application/pdf' || file.name.endsWith('.pdf');
+    let parts: unknown[];
 
     if (isPdf) {
       const buffer = await file.arrayBuffer();
       const bytes = new Uint8Array(buffer);
       let binary = '';
-      for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+      const chunk = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)) as any);
+      }
       const base64 = btoa(binary);
 
-      messageContent = [
-        {
-          type: 'document',
-          source: { type: 'base64', media_type: 'application/pdf', data: base64 },
-        },
-        {
-          type: 'text',
-          text: `Convert this document into a structured curriculum JSON.${suffix}`,
-        },
+      parts = [
+        { inlineData: { mimeType: 'application/pdf', data: base64 } },
+        { text: `Convert this document into a structured curriculum JSON.${suffix}` },
       ];
     } else {
       const text = await file.text();
       if (!text.trim()) throw new Error('File appears to be empty');
-      messageContent = [
-        {
-          type: 'text',
-          text: `Document content:\n\n${text}\n\nConvert this into a structured curriculum JSON.${suffix}`,
-        },
-      ];
+      parts = [{ text: `Document content:\n\n${text}\n\nConvert this into a structured curriculum JSON.${suffix}` }];
     }
 
-    const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const geminiRequestInit = {
       method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'pdfs-2024-09-25',
-        'content-type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 8192,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: messageContent }],
+        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents: [{ role: 'user', parts }],
+        generationConfig: { responseMimeType: 'application/json' },
       }),
-    });
+    };
 
-    if (!anthropicRes.ok) {
-      const err = await anthropicRes.text();
-      throw new Error(`Anthropic API error ${anthropicRes.status}: ${err}`);
+    // Gemini's free-tier rate limit is per-minute and clears quickly, so a couple
+    // of short backoff retries avoids surfacing a 429 to the user for a transient spike.
+    const maxAttempts = 3;
+    let aiRes = await fetch(geminiUrl, geminiRequestInit);
+    for (let attempt = 2; aiRes.status === 429 && attempt <= maxAttempts; attempt++) {
+      const waitSec = Number(aiRes.headers.get('retry-after')) || (attempt - 1) * 2;
+      await new Promise(resolve => setTimeout(resolve, waitSec * 1000));
+      aiRes = await fetch(geminiUrl, geminiRequestInit);
     }
 
-    const anthropicData = await anthropicRes.json();
-    const rawText = (anthropicData.content?.[0] as { text: string })?.text || '';
+    if (!aiRes.ok) {
+      const errText = await aiRes.text();
+      console.error(`Gemini API error ${aiRes.status}:`, errText);
+      if (aiRes.status === 429) {
+        return new Response(JSON.stringify({ error: 'Too many requests. Please try again in a moment.' }), {
+          status: 429,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      if (aiRes.status === 402 || aiRes.status === 403) {
+        return new Response(JSON.stringify({ error: 'AI service is temporarily unavailable. Please contact your administrator.' }), {
+          status: 503,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      let geminiMessage = `Gemini ${aiRes.status}: ${errText.slice(0, 300)}`;
+      try {
+        const errJson = JSON.parse(errText);
+        if (errJson.error?.message) geminiMessage = errJson.error.message;
+      } catch { /* not JSON */ }
+      throw new Error(geminiMessage);
+    }
 
-    // Strip any accidental markdown fences
+    const aiData = await aiRes.json();
+    const rawText: string = aiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const cleaned = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-    const structure = JSON.parse(cleaned);
+
+    let structure: unknown;
+    try {
+      structure = JSON.parse(cleaned);
+    } catch {
+      throw new Error('AI returned invalid JSON. Try again or refine your instructions.');
+    }
 
     return new Response(JSON.stringify({ structure }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
+    console.error('generate-curriculum error:', message);
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

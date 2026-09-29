@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -17,25 +18,28 @@ const BLANK = { program_name: '', description: '', active: true };
 
 export default function ProgramsPage() {
   const navigate = useNavigate();
-  const [programs, setPrograms] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
   const [editProgram, setEditProgram] = useState<any>(null);
   const [form, setForm] = useState(BLANK);
   const [saving, setSaving] = useState(false);
 
-  const load = async () => {
-    const { data } = await supabase.from('programs').select('*').order('created_at', { ascending: false });
-    setPrograms(data || []);
-    setLoading(false);
-  };
+  const { data: programs = [], isLoading: loading } = useQuery({
+    queryKey: ['programs'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('programs').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 5 * 60_000,
+  });
 
-  useEffect(() => { load(); }, []);
+  const load = () => queryClient.invalidateQueries({ queryKey: ['programs'] });
 
-  const openEdit = (program: any) => {
+  const openEdit = useCallback((program: any) => {
     setEditProgram(program);
     setForm({ program_name: program.program_name, description: program.description || '', active: program.active });
-  };
+  }, []);
 
   const handleCreate = async () => {
     if (!form.program_name.trim()) { toast.error('Name required'); return; }
@@ -73,7 +77,7 @@ export default function ProgramsPage() {
     load();
   };
 
-  const columns = [
+  const columns = useMemo(() => [
     { key: 'program_name', header: 'Program Name' },
     {
       key: 'description', header: 'Description',
@@ -85,7 +89,7 @@ export default function ProgramsPage() {
     },
     {
       key: 'created_at', header: 'Created',
-      render: (r: any) => new Date(r.created_at).toLocaleDateString(),
+      render: (r: any) => new Date(r.created_at).toLocaleDateString('en-NG'),
     },
     {
       key: 'actions', header: '',
@@ -114,7 +118,7 @@ export default function ProgramsPage() {
         </div>
       ),
     },
-  ];
+  ], [navigate, openEdit]);
 
   const ProgramForm = ({ onSave, label }: { onSave: () => void; label: string }) => (
     <div className="space-y-4 mt-4">

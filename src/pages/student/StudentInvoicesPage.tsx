@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -12,17 +13,20 @@ import { AlertTriangle, ArrowRight, CheckCircle2, Clock, CreditCard, FileText } 
 export default function StudentInvoicesPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [invoices, setInvoices] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!user) return;
-    supabase.from('invoices')
-      .select('*, enrollments!inner(full_name, user_id, programs(program_name)), installments(*), payments(amount)')
-      .eq('enrollments.user_id', user.id)
-      .order('created_at', { ascending: false })
-      .then(({ data }) => { setInvoices(data || []); setLoading(false); });
-  }, [user]);
+  const { data: invoices = [], isLoading: loading } = useQuery({
+    queryKey: ['student-invoices', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('invoices')
+        .select('*, enrollments!inner(full_name, user_id, programs(program_name)), installments(*), payments(amount)')
+        .eq('enrollments.user_id', user!.id)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user,
+    staleTime: 30_000,
+  });
 
   const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
   const getPaid = (invoice: any) => {
@@ -45,7 +49,7 @@ export default function StudentInvoicesPage() {
     .sort((a, b) => String(getNextInstallment(a)?.due_date || a.created_at).localeCompare(String(getNextInstallment(b)?.due_date || b.created_at)))[0];
   const nextDue = nextDueInvoice ? getNextInstallment(nextDueInvoice) : null;
 
-  const columns = [
+  const columns = useMemo(() => [
     { key: 'invoice_number', header: 'Invoice #' },
     { key: 'program', header: 'Program', render: (r: any) => r.enrollments?.programs?.program_name || '—' },
     { key: 'total_amount', header: 'Amount', render: (r: any) => formatCurrency(Number(r.total_amount)) },
@@ -60,7 +64,7 @@ export default function StudentInvoicesPage() {
       const next = getNextInstallment(r);
       if (!next) return <span className="text-muted-foreground">—</span>;
       const overdue = next.status === 'overdue' || new Date(`${next.due_date}T00:00:00`) < new Date();
-      return <span className={overdue ? 'text-destructive' : ''}>{new Date(`${next.due_date}T00:00:00`).toLocaleDateString()}</span>;
+      return <span className={overdue ? 'text-destructive' : ''}>{new Date(`${next.due_date}T00:00:00`).toLocaleDateString('en-NG')}</span>;
     } },
     { key: 'status', header: 'Status', render: (r: any) => <StatusBadge status={r.status} /> },
     { key: 'action', header: '', render: (r: any) => (
@@ -68,7 +72,7 @@ export default function StudentInvoicesPage() {
         View <ArrowRight className="ml-1.5 h-4 w-4" />
       </Button>
     ) },
-  ];
+  ], []);
 
   if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
 
@@ -107,7 +111,7 @@ export default function StudentInvoicesPage() {
             <Clock className="h-4 w-4 text-primary" />
           </div>
           <p className="mt-2 text-2xl font-semibold">{nextDue ? formatCurrency(Number(nextDue.amount || 0)) : '—'}</p>
-          <p className="text-xs text-muted-foreground">{nextDue ? `Due ${new Date(`${nextDue.due_date}T00:00:00`).toLocaleDateString()}` : 'No payment due'}</p>
+          <p className="text-xs text-muted-foreground">{nextDue ? `Due ${new Date(`${nextDue.due_date}T00:00:00`).toLocaleDateString('en-NG')}` : 'No payment due'}</p>
         </div>
       </div>
 

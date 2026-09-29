@@ -1,0 +1,8 @@
+#!/bin/sh
+echo "Running tests..."
+npx vitest run --reporter=verbose
+if [ $? -ne 0 ]; then
+  echo "❌ Tests failed. Commit blocked."
+  exit 1
+fi
+echo "✅ All tests passed."

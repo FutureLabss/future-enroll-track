@@ -497,7 +497,7 @@ export default function DemoPage() {
                     <span className="text-xs font-mono text-muted-foreground">{inv.id}</span>
                     <div>
                       <p className="text-sm font-medium">{inv.student}</p>
-                      <p className="text-xs text-muted-foreground">{inv.program} · {new Date(inv.date).toLocaleDateString()}</p>
+                      <p className="text-xs text-muted-foreground">{inv.program} · {new Date(inv.date).toLocaleDateString('en-NG')}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -515,7 +515,7 @@ export default function DemoPage() {
                 <div key={p.ref} className="flex items-center justify-between gap-3 rounded-xl border border-border px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">{p.student}</p>
-                    <p className="text-xs text-muted-foreground">{p.ref} · {p.channel} · {new Date(p.date).toLocaleDateString()}</p>
+                    <p className="text-xs text-muted-foreground">{p.ref} · {p.channel} · {new Date(p.date).toLocaleDateString('en-NG')}</p>
                   </div>
                   <span className="font-bold text-success">{p.amount}</span>
                 </div>
@@ -676,7 +676,7 @@ export default function DemoPage() {
                   <div className="flex items-center gap-4 text-sm">
                     <span className="text-success font-medium flex items-center gap-1"><CheckCircle className="h-3.5 w-3.5" />{s.present}</span>
                     <span className="text-warning font-medium flex items-center gap-1"><Clock className="h-3.5 w-3.5" />{s.late}</span>
-                    <span className="text-muted-foreground">{new Date(s.date).toLocaleDateString()}</span>
+                    <span className="text-muted-foreground">{new Date(s.date).toLocaleDateString('en-NG')}</span>
                   </div>
                 </div>
               ))}

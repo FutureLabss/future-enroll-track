@@ -1,6 +1,6 @@
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import {
   LayoutDashboard,
@@ -28,12 +28,10 @@ import {
   BookOpen,
   ChevronsUpDown,
   Check,
-  Contact,
-  Megaphone,
-  CalendarClock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import { ThemeToggle } from '@/components/shared/ThemeToggle';
 import {
   DropdownMenu,
@@ -59,10 +57,6 @@ const adminNav = [
   { to: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/admin/finance', icon: PieChart, label: 'Finance' },
   { to: '/admin/enrollments', icon: Users, label: 'Enrollments' },
-  { to: '/admin/crm/leads', icon: Contact, label: 'Leads' },
-  { to: '/admin/crm/campaigns', icon: Megaphone, label: 'Campaigns' },
-  { to: '/admin/crm/follow-ups', icon: CalendarClock, label: 'Follow-ups' },
-  { to: '/admin/crm/reports', icon: BarChart3, label: 'CRM Reports' },
   { to: '/admin/invoices', icon: FileText, label: 'Invoices' },
   { to: '/admin/payments', icon: CreditCard, label: 'Payments' },
   { to: '/admin/pending-payments', icon: Banknote, label: 'Pending Payments' },
@@ -101,13 +95,6 @@ const orgNav = [
   { to: '/org/reports', icon: BarChart3, label: 'Reports' },
 ];
 
-const marketingNav = [
-  { to: '/admin/crm/leads', icon: Contact, label: 'Leads' },
-  { to: '/admin/crm/campaigns', icon: Megaphone, label: 'Campaigns' },
-  { to: '/admin/crm/follow-ups', icon: CalendarClock, label: 'Follow-ups' },
-  { to: '/admin/crm/reports', icon: BarChart3, label: 'CRM Reports' },
-];
-
 interface AppSidebarProps {
   variant?: 'desktop' | 'mobile';
   onNavigate?: () => void;
@@ -120,20 +107,23 @@ function HubSwitcher({ userId }: { userId: string }) {
   const [switching, setSwitching] = useState(false);
 
   useEffect(() => {
+    let mounted = true;
     Promise.all([
       supabase.rpc('list_hubs' as any),
       supabase.rpc('get_my_hub_context' as any).maybeSingle(),
     ]).then(([hubsRes, ctxRes]) => {
+      if (!mounted) return;
       if (hubsRes.data) setHubs(hubsRes.data as { id: string; name: string; slug: string }[]);
       if (ctxRes.data) setActiveHubId((ctxRes.data as any).hub_id);
     });
+    return () => { mounted = false; };
   }, [userId]);
 
   const switchHub = async (hub: { id: string; slug: string }) => {
     if (hub.id === activeHubId || switching) return;
     setSwitching(true);
     const { error } = await supabase.rpc('switch_hub_context' as any, { p_hub_id: hub.id });
-    if (error) { setSwitching(false); return; }
+    if (error) { toast.error(`Hub switch failed: ${error.message}`); setSwitching(false); return; }
     navigate(`/${hub.slug}`, { replace: true });
     window.location.reload();
   };
@@ -174,25 +164,26 @@ function HubSwitcher({ userId }: { userId: string }) {
 
 export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps) {
   const { isAdmin, isOrganization, isStaff, isMarketing, isSuperadmin: isSA, isDemo, signOut, user } = useAuth();
-  const location = useLocation();
 
   const isSuperadmin = isSA || user?.email?.toLowerCase() === 'manassehudim@gmail.com';
-  const rawBaseNav = isAdmin ? adminNav : isMarketing ? marketingNav : isOrganization ? orgNav : isStaff ? staffNav : studentNav;
-  const baseNav = isDemo ? rawBaseNav.filter(item => !DEMO_HIDDEN_ROUTES.has(item.to)) : rawBaseNav;
-  const adminExtras = isAdmin
-    ? [
-        { to: '/admin/invoice-approvals', icon: ClipboardCheck, label: 'Invoice Approvals' },
-        { to: '/admin/staff-invoices', icon: Inbox, label: isSuperadmin ? 'Staff Invoices' : 'My Invoices' },
-        ...(isSuperadmin
-          ? [
-              { to: '/admin/payroll', icon: Banknote, label: 'Payroll' },
-              { to: '/admin/manage-admins', icon: ShieldCheck, label: 'Manage Admins' },
-              { to: '/admin/hubs', icon: Building2, label: 'Hub Management' },
-            ]
-          : []),
-      ]
-    : [];
-  const nav = [...baseNav, ...adminExtras];
+  const nav = useMemo(() => {
+    const rawBaseNav = isAdmin ? adminNav : isMarketing ? marketingNav : isOrganization ? orgNav : isStaff ? staffNav : studentNav;
+    const baseNav = isDemo ? rawBaseNav.filter(item => !DEMO_HIDDEN_ROUTES.has(item.to)) : rawBaseNav;
+    const adminExtras = isAdmin
+      ? [
+          { to: '/admin/invoice-approvals', icon: ClipboardCheck, label: 'Invoice Approvals' },
+          { to: '/admin/staff-invoices', icon: Inbox, label: isSuperadmin ? 'Staff Invoices' : 'My Invoices' },
+          ...(isSuperadmin
+            ? [
+                { to: '/admin/payroll', icon: Banknote, label: 'Payroll' },
+                { to: '/admin/manage-admins', icon: ShieldCheck, label: 'Manage Admins' },
+                { to: '/admin/hubs', icon: Building2, label: 'Hub Management' },
+              ]
+            : []),
+        ]
+      : [];
+    return [...baseNav, ...adminExtras];
+  }, [isAdmin, isOrganization, isStaff, isMarketing, isSuperadmin, isDemo]);
 
   const containerClass =
     variant === 'mobile'
@@ -208,7 +199,7 @@ export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps)
           <span className="text-sidebar-primary">Future</span>Labs
         </h1>
         <p className="text-xs text-sidebar-foreground/60 mt-1">
-          {isAdmin ? 'Admin Portal' : isMarketing ? 'Marketing Portal' : isOrganization ? 'Sponsor Portal' : isStaff ? 'Staff Portal' : 'Student Portal'}
+          {isAdmin ? 'Admin Portal' : isOrganization ? 'Sponsor Portal' : isStaff ? 'Staff Portal' : 'Student Portal'}
         </p>
       </div>
 

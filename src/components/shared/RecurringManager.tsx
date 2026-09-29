@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -46,20 +46,21 @@ export function RecurringManager({ kind, categories, onPosted }: Props) {
     payment_method: '',
     notes: '',
     active: true,
+    post_now: false,
   };
   const [form, setForm] = useState<any>(blank);
 
-  const fetchRows = async () => {
+  const fetchRows = useCallback(async () => {
     setLoading(true);
     const { data } = await (supabase as any).from(table).select('*').order('next_due_date', { ascending: true });
     setRows(data || []);
     setLoading(false);
-  };
-  useEffect(() => { fetchRows(); }, []);
+  }, [table]);
+  useEffect(() => { fetchRows(); }, [fetchRows]);
 
-  const reset = () => { setEditingId(null); setForm(blank); };
+  const reset = useCallback(() => { setEditingId(null); setForm(blank); }, [blank]);
 
-  const openEdit = (r: any) => {
+  const openEdit = useCallback((r: any) => {
     setEditingId(r.id);
     setForm({
       category: r.category,
@@ -74,7 +75,7 @@ export function RecurringManager({ kind, categories, onPosted }: Props) {
       active: r.active,
     });
     setOpen(true);
-  };
+  }, [partyKey]);
 
   const save = async () => {
     try {
@@ -94,44 +95,53 @@ export function RecurringManager({ kind, categories, onPosted }: Props) {
         active: form.active,
       };
       if (!editingId) payload.created_by = user?.id || null;
-      const { error } = editingId
-        ? await (supabase as any).from(table).update(payload).eq('id', editingId)
-        : await (supabase as any).from(table).insert(payload);
-      if (error) throw error;
-      toast.success(editingId ? 'Updated' : 'Recurring item created');
+      let newId: string | null = null;
+      if (editingId) {
+        const { error } = await (supabase as any).from(table).update(payload).eq('id', editingId);
+        if (error) throw error;
+      } else {
+        const { data: inserted, error } = await (supabase as any).from(table).insert(payload).select('id').single();
+        if (error) throw error;
+        newId = inserted.id;
+      }
+      if (!editingId && form.post_now && newId) {
+        const { error: postErr } = await (supabase as any).rpc(postFn, { p_id: newId });
+        if (postErr) throw postErr;
+      }
+      toast.success(editingId ? 'Updated' : form.post_now ? 'Created and first payment posted' : 'Recurring item created');
       setOpen(false);
       reset();
       fetchRows();
     } catch (err: any) { toast.error(err.message); }
   };
 
-  const remove = async (id: string) => {
+  const remove = useCallback(async (id: string) => {
     if (!confirm('Delete this recurring template?')) return;
     const { error } = await (supabase as any).from(table).delete().eq('id', id);
     if (error) return toast.error(error.message);
     toast.success('Deleted');
     fetchRows();
-  };
+  }, [table, fetchRows]);
 
-  const post = async (id: string) => {
+  const post = useCallback(async (id: string) => {
     if (!confirm('Post this period now? It will create a new record.')) return;
     const { error } = await (supabase as any).rpc(postFn, { p_id: id });
     if (error) return toast.error(error.message);
     toast.success('Posted');
     fetchRows();
     onPosted?.();
-  };
+  }, [postFn, fetchRows, onPosted]);
 
   const today = new Date().toISOString().slice(0, 10);
 
-  const columns = [
+  const columns = useMemo(() => [
     { key: 'category', header: 'Category', render: (r: any) => <span className="capitalize">{r.category}</span> },
     { key: partyKey, header: kind === 'expense' ? 'Vendor' : 'Payer', render: (r: any) => r[partyKey] || '—' },
     { key: 'amount', header: 'Amount', render: (r: any) => formatCurrency(r.amount) },
     { key: 'frequency', header: 'Frequency', render: (r: any) => <span className="capitalize">{r.frequency}</span> },
     { key: 'next_due_date', header: 'Next Due', render: (r: any) => (
       <div className="flex items-center gap-2">
-        {new Date(r.next_due_date).toLocaleDateString()}
+        {new Date(r.next_due_date).toLocaleDateString('en-NG')}
         {r.next_due_date <= today && r.active && <Badge variant="destructive">Due</Badge>}
       </div>
     )},
@@ -151,7 +161,7 @@ export function RecurringManager({ kind, categories, onPosted }: Props) {
         </Button>
       </div>
     )},
-  ];
+  ], [today, partyKey, kind, post, openEdit, remove]);
 
   return (
     <div>
@@ -228,6 +238,15 @@ export function RecurringManager({ kind, categories, onPosted }: Props) {
                 <Label>Active</Label>
                 <Switch checked={form.active} onCheckedChange={v => setForm({ ...form, active: v })} />
               </div>
+              {!editingId && (
+                <div className="flex items-center justify-between rounded-md border px-3 py-2 bg-muted/40">
+                  <div>
+                    <Label className="cursor-pointer">{kind === 'income' ? 'First payment received today' : 'First payment made today'}</Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">Posts the first period immediately on save</p>
+                  </div>
+                  <Switch checked={form.post_now} onCheckedChange={v => setForm({ ...form, post_now: v })} />
+                </div>
+              )}
               <Button onClick={save} className="w-full">{editingId ? 'Save Changes' : 'Create'}</Button>
             </div>
           </DialogContent>

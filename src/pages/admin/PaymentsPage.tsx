@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { usePaymentsAll } from '@/hooks/usePayments';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable } from '@/components/shared/DataTable';
 import { PaymentReceipt } from '@/components/shared/PaymentReceipt';
@@ -12,51 +14,28 @@ import { Plus, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function PaymentsPage() {
-  const [payments, setPayments] = useState<any[]>([]);
-  const [invoices, setInvoices] = useState<any[]>([]);
+  const queryClient = useQueryClient();
   const [installments, setInstallments] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ invoice_id: '', installment_id: '', amount: '', payment_reference: '', payment_method: '' });
+  const [form, setForm] = useState({ invoice_id: '', installment_id: '', amount: '', payment_reference: '', payment_method: '', payment_date: new Date().toISOString().slice(0, 10) });
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
 
-  const fetchPayments = async () => {
-    const [payRes, oiRes, invRes] = await Promise.all([
-      supabase.from('payments')
-        .select('*, invoices(invoice_number, enrollments(full_name, programs(program_name)))')
-        .order('created_at', { ascending: false }).limit(100),
-      supabase.from('other_income').select('*').order('payment_date', { ascending: false }).limit(50),
-      supabase.from('invoices')
-        .select('id, invoice_number, total_amount, status, created_at, enrollments(full_name, programs(program_name))')
-        .order('created_at', { ascending: false }).limit(50),
-    ]);
-    const merged = [
-      ...(payRes.data || []).map((p: any) => ({ ...p, _kind: 'tuition', _date: p.created_at })),
-      ...(oiRes.data || []).map((o: any) => ({
-        ...o, _kind: 'other', _date: o.payment_date,
-        payment_reference: o.payment_reference || '—',
-        invoices: { invoice_number: o.category, enrollments: { full_name: o.payer_name } },
-      })),
-      ...(invRes.data || []).map((inv: any) => ({
-        id: `inv-${inv.id}`,
-        _kind: 'invoice',
-        _date: inv.created_at,
-        created_at: inv.created_at,
-        amount: inv.total_amount,
-        payment_reference: inv.invoice_number,
-        payment_method: inv.status,
-        invoices: { invoice_number: inv.invoice_number, enrollments: inv.enrollments },
-      })),
-    ].sort((a: any, b: any) => new Date(b._date).getTime() - new Date(a._date).getTime());
-    setPayments(merged);
-    setLoading(false);
-  };
+  const { data: payments = [], isLoading: loading } = usePaymentsAll();
 
-  useEffect(() => {
-    fetchPayments();
-    supabase.from('invoices').select('id, invoice_number, status').neq('status', 'paid').neq('status', 'cancelled').then(({ data }) => setInvoices(data || []));
-  }, []);
+  // Only fetched when the dialog opens
+  const { data: invoices = [] } = useQuery({
+    queryKey: ['invoices-unpaid'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('invoices').select('id, invoice_number, status')
+        .neq('status', 'paid').neq('status', 'cancelled');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: open,
+    staleTime: 60_000,
+  });
 
   const onInvoiceChange = async (invoiceId: string) => {
     setForm({ ...form, invoice_id: invoiceId, installment_id: '' });
@@ -64,45 +43,43 @@ export default function PaymentsPage() {
     setInstallments(data || []);
   };
 
-  const getInvoiceEnrollmentDate = async (invoiceId: string) => {
-    const { data } = await supabase
-      .from('installments')
-      .select('due_date')
-      .eq('invoice_id', invoiceId)
-      .order('due_date', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    return data?.due_date ? new Date(`${data.due_date}T00:00:00`).toISOString() : new Date().toISOString();
-  };
-
   const handleRecord = async () => {
     try {
       const amount = parseFloat(form.amount);
       if (!form.invoice_id || isNaN(amount) || amount <= 0 || !form.payment_reference) throw new Error('Fill required fields');
 
+      if (!form.payment_date) throw new Error('Payment date is required');
+
+      // payment_date isn't in the generated Supabase types yet (added directly via
+      // migration 20260812000001, types not regenerated — see CLAUDE.md typegen note)
       const { error } = await supabase.from('payments').insert({
         invoice_id: form.invoice_id,
         installment_id: form.installment_id || null,
         amount,
         payment_reference: form.payment_reference,
         payment_method: form.payment_method || null,
-      });
+        payment_date: form.payment_date,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
       if (error) throw error;
 
       if (form.installment_id) {
-        await supabase.from('installments').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', form.installment_id);
+        await supabase.from('installments').update({ status: 'paid', paid_at: `${form.payment_date}T00:00:00.000Z` }).eq('id', form.installment_id);
       }
 
       const { data: invoice } = await supabase.from('invoices').select('enrollment_id').eq('id', form.invoice_id).single();
       if (invoice) {
-        const { data: enrollment } = await supabase.from('enrollments').select('amount_paid').eq('id', invoice.enrollment_id).single();
+        const { data: enrollment } = await supabase.from('enrollments').select('amount_paid, first_payment_date').eq('id', invoice.enrollment_id).single();
         if (enrollment) {
           const newPaid = Number(enrollment.amount_paid) + amount;
-          const enrollmentDate = await getInvoiceEnrollmentDate(form.invoice_id);
+          const paymentTimestamp = `${form.payment_date}T00:00:00.000Z`;
           await supabase.from('enrollments').update({
             amount_paid: newPaid,
-            last_payment_date: new Date().toISOString(),
-            first_payment_date: enrollmentDate,
+            last_payment_date: paymentTimestamp,
+            // first_payment_date is set once, on the actual first payment — not
+            // overwritten by every later payment (that used to happen when this
+            // read a static due_date instead of the real date being recorded here)
+            ...(!enrollment.first_payment_date ? { first_payment_date: paymentTimestamp } : {}),
             ...(!enrollment.amount_paid || Number(enrollment.amount_paid) === 0 ? { enrollment_status: 'active' } : {}),
           }).eq('id', invoice.enrollment_id);
         }
@@ -118,7 +95,6 @@ export default function PaymentsPage() {
       }
 
       if (invoice) {
-        // Fetch enrollment to get program name for receipt
         const { data: enrollmentData } = await supabase
           .from('enrollments')
           .select('programs(program_name)')
@@ -140,15 +116,14 @@ export default function PaymentsPage() {
               },
             },
           });
-        } catch (notifErr) {
-          console.error('Notification failed:', notifErr);
-        }
+        } catch (_notifErr) { }
       }
 
       toast.success('Payment recorded');
       setOpen(false);
-      setForm({ invoice_id: '', installment_id: '', amount: '', payment_reference: '', payment_method: '' });
-      fetchPayments();
+      setForm({ invoice_id: '', installment_id: '', amount: '', payment_reference: '', payment_method: '', payment_date: new Date().toISOString().slice(0, 10) });
+      queryClient.invalidateQueries({ queryKey: ['payments-all'] });
+      queryClient.invalidateQueries({ queryKey: ['invoices-unpaid'] });
     } catch (err: any) {
       toast.error(err.message);
     }
@@ -156,7 +131,7 @@ export default function PaymentsPage() {
 
   const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
 
-  const openReceipt = (r: any) => {
+  const openReceipt = useCallback((r: any) => {
     setSelectedReceipt({
       payment_reference: r.payment_reference,
       amount: Number(r.amount),
@@ -167,9 +142,9 @@ export default function PaymentsPage() {
       program_name: r.invoices?.enrollments?.programs?.program_name || '',
     });
     setReceiptOpen(true);
-  };
+  }, []);
 
-  const columns = [
+  const columns = useMemo(() => [
     { key: 'type', header: 'Type', render: (r: any) => r._kind === 'other'
       ? <span className="text-xs px-2 py-0.5 rounded bg-accent/15 text-accent-foreground">Other Income</span>
       : r._kind === 'invoice'
@@ -180,13 +155,13 @@ export default function PaymentsPage() {
     { key: 'invoice', header: 'Invoice / Category', render: (r: any) => r.invoices?.invoice_number || '—' },
     { key: 'amount', header: 'Amount', render: (r: any) => formatCurrency(Number(r.amount)) },
     { key: 'payment_method', header: 'Method', render: (r: any) => r.payment_method || '—' },
-    { key: 'created_at', header: 'Date', render: (r: any) => new Date(r._date || r.created_at).toLocaleDateString() },
+    { key: 'created_at', header: 'Date', render: (r: any) => new Date(r._date || r.created_at).toLocaleDateString('en-NG') },
     { key: 'receipt', header: '', render: (r: any) => r._kind === 'tuition' ? (
       <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openReceipt(r); }}>
         <FileText className="h-4 w-4 mr-1" /> Receipt
       </Button>
     ) : null },
-  ];
+  ], [openReceipt]);
 
   return (
     <div>
@@ -218,7 +193,7 @@ export default function PaymentsPage() {
                       <SelectContent>
                         {installments.map(inst => (
                           <SelectItem key={inst.id} value={inst.id}>
-                            ₦{Number(inst.amount).toLocaleString()} — Due {new Date(inst.due_date).toLocaleDateString()}
+                            ₦{Number(inst.amount).toLocaleString()} — Due {new Date(inst.due_date).toLocaleDateString('en-NG')}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -244,6 +219,11 @@ export default function PaymentsPage() {
                       <SelectItem value="other">Other</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                <div>
+                  <Label>Payment Date *</Label>
+                  <Input type="date" value={form.payment_date} onChange={e => setForm({ ...form, payment_date: e.target.value })} className="mt-1.5" />
+                  <p className="text-xs text-muted-foreground mt-1">When the payment actually happened — not today's date if you're recording it late.</p>
                 </div>
                 <Button onClick={handleRecord} className="w-full">Record Payment</Button>
               </div>

@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { useClassrooms } from '@/hooks/useClassroom';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -17,7 +18,14 @@ import { supabase } from '@/lib/supabase';
 export default function ClassroomsPage() {
   const navigate = useNavigate();
   const { classrooms, loading, createClassroom } = useClassrooms();
-  const [programs, setPrograms] = useState<any[]>([]);
+  const { data: programs = [] } = useQuery({
+    queryKey: ['programs-active'],
+    queryFn: async () => {
+      const { data } = await supabase.from('programs').select('id, program_name').eq('active', true);
+      return (data || []) as any[];
+    },
+    staleTime: 5 * 60_000,
+  });
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [collapsedPrograms, setCollapsedPrograms] = useState<Set<string>>(new Set());
@@ -27,10 +35,6 @@ export default function ClassroomsPage() {
     geofencing_enabled: false,
   });
 
-  useEffect(() => {
-    supabase.from('programs').select('id, program_name').eq('active', true)
-      .then(({ data }) => setPrograms(data || []));
-  }, []);
 
   const openForProgram = (programId: string) => {
     setForm(f => ({ ...f, program_id: programId }));

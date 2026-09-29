@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable } from '@/components/shared/DataTable';
@@ -39,7 +39,7 @@ export default function CustomFieldsPage() {
     fetch();
   };
 
-  const columns = [
+  const columns = useMemo(() => [
     { key: 'label', header: 'Label' },
     { key: 'key', header: 'Key', render: (r: any) => <code className="text-xs bg-muted px-2 py-1 rounded">{r.key}</code> },
     { key: 'field_type', header: 'Type', render: (r: any) => <span className="capitalize">{r.field_type}</span> },
@@ -47,7 +47,7 @@ export default function CustomFieldsPage() {
     { key: 'visible_to_student', header: 'Student', render: (r: any) => r.visible_to_student ? '👁' : '—' },
     { key: 'visible_to_organization', header: 'Org', render: (r: any) => r.visible_to_organization ? '👁' : '—' },
     { key: 'active', header: 'Status', render: (r: any) => <StatusBadge status={r.active ? 'active' : 'cancelled'} /> },
-  ];
+  ], []);
 
   return (
     <div>

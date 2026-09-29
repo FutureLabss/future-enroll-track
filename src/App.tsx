@@ -1,85 +1,142 @@
-import { Toaster } from "@/components/ui/toaster";
+import { lazy, Suspense, useEffect } from "react";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation, useParams } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { AppLayout } from "@/components/layout/AppLayout";
-import LoginPage from "@/pages/auth/LoginPage";
-import ResetPasswordPage from "@/pages/auth/ResetPasswordPage";
-import AdminDashboard from "@/pages/admin/AdminDashboard";
-import EnrollmentsPage from "@/pages/admin/EnrollmentsPage";
-import EnrollmentDetailPage from "@/pages/admin/EnrollmentDetailPage";
-import InvoicesPage from "@/pages/admin/InvoicesPage";
-import InvoiceDetailPage from "@/pages/admin/InvoiceDetailPage";
-import CreateInvoicePage from "@/pages/admin/CreateInvoicePage";
-import PaymentsPage from "@/pages/admin/PaymentsPage";
-import ProgramsPage from "@/pages/admin/ProgramsPage";
-import ProgramDetailPage from "@/pages/admin/ProgramDetailPage";
-import OrganizationsPage from "@/pages/admin/OrganizationsPage";
-import CustomFieldsPage from "@/pages/admin/CustomFieldsPage";
-import NotificationsPage from "@/pages/admin/NotificationsPage";
-import ReportsPage from "@/pages/admin/ReportsPage";
-import AuditLogPage from "@/pages/admin/AuditLogPage";
-import ManageAdminsPage from "@/pages/admin/ManageAdminsPage";
-import PayrollPage from "@/pages/admin/PayrollPage";
-import OtherIncomePage from "@/pages/admin/OtherIncomePage";
-import ExpensesPage from "@/pages/admin/ExpensesPage";
-import FinanceDashboardPage from "@/pages/admin/FinanceDashboardPage";
-import BulkEmailPage from "@/pages/admin/BulkEmailPage";
-import EditInvoicePage from "@/pages/admin/EditInvoicePage";
-import OutstandingInvoicesPage from "@/pages/admin/OutstandingInvoicesPage";
-import InvoiceApprovalsPage from "@/pages/admin/InvoiceApprovalsPage";
-import StaffInvoicesAdminPage from "@/pages/admin/StaffInvoicesAdminPage";
-import StaffInvoicesPage from "@/pages/staff/StaffInvoicesPage";
-import StudentDashboard from "@/pages/student/StudentDashboard";
-import StudentInvoicesPage from "@/pages/student/StudentInvoicesPage";
-import StudentInvoiceDetailPage from "@/pages/student/StudentInvoiceDetailPage";
-import PaymentCallbackPage from "@/pages/student/PaymentCallbackPage";
-import StudentPaymentsPage from "@/pages/student/StudentPaymentsPage";
-import StudentNotificationsPage from "@/pages/student/StudentNotificationsPage";
-import PendingPaymentsPage from "@/pages/admin/PendingPaymentsPage";
-import OrgDashboard from "@/pages/org/OrgDashboard";
-import OrgEnrollmentsPage from "@/pages/org/OrgEnrollmentsPage";
-import OrgReportsPage from "@/pages/org/OrgReportsPage";
-import ProfilePage from "@/pages/profile/ProfilePage";
-import EnrollPage from "@/pages/public/EnrollPage";
-import StudentSignupPage from "@/pages/public/StudentSignupPage";
-import AcceptInvitationPage from "@/pages/public/AcceptInvitationPage";
-import AcceptHubInvitationPage from "@/pages/public/AcceptHubInvitationPage";
-import DemoPage from "@/pages/public/DemoPage";
-import HubsPage from "@/pages/admin/HubsPage";
-import ClassroomsPage from "@/pages/admin/ClassroomsPage";
-import ClassroomDetailPage from "@/pages/admin/ClassroomDetailPage";
-import CohortsPage from "@/pages/admin/CohortsPage";
-import CohortDetailPage from "@/pages/admin/CohortDetailPage";
-import StaffInvitationsAdminPage from "@/pages/admin/StaffInvitationsAdminPage";
-import StaffClassroomsPage from "@/pages/staff/StaffClassroomsPage";
-import ClassroomWorkspacePage from "@/pages/staff/ClassroomWorkspacePage";
-import StaffInvitationsPage from "@/pages/staff/StaffInvitationsPage";
-import StudentClassroomsPage from "@/pages/student/StudentClassroomsPage";
-import StudentClassroomPage from "@/pages/student/StudentClassroomPage";
-import HubPortalPage from "@/pages/public/HubPortalPage";
-import SetPasswordPage from "@/pages/auth/SetPasswordPage";
-import NotFound from "./pages/NotFound";
-import CrmLeadsPage from "@/pages/admin/CrmLeadsPage";
-import CrmLeadDetailPage from "@/pages/admin/CrmLeadDetailPage";
-import CrmCampaignsPage from "@/pages/admin/CrmCampaignsPage";
-import CrmFollowUpsPage from "@/pages/admin/CrmFollowUpsPage";
-import CrmReportsPage from "@/pages/admin/CrmReportsPage";
 
-const queryClient = new QueryClient();
+const LoginPage = lazy(() => import("@/pages/auth/LoginPage"));
+const ResetPasswordPage = lazy(() => import("@/pages/auth/ResetPasswordPage"));
+const SetPasswordPage = lazy(() => import("@/pages/auth/SetPasswordPage"));
+
+const AdminDashboard = lazy(() => import("@/pages/admin/AdminDashboard"));
+const EnrollmentsPage = lazy(() => import("@/pages/admin/EnrollmentsPage"));
+const EnrollmentDetailPage = lazy(() => import("@/pages/admin/EnrollmentDetailPage"));
+const InvoicesPage = lazy(() => import("@/pages/admin/InvoicesPage"));
+const InvoiceDetailPage = lazy(() => import("@/pages/admin/InvoiceDetailPage"));
+const CreateInvoicePage = lazy(() => import("@/pages/admin/CreateInvoicePage"));
+const EditInvoicePage = lazy(() => import("@/pages/admin/EditInvoicePage"));
+const PaymentsPage = lazy(() => import("@/pages/admin/PaymentsPage"));
+const PendingPaymentsPage = lazy(() => import("@/pages/admin/PendingPaymentsPage"));
+const ProgramsPage = lazy(() => import("@/pages/admin/ProgramsPage"));
+const ProgramDetailPage = lazy(() => import("@/pages/admin/ProgramDetailPage"));
+const OrganizationsPage = lazy(() => import("@/pages/admin/OrganizationsPage"));
+const CustomFieldsPage = lazy(() => import("@/pages/admin/CustomFieldsPage"));
+const NotificationsPage = lazy(() => import("@/pages/admin/NotificationsPage"));
+const ReportsPage = lazy(() => import("@/pages/admin/ReportsPage"));
+const PartnerReportPage = lazy(() => import("@/pages/admin/PartnerReportPage"));
+const AuditLogPage = lazy(() => import("@/pages/admin/AuditLogPage"));
+const ManageAdminsPage = lazy(() => import("@/pages/admin/ManageAdminsPage"));
+const PayrollPage = lazy(() => import("@/pages/admin/PayrollPage"));
+const OtherIncomePage = lazy(() => import("@/pages/admin/OtherIncomePage"));
+const ExpensesPage = lazy(() => import("@/pages/admin/ExpensesPage"));
+const FinanceDashboardPage = lazy(() => import("@/pages/admin/FinanceDashboardPage"));
+const BulkEmailPage = lazy(() => import("@/pages/admin/BulkEmailPage"));
+const OutstandingInvoicesPage = lazy(() => import("@/pages/admin/OutstandingInvoicesPage"));
+const InvoiceApprovalsPage = lazy(() => import("@/pages/admin/InvoiceApprovalsPage"));
+const StaffInvoicesAdminPage = lazy(() => import("@/pages/admin/StaffInvoicesAdminPage"));
+const HubsPage = lazy(() => import("@/pages/admin/HubsPage"));
+const ClassroomsPage = lazy(() => import("@/pages/admin/ClassroomsPage"));
+const ClassroomDetailPage = lazy(() => import("@/pages/admin/ClassroomDetailPage"));
+const CohortsPage = lazy(() => import("@/pages/admin/CohortsPage"));
+const CohortDetailPage = lazy(() => import("@/pages/admin/CohortDetailPage"));
+const StaffInvitationsAdminPage = lazy(() => import("@/pages/admin/StaffInvitationsAdminPage"));
+const CrmLeadsPage = lazy(() => import("@/pages/admin/CrmLeadsPage"));
+const CrmLeadDetailPage = lazy(() => import("@/pages/admin/CrmLeadDetailPage"));
+const CrmCampaignsPage = lazy(() => import("@/pages/admin/CrmCampaignsPage"));
+const CrmFollowUpsPage = lazy(() => import("@/pages/admin/CrmFollowUpsPage"));
+const CrmReportsPage = lazy(() => import("@/pages/admin/CrmReportsPage"));
+
+const StaffInvoicesPage = lazy(() => import("@/pages/staff/StaffInvoicesPage"));
+const StaffClassroomsPage = lazy(() => import("@/pages/staff/StaffClassroomsPage"));
+const ClassroomWorkspacePage = lazy(() => import("@/pages/staff/ClassroomWorkspacePage"));
+const StaffInvitationsPage = lazy(() => import("@/pages/staff/StaffInvitationsPage"));
+
+const StudentDashboard = lazy(() => import("@/pages/student/StudentDashboard"));
+const StudentInvoicesPage = lazy(() => import("@/pages/student/StudentInvoicesPage"));
+const StudentInvoiceDetailPage = lazy(() => import("@/pages/student/StudentInvoiceDetailPage"));
+const PaymentCallbackPage = lazy(() => import("@/pages/student/PaymentCallbackPage"));
+const StudentPaymentsPage = lazy(() => import("@/pages/student/StudentPaymentsPage"));
+const StudentNotificationsPage = lazy(() => import("@/pages/student/StudentNotificationsPage"));
+const StudentClassroomsPage = lazy(() => import("@/pages/student/StudentClassroomsPage"));
+const StudentClassroomPage = lazy(() => import("@/pages/student/StudentClassroomPage"));
+
+const OrgDashboard = lazy(() => import("@/pages/org/OrgDashboard"));
+const OrgEnrollmentsPage = lazy(() => import("@/pages/org/OrgEnrollmentsPage"));
+const OrgReportsPage = lazy(() => import("@/pages/org/OrgReportsPage"));
+
+const ProfilePage = lazy(() => import("@/pages/profile/ProfilePage"));
+const AssignmentDetailPage = lazy(() => import("@/pages/shared/AssignmentDetailPage"));
+const PresentationDetailPage = lazy(() => import("@/pages/shared/PresentationDetailPage"));
+
+const EnrollPage = lazy(() => import("@/pages/public/EnrollPage"));
+const StudentSignupPage = lazy(() => import("@/pages/public/StudentSignupPage"));
+const AcceptInvitationPage = lazy(() => import("@/pages/public/AcceptInvitationPage"));
+const AcceptHubInvitationPage = lazy(() => import("@/pages/public/AcceptHubInvitationPage"));
+const DemoPage = lazy(() => import("@/pages/public/DemoPage"));
+const HubPortalPage = lazy(() => import("@/pages/public/HubPortalPage"));
+
+const NotFound = lazy(() => import("./pages/NotFound"));
+
+const PageSpinner = () => (
+  <div className="flex items-center justify-center min-h-screen">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+  </div>
+);
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  if (loading) return <div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+  if (loading) return <PageSpinner />;
   if (!user) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
 
+function AdminGuard() {
+  const { isAdmin, isStaff, isMarketing, isHubManager, loading, rolesReady } = useAuth();
+  const location = useLocation();
+  if (loading || !rolesReady) return <PageSpinner />;
+  // Hub managers (CEO, training manager) can access classroom management only
+  if (!isAdmin && isHubManager && location.pathname.startsWith('/admin/classrooms')) return <Outlet />;
+  if (!isAdmin && isMarketing && location.pathname.startsWith('/admin/crm')) return <Outlet />;
+  if (!isAdmin) return <Navigate to={isStaff ? '/staff/classrooms' : '/student'} replace />;
+  return <Outlet />;
+}
+
+function PrefetchChunks() {
+  const { isAdmin, isStaff, isOrganization, isMarketing, rolesReady } = useAuth();
+  useEffect(() => {
+    if (!rolesReady) return;
+
+    // vite.config groups pages by section into shared chunks, so one import()
+    // per section downloads the entire section — all routes become instant.
+    const preload = () => {
+      if (isAdmin || isMarketing) {
+        import("@/pages/admin/AdminDashboard");       // warms pages-admin (every admin page)
+      } else if (isStaff) {
+        import("@/pages/staff/StaffClassroomsPage");  // warms pages-staff
+      } else if (isOrganization) {
+        import("@/pages/org/OrgDashboard");            // warms pages-org
+      } else {
+        import("@/pages/student/StudentDashboard");   // warms pages-student
+      }
+      import("@/pages/profile/ProfilePage");           // warms pages-shared (profile + assignment detail)
+    };
+
+    // Defer until the browser is idle so the dashboard paint isn't delayed.
+    // Timeout of 3 s ensures it still runs on busy tabs.
+    if ('requestIdleCallback' in window) {
+      const id = requestIdleCallback(preload, { timeout: 3000 });
+      return () => cancelIdleCallback(id);
+    }
+    const id = setTimeout(preload, 200);
+    return () => clearTimeout(id);
+  }, [rolesReady, isAdmin, isStaff, isOrganization, isMarketing]);
+  return null;
+}
+
 function RoleRedirect() {
-  const { isAdmin, isOrganization, isStaff, isMarketing, loading } = useAuth();
-  if (loading) return <div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+  const { isAdmin, isOrganization, isStaff, isMarketing, loading, rolesReady } = useAuth();
+  if (loading || !rolesReady) return <PageSpinner />;
   if (isAdmin) return <Navigate to="/admin" replace />;
   if (isOrganization) return <Navigate to="/org" replace />;
   if (isStaff) return <Navigate to="/staff/classrooms" replace />;
@@ -93,98 +150,102 @@ function LegacyEnrollRedirect() {
 }
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
+  <TooltipProvider>
+    <Sonner />
+    <BrowserRouter>
+      <AuthProvider>
+        <PrefetchChunks />
+        <Suspense fallback={<PageSpinner />}>
           <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/reset-password" element={<ResetPasswordPage />} />
-            <Route path="/enroll" element={<EnrollPage />} />
-            <Route path="/students/:id" element={<StudentSignupPage />} />
-            <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
-            <Route path="/accept-hub-invitation" element={<AcceptHubInvitationPage />} />
-            <Route path="/set-password" element={<SetPasswordPage />} />
-            <Route path="/demo" element={<DemoPage />} />
-            {/* Backward compatibility: old invitation links */}
-            <Route path="/enroll/complete/:id" element={<LegacyEnrollRedirect />} />
-            <Route path="/" element={<ProtectedRoute><RoleRedirect /></ProtectedRoute>} />
-            
-            {/* Admin routes */}
-            <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-              <Route path="/admin" element={<AdminDashboard />} />
-              <Route path="/admin/enrollments" element={<EnrollmentsPage />} />
-              <Route path="/admin/enrollments/:id" element={<EnrollmentDetailPage />} />
-              <Route path="/admin/invoices" element={<InvoicesPage />} />
-              <Route path="/admin/invoices/:id" element={<InvoiceDetailPage />} />
-              <Route path="/admin/invoices/:id/edit" element={<EditInvoicePage />} />
-              <Route path="/admin/invoices/new" element={<CreateInvoicePage />} />
-              <Route path="/admin/bulk-email" element={<BulkEmailPage />} />
-              <Route path="/admin/crm/leads" element={<CrmLeadsPage />} />
-              <Route path="/admin/crm/leads/:id" element={<CrmLeadDetailPage />} />
-              <Route path="/admin/crm/campaigns" element={<CrmCampaignsPage />} />
-              <Route path="/admin/crm/follow-ups" element={<CrmFollowUpsPage />} />
-              <Route path="/admin/crm/reports" element={<CrmReportsPage />} />
-              <Route path="/admin/payments" element={<PaymentsPage />} />
-              <Route path="/admin/pending-payments" element={<PendingPaymentsPage />} />
-              <Route path="/admin/programs" element={<ProgramsPage />} />
-              <Route path="/admin/programs/:id" element={<ProgramDetailPage />} />
-              <Route path="/admin/organizations" element={<OrganizationsPage />} />
-              <Route path="/admin/custom-fields" element={<CustomFieldsPage />} />
-              <Route path="/admin/notifications" element={<NotificationsPage />} />
-              <Route path="/admin/reports" element={<ReportsPage />} />
-              <Route path="/admin/audit-logs" element={<AuditLogPage />} />
-              <Route path="/admin/manage-admins" element={<ManageAdminsPage />} />
-              <Route path="/admin/payroll" element={<PayrollPage />} />
-              <Route path="/admin/other-income" element={<OtherIncomePage />} />
-              <Route path="/admin/expenses" element={<ExpensesPage />} />
-              <Route path="/admin/finance" element={<FinanceDashboardPage />} />
-              <Route path="/admin/outstanding" element={<OutstandingInvoicesPage />} />
-              <Route path="/admin/invoice-approvals" element={<InvoiceApprovalsPage />} />
-              <Route path="/admin/staff-invoices" element={<StaffInvoicesAdminPage />} />
-              {/* Hub management (superadmin only) */}
-              <Route path="/admin/hubs" element={<HubsPage />} />
-              {/* Classroom admin routes */}
-              <Route path="/admin/classrooms" element={<ClassroomsPage />} />
-              <Route path="/admin/classrooms/:id" element={<ClassroomDetailPage />} />
-              <Route path="/admin/cohorts" element={<CohortsPage />} />
-              <Route path="/admin/cohorts/:id" element={<CohortDetailPage />} />
-              <Route path="/admin/staff-invitations" element={<StaffInvitationsAdminPage />} />
-              {/* Staff classroom routes */}
-              <Route path="/staff/invoices" element={<StaffInvoicesPage />} />
-              <Route path="/staff/classrooms" element={<StaffClassroomsPage />} />
-              <Route path="/staff/classrooms/:id" element={<ClassroomWorkspacePage />} />
-              <Route path="/staff/invitations" element={<StaffInvitationsPage />} />
-              
-              {/* Student routes */}
-              <Route path="/student" element={<StudentDashboard />} />
-              <Route path="/student/invoices" element={<StudentInvoicesPage />} />
-              <Route path="/student/invoices/:id" element={<StudentInvoiceDetailPage />} />
-              <Route path="/student/invoices/:id/payment-callback" element={<PaymentCallbackPage />} />
-              <Route path="/student/payments" element={<StudentPaymentsPage />} />
-              <Route path="/student/notifications" element={<StudentNotificationsPage />} />
-              <Route path="/student/classrooms" element={<StudentClassroomsPage />} />
-              <Route path="/student/classrooms/:id" element={<StudentClassroomPage />} />
-              
-              {/* Org routes */}
-              <Route path="/org" element={<OrgDashboard />} />
-              <Route path="/org/enrollments" element={<OrgEnrollmentsPage />} />
-              <Route path="/org/reports" element={<OrgReportsPage />} />
-              
-              {/* Shared routes */}
-              <Route path="/profile" element={<ProfilePage />} />
-            </Route>
-            
-            {/* Hub portal: /:hubSlug — branded entry for any registered hub */}
-            <Route path="/:hubSlug" element={<HubPortalPage />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
+              <Route path="/enroll" element={<EnrollPage />} />
+              <Route path="/students/:id" element={<StudentSignupPage />} />
+              <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
+              <Route path="/accept-hub-invitation" element={<AcceptHubInvitationPage />} />
+              <Route path="/set-password" element={<SetPasswordPage />} />
+              <Route path="/demo" element={<DemoPage />} />
+              <Route path="/enroll/complete/:id" element={<LegacyEnrollRedirect />} />
+              <Route path="/" element={<ProtectedRoute><RoleRedirect /></ProtectedRoute>} />
+
+              {/* Admin routes */}
+              <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+                <Route element={<AdminGuard />}>
+                  <Route path="/admin" element={<AdminDashboard />} />
+                  <Route path="/admin/enrollments" element={<EnrollmentsPage />} />
+                  <Route path="/admin/enrollments/:id" element={<EnrollmentDetailPage />} />
+                  <Route path="/admin/invoices" element={<InvoicesPage />} />
+                  <Route path="/admin/invoices/:id" element={<InvoiceDetailPage />} />
+                  <Route path="/admin/invoices/:id/edit" element={<EditInvoicePage />} />
+                  <Route path="/admin/invoices/new" element={<CreateInvoicePage />} />
+                  <Route path="/admin/bulk-email" element={<BulkEmailPage />} />
+                  <Route path="/admin/crm/leads" element={<CrmLeadsPage />} />
+                  <Route path="/admin/crm/leads/:id" element={<CrmLeadDetailPage />} />
+                  <Route path="/admin/crm/campaigns" element={<CrmCampaignsPage />} />
+                  <Route path="/admin/crm/follow-ups" element={<CrmFollowUpsPage />} />
+                  <Route path="/admin/crm/reports" element={<CrmReportsPage />} />
+                  <Route path="/admin/payments" element={<PaymentsPage />} />
+                  <Route path="/admin/pending-payments" element={<PendingPaymentsPage />} />
+                  <Route path="/admin/programs" element={<ProgramsPage />} />
+                  <Route path="/admin/programs/:id" element={<ProgramDetailPage />} />
+                  <Route path="/admin/organizations" element={<OrganizationsPage />} />
+                  <Route path="/admin/custom-fields" element={<CustomFieldsPage />} />
+                  <Route path="/admin/notifications" element={<NotificationsPage />} />
+                  <Route path="/admin/reports" element={<ReportsPage />} />
+                  <Route path="/admin/reports/pind" element={<PartnerReportPage />} />
+                  <Route path="/admin/audit-logs" element={<AuditLogPage />} />
+                  <Route path="/admin/manage-admins" element={<ManageAdminsPage />} />
+                  <Route path="/admin/payroll" element={<PayrollPage />} />
+                  <Route path="/admin/other-income" element={<OtherIncomePage />} />
+                  <Route path="/admin/expenses" element={<ExpensesPage />} />
+                  <Route path="/admin/finance" element={<FinanceDashboardPage />} />
+                  <Route path="/admin/outstanding" element={<OutstandingInvoicesPage />} />
+                  <Route path="/admin/invoice-approvals" element={<InvoiceApprovalsPage />} />
+                  <Route path="/admin/staff-invoices" element={<StaffInvoicesAdminPage />} />
+                  <Route path="/admin/hubs" element={<HubsPage />} />
+                  <Route path="/admin/classrooms" element={<ClassroomsPage />} />
+                  <Route path="/admin/classrooms/:id" element={<ClassroomDetailPage />} />
+                  <Route path="/admin/assignments/:id" element={<AssignmentDetailPage />} />
+                  <Route path="/admin/presentations/:id" element={<PresentationDetailPage />} />
+                  <Route path="/admin/cohorts" element={<CohortsPage />} />
+                  <Route path="/admin/cohorts/:id" element={<CohortDetailPage />} />
+                  <Route path="/admin/staff-invitations" element={<StaffInvitationsAdminPage />} />
+                </Route>
+
+                {/* Staff routes */}
+                <Route path="/staff/invoices" element={<StaffInvoicesPage />} />
+                <Route path="/staff/classrooms" element={<StaffClassroomsPage />} />
+                <Route path="/staff/classrooms/:id" element={<ClassroomWorkspacePage />} />
+                <Route path="/staff/assignments/:id" element={<AssignmentDetailPage />} />
+                <Route path="/staff/presentations/:id" element={<PresentationDetailPage />} />
+                <Route path="/staff/invitations" element={<StaffInvitationsPage />} />
+
+                {/* Student routes */}
+                <Route path="/student" element={<StudentDashboard />} />
+                <Route path="/student/invoices" element={<StudentInvoicesPage />} />
+                <Route path="/student/invoices/:id" element={<StudentInvoiceDetailPage />} />
+                <Route path="/student/invoices/:id/payment-callback" element={<PaymentCallbackPage />} />
+                <Route path="/student/payments" element={<StudentPaymentsPage />} />
+                <Route path="/student/notifications" element={<StudentNotificationsPage />} />
+                <Route path="/student/classrooms" element={<StudentClassroomsPage />} />
+                <Route path="/student/classrooms/:id" element={<StudentClassroomPage />} />
+
+                {/* Org routes */}
+                <Route path="/org" element={<OrgDashboard />} />
+                <Route path="/org/enrollments" element={<OrgEnrollmentsPage />} />
+                <Route path="/org/reports" element={<OrgReportsPage />} />
+
+                {/* Shared routes */}
+                <Route path="/profile" element={<ProfilePage />} />
+              </Route>
+
+              <Route path="/:hubSlug" element={<HubPortalPage />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
         </AuthProvider>
       </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
+  </TooltipProvider>
 );
 
 export default App;

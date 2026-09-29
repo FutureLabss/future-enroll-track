@@ -100,7 +100,7 @@ export default function InvoiceApprovalsPage() {
                       {r.payload.installments.map((inst: any, i: number) => (
                         <tr key={i} className="border-t border-border">
                           <td className="px-3 py-1.5 text-muted-foreground">{i + 1}</td>
-                          <td className="px-3 py-1.5">{inst.due_date ? new Date(inst.due_date).toLocaleDateString() : '—'}</td>
+                          <td className="px-3 py-1.5">{inst.due_date ? new Date(inst.due_date).toLocaleDateString('en-NG') : '—'}</td>
                           <td className="px-3 py-1.5 text-right font-mono">₦{Number(inst.amount || 0).toLocaleString()}</td>
                           <td className="px-3 py-1.5">
                             <span className={`capitalize font-medium ${inst.status === 'paid' ? 'text-success' : 'text-muted-foreground'}`}>
@@ -108,7 +108,7 @@ export default function InvoiceApprovalsPage() {
                             </span>
                           </td>
                           <td className="px-3 py-1.5 text-muted-foreground">
-                            {inst.paid_at ? new Date(inst.paid_at).toLocaleDateString() : '—'}
+                            {inst.paid_at ? new Date(inst.paid_at).toLocaleDateString('en-NG') : '—'}
                           </td>
                         </tr>
                       ))}

@@ -1,4 +1,4 @@
-import { forwardRef, useState, useMemo } from 'react';
+import { forwardRef, memo, useState, useMemo } from 'react';
 import {
   Table,
   TableBody,
@@ -28,6 +28,7 @@ interface DataTableProps<T> {
   pageSize?: number;
   exportable?: boolean;
   exportFilename?: string;
+  getRowId?: (item: T) => string | number;
 }
 
 const PAGE_SIZE_DEFAULT = 15;
@@ -43,6 +44,7 @@ function DataTableInner<T extends Record<string, any>>(
     pageSize = PAGE_SIZE_DEFAULT,
     exportable = false,
     exportFilename = 'export',
+    getRowId,
   }: DataTableProps<T>,
   ref: React.ForwardedRef<HTMLDivElement>
 ) {
@@ -126,7 +128,7 @@ function DataTableInner<T extends Record<string, any>>(
               ) : (
                 paged.map((item, i) => (
                   <TableRow
-                    key={i}
+                    key={getRowId?.(item) ?? item.id ?? i}
                     onClick={() => onRowClick?.(item)}
                     className={onRowClick ? 'cursor-pointer' : ''}
                   >
@@ -162,6 +164,7 @@ function DataTableInner<T extends Record<string, any>>(
   );
 }
 
-export const DataTable = forwardRef(DataTableInner) as <T extends Record<string, any>>(
+const DataTableBase = forwardRef(DataTableInner);
+export const DataTable = memo(DataTableBase) as <T extends Record<string, any>>(
   props: DataTableProps<T> & { ref?: React.ForwardedRef<HTMLDivElement> }
 ) => React.ReactElement;

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -14,23 +15,25 @@ import { toast } from 'sonner';
 
 export default function StaffInvoicesPage() {
   const { user } = useAuth();
-  const [staffRow, setStaffRow] = useState<any>(null);
-  const [rows, setRows] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ title: '', description: '', amount: '', file: null as File | null });
 
-  useEffect(() => {
-    if (!user?.email) return;
-    (async () => {
-      const { data: s } = await supabase.from('staff').select('*').ilike('email', user.email!).maybeSingle();
-      setStaffRow(s);
-      const { data } = await supabase.from('staff_invoices' as any).select('*').order('created_at', { ascending: false });
-      setRows(data || []);
-      setLoading(false);
-    })();
-  }, [user]);
+  const { data: pageData, isLoading: loading } = useQuery({
+    queryKey: ['staff-invoices-page', user?.email],
+    queryFn: async () => {
+      const [staffRes, invoicesRes] = await Promise.all([
+        supabase.from('staff').select('*').ilike('email', user!.email!).maybeSingle(),
+        supabase.from('staff_invoices' as any).select('*').order('created_at', { ascending: false }),
+      ]);
+      return { staffRow: staffRes.data ?? null, rows: (invoicesRes.data || []) as any[] };
+    },
+    enabled: !!user?.email,
+    staleTime: 30_000,
+  });
+  const staffRow = pageData?.staffRow ?? null;
+  const rows = pageData?.rows ?? [];
 
   const submit = async () => {
     if (!user || !staffRow) return;
@@ -60,8 +63,7 @@ export default function StaffInvoicesPage() {
       toast.success('Invoice submitted for approval');
       setOpen(false);
       setForm({ title: '', description: '', amount: '', file: null });
-      const { data } = await supabase.from('staff_invoices' as any).select('*').order('created_at', { ascending: false });
-      setRows(data || []);
+      queryClient.invalidateQueries({ queryKey: ['staff-invoices-page', user?.email] });
     } catch (e: any) { toast.error(e.message); } finally { setSubmitting(false); }
   };
 

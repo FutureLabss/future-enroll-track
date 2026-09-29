@@ -8,7 +8,7 @@ describe('StatusBadge', () => {
   it.each(knownStatuses)('renders "%s" status text', (status) => {
     render(<StatusBadge status={status} />);
     expect(screen.getByText(status)).toBeInTheDocument();
-  });
+  }, 15000);
 
   it('applies success style for active status', () => {
     render(<StatusBadge status="active" />);

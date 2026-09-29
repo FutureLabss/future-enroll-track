@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatCard } from '@/components/shared/StatCard';
@@ -33,20 +34,18 @@ type Row = {
 const fmt = (n: number) => `₦${Number(n || 0).toLocaleString('en-NG')}`;
 
 export default function OutstandingInvoicesPage() {
-  const [rows, setRows] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'all' | 'overdue'>('all');
   const [q, setQ] = useState('');
 
-  useEffect(() => {
-    setLoading(true);
-    supabase.rpc('list_outstanding_invoices' as any, { p_only_overdue: false })
-      .then(({ data, error }) => {
-        if (error) console.error(error);
-        setRows((data as any) || []);
-        setLoading(false);
-      });
-  }, []);
+  const { data: rows = [], isLoading: loading } = useQuery({
+    queryKey: ['outstanding-invoices'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('list_outstanding_invoices' as any, { p_only_overdue: false });
+      if (error) throw error;
+      return (data as Row[]) || [];
+    },
+    staleTime: 30_000,
+  });
 
   const filtered = useMemo(() => {
     const base = tab === 'overdue' ? rows.filter(r => r.is_overdue) : rows;
@@ -113,7 +112,9 @@ export default function OutstandingInvoicesPage() {
                     <TableRow key={r.invoice_id}>
                       <TableCell className="font-medium">{r.invoice_number}</TableCell>
                       <TableCell>
-                        <div>{r.full_name}</div>
+                        <Link to={`/admin/enrollments/${r.enrollment_id}`} className="font-medium hover:underline text-foreground">
+                          {r.full_name}
+                        </Link>
                         <div className="text-xs text-muted-foreground">{r.email}</div>
                       </TableCell>
                       <TableCell>
@@ -123,7 +124,7 @@ export default function OutstandingInvoicesPage() {
                       <TableCell className="text-right">{fmt(r.total_amount)}</TableCell>
                       <TableCell className="text-right">{fmt(r.amount_paid)}</TableCell>
                       <TableCell className="text-right font-semibold">{fmt(r.outstanding)}</TableCell>
-                      <TableCell>{r.next_due_date ? new Date(r.next_due_date).toLocaleDateString() : '—'}</TableCell>
+                      <TableCell>{r.next_due_date ? new Date(r.next_due_date).toLocaleDateString('en-NG') : '—'}</TableCell>
                       <TableCell>
                         {r.is_overdue ? (
                           <Badge variant="destructive">Overdue {r.days_overdue}d</Badge>

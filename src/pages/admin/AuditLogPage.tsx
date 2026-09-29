@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable } from '@/components/shared/DataTable';
@@ -14,7 +14,7 @@ export default function AuditLogPage() {
     });
   }, []);
 
-  const columns = [
+  const columns = useMemo(() => [
     {
       key: 'user_email',
       header: 'User',
@@ -27,7 +27,7 @@ export default function AuditLogPage() {
     { key: 'entity_id', header: 'Entity ID', render: (r: any) => <span className="text-xs font-mono text-muted-foreground">{r.entity_id?.slice(0, 8) || '—'}</span> },
     { key: 'details', header: 'Details', render: (r: any) => <span className="text-sm text-muted-foreground truncate max-w-[260px] block">{r.details ? JSON.stringify(r.details).slice(0, 80) : '—'}</span> },
     { key: 'created_at', header: 'When', render: (r: any) => new Date(r.created_at).toLocaleString() },
-  ];
+  ], []);
 
   return (
     <div>

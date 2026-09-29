@@ -12,6 +12,7 @@ interface AuthContextType {
   isAdmin: boolean;
   isOrganization: boolean;
   isStaff: boolean;
+  isMarketing: boolean;
   isSuperadmin: boolean;
   isDemo: boolean;
   demoExpiresAt: Date | null;
@@ -105,6 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAdmin: roles.includes('admin') || user?.email?.toLowerCase() === 'manassehudim@gmail.com',
         isOrganization: roles.includes('organization'),
         isStaff: roles.includes('staff') && !roles.includes('admin') && user?.email?.toLowerCase() !== 'manassehudim@gmail.com',
+        isMarketing: roles.includes('marketing'),
         isSuperadmin,
         isDemo: !!demoExpiresAt && demoExpiresAt > new Date(),
         demoExpiresAt,

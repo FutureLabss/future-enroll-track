@@ -28,6 +28,9 @@ import {
   BookOpen,
   ChevronsUpDown,
   Check,
+  Contact,
+  Megaphone,
+  CalendarClock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -56,6 +59,10 @@ const adminNav = [
   { to: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/admin/finance', icon: PieChart, label: 'Finance' },
   { to: '/admin/enrollments', icon: Users, label: 'Enrollments' },
+  { to: '/admin/crm/leads', icon: Contact, label: 'Leads' },
+  { to: '/admin/crm/campaigns', icon: Megaphone, label: 'Campaigns' },
+  { to: '/admin/crm/follow-ups', icon: CalendarClock, label: 'Follow-ups' },
+  { to: '/admin/crm/reports', icon: BarChart3, label: 'CRM Reports' },
   { to: '/admin/invoices', icon: FileText, label: 'Invoices' },
   { to: '/admin/payments', icon: CreditCard, label: 'Payments' },
   { to: '/admin/pending-payments', icon: Banknote, label: 'Pending Payments' },
@@ -92,6 +99,13 @@ const orgNav = [
   { to: '/org', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/org/enrollments', icon: Users, label: 'Sponsored Learners' },
   { to: '/org/reports', icon: BarChart3, label: 'Reports' },
+];
+
+const marketingNav = [
+  { to: '/admin/crm/leads', icon: Contact, label: 'Leads' },
+  { to: '/admin/crm/campaigns', icon: Megaphone, label: 'Campaigns' },
+  { to: '/admin/crm/follow-ups', icon: CalendarClock, label: 'Follow-ups' },
+  { to: '/admin/crm/reports', icon: BarChart3, label: 'CRM Reports' },
 ];
 
 interface AppSidebarProps {
@@ -159,11 +173,11 @@ function HubSwitcher({ userId }: { userId: string }) {
 }
 
 export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps) {
-  const { isAdmin, isOrganization, isStaff, isSuperadmin: isSA, isDemo, signOut, user } = useAuth();
+  const { isAdmin, isOrganization, isStaff, isMarketing, isSuperadmin: isSA, isDemo, signOut, user } = useAuth();
   const location = useLocation();
 
   const isSuperadmin = isSA || user?.email?.toLowerCase() === 'manassehudim@gmail.com';
-  const rawBaseNav = isAdmin ? adminNav : isOrganization ? orgNav : isStaff ? staffNav : studentNav;
+  const rawBaseNav = isAdmin ? adminNav : isMarketing ? marketingNav : isOrganization ? orgNav : isStaff ? staffNav : studentNav;
   const baseNav = isDemo ? rawBaseNav.filter(item => !DEMO_HIDDEN_ROUTES.has(item.to)) : rawBaseNav;
   const adminExtras = isAdmin
     ? [
@@ -194,7 +208,7 @@ export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps)
           <span className="text-sidebar-primary">Future</span>Labs
         </h1>
         <p className="text-xs text-sidebar-foreground/60 mt-1">
-          {isAdmin ? 'Admin Portal' : isOrganization ? 'Sponsor Portal' : isStaff ? 'Staff Portal' : 'Student Portal'}
+          {isAdmin ? 'Admin Portal' : isMarketing ? 'Marketing Portal' : isOrganization ? 'Sponsor Portal' : isStaff ? 'Staff Portal' : 'Student Portal'}
         </p>
       </div>
 

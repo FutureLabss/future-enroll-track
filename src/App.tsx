@@ -62,6 +62,11 @@ import StudentClassroomPage from "@/pages/student/StudentClassroomPage";
 import HubPortalPage from "@/pages/public/HubPortalPage";
 import SetPasswordPage from "@/pages/auth/SetPasswordPage";
 import NotFound from "./pages/NotFound";
+import CrmLeadsPage from "@/pages/admin/CrmLeadsPage";
+import CrmLeadDetailPage from "@/pages/admin/CrmLeadDetailPage";
+import CrmCampaignsPage from "@/pages/admin/CrmCampaignsPage";
+import CrmFollowUpsPage from "@/pages/admin/CrmFollowUpsPage";
+import CrmReportsPage from "@/pages/admin/CrmReportsPage";
 
 const queryClient = new QueryClient();
 
@@ -73,11 +78,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function RoleRedirect() {
-  const { isAdmin, isOrganization, isStaff, loading } = useAuth();
+  const { isAdmin, isOrganization, isStaff, isMarketing, loading } = useAuth();
   if (loading) return <div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
   if (isAdmin) return <Navigate to="/admin" replace />;
   if (isOrganization) return <Navigate to="/org" replace />;
   if (isStaff) return <Navigate to="/staff/classrooms" replace />;
+  if (isMarketing) return <Navigate to="/admin/crm/leads" replace />;
   return <Navigate to="/student" replace />;
 }
 
@@ -116,6 +122,11 @@ const App = () => (
               <Route path="/admin/invoices/:id/edit" element={<EditInvoicePage />} />
               <Route path="/admin/invoices/new" element={<CreateInvoicePage />} />
               <Route path="/admin/bulk-email" element={<BulkEmailPage />} />
+              <Route path="/admin/crm/leads" element={<CrmLeadsPage />} />
+              <Route path="/admin/crm/leads/:id" element={<CrmLeadDetailPage />} />
+              <Route path="/admin/crm/campaigns" element={<CrmCampaignsPage />} />
+              <Route path="/admin/crm/follow-ups" element={<CrmFollowUpsPage />} />
+              <Route path="/admin/crm/reports" element={<CrmReportsPage />} />
               <Route path="/admin/payments" element={<PaymentsPage />} />
               <Route path="/admin/pending-payments" element={<PendingPaymentsPage />} />
               <Route path="/admin/programs" element={<ProgramsPage />} />

@@ -28,6 +28,9 @@ import {
   BookOpen,
   ChevronsUpDown,
   Check,
+  Contact,
+  Megaphone,
+  CalendarClock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -57,6 +60,10 @@ const adminNav = [
   { to: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/admin/finance', icon: PieChart, label: 'Finance' },
   { to: '/admin/enrollments', icon: Users, label: 'Enrollments' },
+  { to: '/admin/crm/leads', icon: Contact, label: 'Leads' },
+  { to: '/admin/crm/campaigns', icon: Megaphone, label: 'Campaigns' },
+  { to: '/admin/crm/follow-ups', icon: CalendarClock, label: 'Follow-ups' },
+  { to: '/admin/crm/reports', icon: BarChart3, label: 'CRM Reports' },
   { to: '/admin/invoices', icon: FileText, label: 'Invoices' },
   { to: '/admin/payments', icon: CreditCard, label: 'Payments' },
   { to: '/admin/pending-payments', icon: Banknote, label: 'Pending Payments' },
@@ -93,6 +100,13 @@ const orgNav = [
   { to: '/org', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/org/enrollments', icon: Users, label: 'Sponsored Learners' },
   { to: '/org/reports', icon: BarChart3, label: 'Reports' },
+];
+
+const marketingNav = [
+  { to: '/admin/crm/leads', icon: Contact, label: 'Leads' },
+  { to: '/admin/crm/campaigns', icon: Megaphone, label: 'Campaigns' },
+  { to: '/admin/crm/follow-ups', icon: CalendarClock, label: 'Follow-ups' },
+  { to: '/admin/crm/reports', icon: BarChart3, label: 'CRM Reports' },
 ];
 
 interface AppSidebarProps {

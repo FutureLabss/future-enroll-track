@@ -36,3 +36,4 @@ dist-ssr
 e2e/.auth/
 coverage
 .stryker-tmp
+supabase/.temp/

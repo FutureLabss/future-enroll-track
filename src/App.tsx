@@ -41,6 +41,11 @@ const ClassroomDetailPage = lazy(() => import("@/pages/admin/ClassroomDetailPage
 const CohortsPage = lazy(() => import("@/pages/admin/CohortsPage"));
 const CohortDetailPage = lazy(() => import("@/pages/admin/CohortDetailPage"));
 const StaffInvitationsAdminPage = lazy(() => import("@/pages/admin/StaffInvitationsAdminPage"));
+const CrmLeadsPage = lazy(() => import("@/pages/admin/CrmLeadsPage"));
+const CrmLeadDetailPage = lazy(() => import("@/pages/admin/CrmLeadDetailPage"));
+const CrmCampaignsPage = lazy(() => import("@/pages/admin/CrmCampaignsPage"));
+const CrmFollowUpsPage = lazy(() => import("@/pages/admin/CrmFollowUpsPage"));
+const CrmReportsPage = lazy(() => import("@/pages/admin/CrmReportsPage"));
 
 const StaffInvoicesPage = lazy(() => import("@/pages/staff/StaffInvoicesPage"));
 const StaffClassroomsPage = lazy(() => import("@/pages/staff/StaffClassroomsPage"));
@@ -87,24 +92,25 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AdminGuard() {
-  const { isAdmin, isStaff, isHubManager, loading, rolesReady } = useAuth();
+  const { isAdmin, isStaff, isMarketing, isHubManager, loading, rolesReady } = useAuth();
   const location = useLocation();
   if (loading || !rolesReady) return <PageSpinner />;
   // Hub managers (CEO, training manager) can access classroom management only
   if (!isAdmin && isHubManager && location.pathname.startsWith('/admin/classrooms')) return <Outlet />;
+  if (!isAdmin && isMarketing && location.pathname.startsWith('/admin/crm')) return <Outlet />;
   if (!isAdmin) return <Navigate to={isStaff ? '/staff/classrooms' : '/student'} replace />;
   return <Outlet />;
 }
 
 function PrefetchChunks() {
-  const { isAdmin, isStaff, isOrganization, rolesReady } = useAuth();
+  const { isAdmin, isStaff, isOrganization, isMarketing, rolesReady } = useAuth();
   useEffect(() => {
     if (!rolesReady) return;
 
     // vite.config groups pages by section into shared chunks, so one import()
     // per section downloads the entire section — all routes become instant.
     const preload = () => {
-      if (isAdmin) {
+      if (isAdmin || isMarketing) {
         import("@/pages/admin/AdminDashboard");       // warms pages-admin (every admin page)
       } else if (isStaff) {
         import("@/pages/staff/StaffClassroomsPage");  // warms pages-staff
@@ -124,16 +130,17 @@ function PrefetchChunks() {
     }
     const id = setTimeout(preload, 200);
     return () => clearTimeout(id);
-  }, [rolesReady, isAdmin, isStaff, isOrganization]);
+  }, [rolesReady, isAdmin, isStaff, isOrganization, isMarketing]);
   return null;
 }
 
 function RoleRedirect() {
-  const { isAdmin, isOrganization, isStaff, loading, rolesReady } = useAuth();
+  const { isAdmin, isOrganization, isStaff, isMarketing, loading, rolesReady } = useAuth();
   if (loading || !rolesReady) return <PageSpinner />;
   if (isAdmin) return <Navigate to="/admin" replace />;
   if (isOrganization) return <Navigate to="/org" replace />;
   if (isStaff) return <Navigate to="/staff/classrooms" replace />;
+  if (isMarketing) return <Navigate to="/admin/crm/leads" replace />;
   return <Navigate to="/student" replace />;
 }
 
@@ -172,6 +179,11 @@ const App = () => (
                   <Route path="/admin/invoices/:id/edit" element={<EditInvoicePage />} />
                   <Route path="/admin/invoices/new" element={<CreateInvoicePage />} />
                   <Route path="/admin/bulk-email" element={<BulkEmailPage />} />
+                  <Route path="/admin/crm/leads" element={<CrmLeadsPage />} />
+                  <Route path="/admin/crm/leads/:id" element={<CrmLeadDetailPage />} />
+                  <Route path="/admin/crm/campaigns" element={<CrmCampaignsPage />} />
+                  <Route path="/admin/crm/follow-ups" element={<CrmFollowUpsPage />} />
+                  <Route path="/admin/crm/reports" element={<CrmReportsPage />} />
                   <Route path="/admin/payments" element={<PaymentsPage />} />
                   <Route path="/admin/pending-payments" element={<PendingPaymentsPage />} />
                   <Route path="/admin/programs" element={<ProgramsPage />} />

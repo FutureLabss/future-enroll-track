@@ -13,7 +13,7 @@ function logAuthEvent(action: 'user_login' | 'user_logout', userId: string, emai
   }).then(() => {});
 }
 
-type AppRole = 'admin' | 'student' | 'organization' | 'staff';
+type AppRole = 'admin' | 'student' | 'organization' | 'staff' | 'marketing';
 
 interface AuthContextType {
   user: User | null;
@@ -25,6 +25,7 @@ interface AuthContextType {
   isAdmin: boolean;
   isOrganization: boolean;
   isStaff: boolean;
+  isMarketing: boolean;
   isSuperadmin: boolean;
   isHubManager: boolean;
   isDemo: boolean;
@@ -147,6 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAdmin: roles.includes('admin') || isSuperadmin,
     isOrganization: roles.includes('organization'),
     isStaff: roles.includes('staff') && !roles.includes('admin') && !isSuperadmin,
+    isMarketing: roles.includes('marketing'),
     isSuperadmin,
     isHubManager,
     isDemo: !!demoExpiresAt && demoExpiresAt > new Date(),

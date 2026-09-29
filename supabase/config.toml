@@ -8,3 +8,18 @@ verify_jwt = false
 
 [functions.paystack-verify]
 verify_jwt = false
+
+[functions.capture-lead]
+verify_jwt = false
+
+[functions.process-marketing-campaigns]
+verify_jwt = false
+
+[functions.process-lead-follow-ups]
+verify_jwt = false
+
+[functions.unsubscribe-lead]
+verify_jwt = false
+
+[functions.resend-marketing-webhook]
+verify_jwt = false

@@ -9,6 +9,17 @@ import { toast } from 'sonner';
 import { CheckCircle, GraduationCap } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
+const V2_REQUIRED_PROFILE_FIELDS = [
+  'surname',
+  'first_name',
+  'date_of_birth',
+  'sex',
+  'pwd_status',
+  'state_of_residence',
+  'residential_address',
+  'highest_educational_qualification',
+];
+
 export default function EnrollCompletePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -49,6 +60,7 @@ export default function EnrollCompletePage() {
           .select('*')
           .eq('active', true)
           .eq('visible_to_student', true)
+          .eq('hub_id', enrollData.hub_id)
           .order('sort_order', { ascending: true });
 
         if (fieldsErr) throw fieldsErr;
@@ -84,10 +96,14 @@ export default function EnrollCompletePage() {
     e.preventDefault();
     if (!id) return;
 
-    // Validate required fields (skip conditional fields that aren't applicable)
+    // New enrollments use the expanded profile requirements; existing completed records are grandfathered.
+    const requiredKeys = new Set([
+      ...customFields.filter(field => field.required).map(field => field.key),
+      ...(enrollment.profile_requirements_version >= 2 ? V2_REQUIRED_PROFILE_FIELDS : []),
+    ]);
     for (const field of customFields) {
       if (field.key === 'current_academic_level' && formValues['highest_education'] !== 'SIWES/IT (Internship)') continue;
-      if (field.required && !formValues[field.key]) {
+      if (requiredKeys.has(field.key) && !formValues[field.key]?.trim()) {
         toast.error(`Please fill in the required field: ${field.label}`);
         return;
       }
@@ -255,7 +271,12 @@ export default function EnrollCompletePage() {
 
           {customFields.length > 0 ? (
             <CustomFieldsForm 
-              fields={customFields}
+              fields={customFields.map(field => ({
+                ...field,
+                required: field.required || (
+                  enrollment.profile_requirements_version >= 2 && V2_REQUIRED_PROFILE_FIELDS.includes(field.key)
+                ),
+              }))}
               values={formValues}
               onChange={handleFieldChange}
             />

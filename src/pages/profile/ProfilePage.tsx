@@ -142,8 +142,6 @@ export default function ProfilePage() {
     setSavingEnrollment(true);
     try {
       const enrollmentIds = enrollments.map(e => e.id);
-      await supabase.from('field_values').delete().in('enrollment_id', enrollmentIds);
-
       const fieldValues = enrollmentIds.flatMap(enrollmentId =>
         customFields
           .filter(field => customValues[field.key]?.trim())
@@ -155,7 +153,7 @@ export default function ProfilePage() {
       );
 
       if (fieldValues.length > 0) {
-        const { error } = await supabase.from('field_values').insert(fieldValues);
+        const { error } = await supabase.from('field_values').upsert(fieldValues, { onConflict: 'enrollment_id,field_id' });
         if (error) throw error;
       }
       toast.success('Enrollment information saved');

@@ -10,6 +10,11 @@ import { Progress } from '@/components/ui/progress';
 import { AlertTriangle, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 
+const V2_REQUIRED_PROFILE_FIELDS = [
+  'surname', 'first_name', 'date_of_birth', 'sex', 'pwd_status',
+  'state_of_residence', 'residential_address', 'highest_educational_qualification',
+];
+
 export function CompleteProfileBanner() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -32,17 +37,22 @@ export function CompleteProfileBanner() {
       // Get student's enrollments
       const { data: enrs } = await supabase
         .from('enrollments')
-        .select('id')
+        .select('id, profile_requirements_version, programs(hub_id)')
         .eq('user_id', user.id);
       setEnrollments(enrs || []);
 
-      // Get required custom fields
-      const { data: fields } = await supabase
+      const primaryEnrollment = enrs?.[0] as any;
+      const hubId = primaryEnrollment?.programs?.hub_id;
+
+      // Get required custom fields for this enrollment's training hub.
+      let fieldQuery = supabase
         .from('custom_fields')
         .select('*')
         .eq('active', true)
         .eq('visible_to_student', true)
         .order('sort_order');
+      if (hubId) fieldQuery = fieldQuery.eq('hub_id', hubId);
+      const { data: fields } = await fieldQuery;
       setCustomFields(fields || []);
 
       if (enrs?.length && fields?.length) {
@@ -73,7 +83,8 @@ export function CompleteProfileBanner() {
 
   if (loading || !enrollments.length || !customFields.length) return null;
 
-  const requiredFields = customFields.filter(f => f.required);
+  const usesV2Requirements = enrollments.some(e => e.profile_requirements_version >= 2);
+  const requiredFields = customFields.filter(f => f.required || (usesV2Requirements && V2_REQUIRED_PROFILE_FIELDS.includes(f.key)));
   const missingRequired = requiredFields.filter(f => !customValues[f.key]?.trim());
   const requiredComplete = missingRequired.length === 0;
   const completionPct = customFields.length ? Math.round((completedFieldCount / customFields.length) * 100) : 100;
@@ -100,14 +111,8 @@ export function CompleteProfileBanner() {
 
     setSaving(true);
     try {
-      // Save for all enrollments
+      // Upsert student-visible values without deleting staff-managed reporting fields.
       for (const enrollment of enrollments) {
-        // Delete existing values first
-        await supabase
-          .from('field_values')
-          .delete()
-          .eq('enrollment_id', enrollment.id);
-
         const fieldValues = customFields
           .filter(f => customValues[f.key])
           .map(f => ({
@@ -117,7 +122,7 @@ export function CompleteProfileBanner() {
           }));
 
         if (fieldValues.length > 0) {
-          const { error } = await supabase.from('field_values').insert(fieldValues);
+          const { error } = await supabase.from('field_values').upsert(fieldValues, { onConflict: 'enrollment_id,field_id' });
           if (error) throw error;
         }
       }
@@ -165,7 +170,10 @@ export function CompleteProfileBanner() {
 
           <div className="space-y-2">
             <CustomFieldsForm
-              fields={customFields}
+              fields={customFields.map(field => ({
+                ...field,
+                required: field.required || (usesV2Requirements && V2_REQUIRED_PROFILE_FIELDS.includes(field.key)),
+              }))}
               values={customValues}
               onChange={handleFieldChange}
             />

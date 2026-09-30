@@ -6,12 +6,13 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatusBadge } from '@/components/shared/StatusBadge';
+import { CustomFieldsForm } from '@/components/enrollment/CustomFieldsForm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { ArrowLeft, CheckCircle, XCircle, ExternalLink, Trash2, Pencil, ArrowLeftRight, Eye } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, ExternalLink, Trash2, Pencil, ArrowLeftRight, Eye, ClipboardList, LockKeyhole, Loader2, Save } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface FieldValue {
@@ -32,6 +33,9 @@ export default function EnrollmentDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState({ full_name: '', email: '', phone: '', address: '', guardian_name: '', guardian_phone: '' });
   const [saving, setSaving] = useState(false);
+  const [reportingOpen, setReportingOpen] = useState(false);
+  const [reportingValues, setReportingValues] = useState<Record<string, string>>({});
+  const [reportingSaving, setReportingSaving] = useState(false);
 
   const openEdit = () => {
     setEditForm({ full_name: enrollment.full_name || '', email: enrollment.email || '', phone: enrollment.phone || '', address: (enrollment as any).address || '', guardian_name: (enrollment as any).guardian_name || '', guardian_phone: (enrollment as any).guardian_phone || '' });
@@ -105,14 +109,20 @@ export default function EnrollmentDetailPage() {
   const { data: pageData, isLoading: loading } = useQuery({
     queryKey: ['enrollment-detail', id],
     queryFn: async () => {
-      const [eRes, fRes] = await Promise.all([
+      const [eRes, fRes, rRes] = await Promise.all([
         supabase.from('enrollments')
-          .select('*, programs(program_name), cohorts(cohort_label), organizations(organization_name)')
+          .select('*, programs(program_name, hub_id, hubs(name)), cohorts(cohort_label), organizations(organization_name)')
           .eq('id', id!).single(),
         supabase.from('field_values')
           .select('id, value, custom_fields(label, key, sort_order, field_type)')
           .eq('enrollment_id', id!)
           .order('field_id'),
+        supabase.from('custom_fields')
+          .select('*')
+          .eq('active', true)
+          .eq('visible_to_student', false)
+          .gte('sort_order', 100)
+          .order('sort_order'),
       ]);
       if (eRes.error) throw eRes.error;
       let switchHistory: any[] = [];
@@ -130,14 +140,47 @@ export default function EnrollmentDetailPage() {
           switchHistory = history.map((h: any) => ({ ...h, admin: adminMap.get(h.user_id) }));
         }
       }
-      return { enrollment: eRes.data, fieldValues: (fRes.data as FieldValue[]) || [], switchHistory };
+      const reportingFields = (rRes.data || []).filter((field: any) => !field.hub_id || field.hub_id === eRes.data.programs?.hub_id);
+      return { enrollment: eRes.data, fieldValues: (fRes.data as FieldValue[]) || [], reportingFields, switchHistory };
     },
     enabled: !!id,
     staleTime: 30_000,
   });
   const enrollment = pageData?.enrollment ?? null;
   const fieldValues = pageData?.fieldValues ?? [];
+  const reportingFields = pageData?.reportingFields ?? [];
   const switchHistory = pageData?.switchHistory ?? [];
+
+  const openReporting = () => {
+    const values: Record<string, string> = {};
+    fieldValues.forEach(fieldValue => {
+      if (fieldValue.custom_fields?.sort_order >= 100) values[fieldValue.custom_fields.key] = fieldValue.value || '';
+    });
+    setReportingValues(values);
+    setReportingOpen(true);
+  };
+
+  const saveReporting = async () => {
+    setReportingSaving(true);
+    try {
+      const rows = reportingFields.map((field: any) => ({
+        enrollment_id: id!,
+        field_id: field.id,
+        value: reportingValues[field.key]?.trim() || null,
+      }));
+      if (rows.length) {
+        const { error } = await supabase.from('field_values').upsert(rows, { onConflict: 'enrollment_id,field_id' });
+        if (error) throw error;
+      }
+      await queryClient.invalidateQueries({ queryKey: ['enrollment-detail', id] });
+      setReportingOpen(false);
+      toast.success('Program reporting details saved');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to save reporting details');
+    } finally {
+      setReportingSaving(false);
+    }
+  };
 
   const getEnrollmentDate = async () => {
     const { data: invoice } = await supabase
@@ -249,6 +292,11 @@ export default function EnrollmentDetailPage() {
             <Button variant="ghost" onClick={() => navigate('/admin/enrollments')}>
               <ArrowLeft className="h-4 w-4 mr-2" /> Back
             </Button>
+            {reportingFields.length > 0 && (
+              <Button variant="outline" onClick={openReporting}>
+                <Pencil className="h-4 w-4 mr-2" /> Program Reporting
+              </Button>
+            )}
             {isSuperadmin && (
               <Button variant="outline" onClick={openEdit}>
                 <Pencil className="h-4 w-4 mr-2" /> Edit Student
@@ -336,6 +384,7 @@ export default function EnrollmentDetailPage() {
             ['Full Name', enrollment.full_name],
             ['Email', enrollment.email],
             ['Phone', enrollment.phone || '—'],
+            ['Training Partner', enrollment.programs?.hubs?.name || '—'],
             ['Address', (enrollment as any).address || '—'],
             ['Guardian Name', (enrollment as any).guardian_name || '—'],
             ['Guardian Phone', (enrollment as any).guardian_phone || '—'],
@@ -427,6 +476,55 @@ export default function EnrollmentDetailPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Program reporting is staff-managed and intentionally separate from student profile completion. */}
+      <Dialog open={reportingOpen} onOpenChange={setReportingOpen}>
+        <DialogContent className="flex max-h-[90vh] max-w-4xl flex-col gap-0 overflow-hidden border-0 p-0 shadow-2xl [&>button]:z-20 [&>button]:text-white [&>button:hover]:bg-white/15">
+          <div className="relative overflow-hidden bg-gradient-to-br from-primary via-primary to-primary/80 px-6 py-6 text-primary-foreground sm:px-8">
+            <div className="absolute -right-10 -top-12 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
+            <div className="absolute -bottom-16 left-1/3 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
+            <DialogHeader className="relative space-y-3 text-left">
+              <div className="flex items-start gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/20 bg-white/15 shadow-inner">
+                  <ClipboardList className="h-6 w-6" />
+                </div>
+                <div className="min-w-0">
+                  <DialogTitle className="text-2xl font-heading text-white">Program Reporting</DialogTitle>
+                  <DialogDescription className="mt-1 max-w-2xl text-sm text-white/75">
+                    Capture this learner's intake, completion, and employment outcomes for programme monitoring.
+                  </DialogDescription>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 pl-0 sm:pl-16">
+                <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-medium text-white/90">{enrollment.full_name}</span>
+                <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-medium text-white/90">{enrollment.programs?.program_name || 'Programme not assigned'}</span>
+              </div>
+            </DialogHeader>
+          </div>
+
+          <div className="flex-1 overflow-y-auto bg-muted/20 px-6 py-6 sm:px-8">
+            <div className="mb-5 flex items-start gap-3 rounded-xl border border-border/70 bg-background p-4 shadow-sm">
+              <div className="mt-0.5 rounded-lg bg-primary/10 p-2 text-primary"><LockKeyhole className="h-4 w-4" /></div>
+              <div>
+                <p className="text-sm font-medium text-foreground">Internal reporting record</p>
+                <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">These details are visible to authorised staff only and are not shown on the student's dashboard.</p>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-card px-5 pb-6 shadow-sm sm:px-6">
+              <CustomFieldsForm fields={reportingFields} values={reportingValues} onChange={(key, value) => setReportingValues(current => ({ ...current, [key]: value }))} />
+            </div>
+          </div>
+
+          <div className="flex flex-col-reverse gap-3 border-t border-border bg-background px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8">
+            <p className="text-xs text-muted-foreground">You can return and update these outcomes at any time.</p>
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setReportingOpen(false)} disabled={reportingSaving}>Cancel</Button>
+              <Button onClick={saveReporting} disabled={reportingSaving} className="min-w-44 shadow-sm">
+                {reportingSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : <><Save className="mr-2 h-4 w-4" />Save Reporting Details</>}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
       {/* Edit Student Dialog (superadmin only) */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-md">

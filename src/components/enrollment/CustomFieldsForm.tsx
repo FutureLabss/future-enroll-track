@@ -51,22 +51,46 @@ function groupFields(fields: CustomField[]) {
     { title: 'Employment Status', fields: [] },
     { title: 'Training Program Information', fields: [] },
     { title: 'Demographic Information', fields: [] },
+    { title: 'Enrollment & Selection', fields: [] },
+    { title: 'Training Outcome', fields: [] },
+    { title: 'Employment Outcome', fields: [] },
   ];
 
   for (const f of fields) {
-    if (f.key === 'profile_photo' || f.sort_order <= 6) groups[0].fields.push(f);
+    if (f.sort_order >= 110) groups[7].fields.push(f);
+    else if (f.sort_order >= 107) groups[6].fields.push(f);
+    else if (f.sort_order >= 100) groups[5].fields.push(f);
+    else if (f.key === 'profile_photo' || f.sort_order <= 6) groups[0].fields.push(f);
     else if (f.sort_order <= 10) groups[1].fields.push(f);
     else if (f.sort_order <= 13) groups[2].fields.push(f);
     else if (f.sort_order <= 16) groups[3].fields.push(f);
     else groups[4].fields.push(f);
   }
 
-  // Ensure profile_photo is the first field in basic info
-  groups[0].fields.sort((a, b) => {
+  // Keep related reporting controls together in the two-column layout.
+  const reportingOrder: Record<string, number> = {
+    intake_status: 1,
+    enrolment_category: 2,
+    reporting_quarter: 3,
+    reporting_year: 4,
+    selection_period: 5,
+    scholarship_reason: 6,
+    training_outcome: 1,
+    completion_period: 2,
+    dropoff_remarks: 3,
+    employment_pathway: 1,
+    employment_monthly_income: 2,
+    employment_role: 3,
+    employment_organization: 4,
+    employment_address: 5,
+    success_story: 6,
+  };
+
+  groups.forEach(group => group.fields.sort((a, b) => {
     if (a.key === 'profile_photo') return -1;
     if (b.key === 'profile_photo') return 1;
-    return a.sort_order - b.sort_order;
-  });
+    return (reportingOrder[a.key] ?? a.sort_order) - (reportingOrder[b.key] ?? b.sort_order);
+  }));
 
   return groups.filter(g => g.fields.length > 0);
 }

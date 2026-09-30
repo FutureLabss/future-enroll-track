@@ -10,7 +10,7 @@ export function useCrmLeads() {
   return { data, loading, error, refetch };
 }
 
-export async function createLead(input: { full_name: string; email?: string; phone?: string; source?: string; marketing_consent?: boolean }) {
-  return (supabase.rpc as any)('upsert_crm_lead', { p_full_name: input.full_name, p_email: input.email || null, p_phone: input.phone || null, p_source_slug: input.source || 'manual', p_marketing_consent: !!input.marketing_consent, p_metadata: {} });
+export async function createLead(input: { full_name: string; email?: string; phone?: string; source?: string; marketing_consent?: boolean; qualification?: 'cold' | 'warm' | 'hot' | 'automatic' }) {
+  return (supabase.rpc as any)('upsert_crm_lead', { p_full_name: input.full_name, p_email: input.email || null, p_phone: input.phone || null, p_source_slug: input.source || 'manual', p_marketing_consent: !!input.marketing_consent, p_metadata: {}, p_qualification: input.qualification && input.qualification !== 'automatic' ? input.qualification : null });
 }
 export async function seedCrmDefaults() { return (supabase.rpc as any)('seed_crm_defaults'); }

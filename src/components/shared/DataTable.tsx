@@ -15,6 +15,8 @@ interface Column<T> {
   key: string;
   header: string;
   render?: (item: T) => React.ReactNode;
+  exportValue?: (item: T) => unknown;
+  exportable?: boolean;
   searchable?: boolean;
 }
 
@@ -56,7 +58,7 @@ function DataTableInner<T extends Record<string, any>>(
     const q = search.toLowerCase();
     return data.filter(item =>
       columns.some(col => {
-        const val = item[col.key];
+        const val = col.exportValue ? col.exportValue(item) : item[col.key];
         return val && String(val).toLowerCase().includes(q);
       })
     );
@@ -66,10 +68,11 @@ function DataTableInner<T extends Record<string, any>>(
   const paged = filtered.slice(page * pageSize, (page + 1) * pageSize);
 
   const handleExportCSV = () => {
-    const headers = columns.map(c => c.header);
+    const exportColumns = columns.filter(col => col.exportable !== false);
+    const headers = exportColumns.map(c => c.header);
     const rows = filtered.map(item =>
-      columns.map(col => {
-        const val = item[col.key];
+      exportColumns.map(col => {
+        const val = col.exportValue ? col.exportValue(item) : item[col.key];
         return `"${String(val ?? '').replace(/"/g, '""')}"`;
       })
     );

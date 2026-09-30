@@ -30,7 +30,10 @@ Deno.serve(async (req) => {
     try {
       const { data: owner } = lead.owner_id ? await db.from("profiles").select("full_name").eq("user_id", lead.owner_id).maybeSingle() : { data: null };
       const unsubscribe = `${Deno.env.get("SUPABASE_URL")}/functions/v1/unsubscribe-lead?token=${await unsubscribeToken(reservation.data.id)}`;
-      const response = await fetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: `Bearer ${Deno.env.get("RESEND_API_KEY")}`, "Content-Type": "application/json" }, body: JSON.stringify({ from: Deno.env.get("MARKETING_FROM") || "FutureLabs <notifications@futurelabs.ng>", to: [lead.email], subject: personalize(step.marketing_email_templates.subject, lead, enrollment.hubs, owner), html: `${personalize(step.marketing_email_templates.html_body, lead, enrollment.hubs, owner)}<p style="font-size:12px;color:#64748b"><a href="${unsubscribe}">Unsubscribe</a></p>` }) });
+      const renderedSubject = personalize(step.marketing_email_templates.subject, lead, enrollment.hubs, owner);
+      const renderedHtml = `${personalize(step.marketing_email_templates.html_body, lead, enrollment.hubs, owner)}<p style="font-size:12px;color:#64748b"><a href="${unsubscribe}">Unsubscribe</a></p>`;
+      await db.from("marketing_email_deliveries").update({ recipient_email: lead.email, rendered_subject: renderedSubject, rendered_html: renderedHtml }).eq("id", reservation.data.id);
+      const response = await fetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: `Bearer ${Deno.env.get("RESEND_API_KEY")}`, "Content-Type": "application/json" }, body: JSON.stringify({ from: Deno.env.get("MARKETING_FROM") || "FutureLabs <notifications@futurelabs.ng>", to: [lead.email], subject: renderedSubject, html: renderedHtml }) });
       if (!response.ok) throw new Error(await response.text());
       const provider = await response.json();
       await db.from("marketing_email_deliveries").update({ status: "sent", sent_at: new Date().toISOString(), provider_message_id: provider.id }).eq("id", reservation.data.id);

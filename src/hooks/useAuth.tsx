@@ -51,22 +51,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const currentUserRef = useRef<{ id: string; email?: string } | null>(null);
 
   const fetchRoles = async (userId: string) => {
-    try {
-      const [rolesRes, saRes, memberRes] = await Promise.all([
-        supabase.from('user_roles').select('role').eq('user_id', userId),
-        supabase.from('superadmins').select('user_id').eq('user_id', userId).maybeSingle(),
-        supabase.from('hub_members').select('hub_id, hub_role, demo_expires_at').eq('user_id', userId).maybeSingle(),
-      ]);
-      if (!rolesRes.error && rolesRes.data) {
-        setRoles(rolesRes.data.map(r => r.role as AppRole));
-      }
-      setIsSuperadmin(!!saRes.data);
-      setIsHubManager(memberRes.data?.hub_role === 'manager');
-      setHubId(memberRes.data?.hub_id ?? null);
-      const exp = memberRes.data?.demo_expires_at;
-      setDemoExpiresAt(exp ? new Date(exp) : null);
-    } catch (_e) {
-    }
+    const [rolesRes, saRes, memberRes] = await Promise.all([
+      supabase.from('user_roles').select('role').eq('user_id', userId),
+      supabase.from('superadmins').select('user_id').eq('user_id', userId).maybeSingle(),
+      supabase.from('hub_members').select('hub_id, hub_role, demo_expires_at').eq('user_id', userId).maybeSingle(),
+    ]);
+
+    const error = rolesRes.error ?? saRes.error ?? memberRes.error;
+    if (error) throw error;
+
+    setRoles((rolesRes.data ?? []).map(r => r.role as AppRole));
+    setIsSuperadmin(!!saRes.data);
+    setIsHubManager(memberRes.data?.hub_role === 'manager');
+    setHubId(memberRes.data?.hub_id ?? null);
+    const exp = memberRes.data?.demo_expires_at;
+    setDemoExpiresAt(exp ? new Date(exp) : null);
   };
 
   useEffect(() => {
@@ -119,8 +118,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error as Error | null };
+    setRolesReady(false);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (error || !data.user) {
+      setRolesReady(true);
+      return { error: error as Error | null };
+    }
+
+    try {
+      setSession(data.session);
+      setUser(data.user);
+      currentUserRef.current = { id: data.user.id, email: data.user.email };
+      await fetchRoles(data.user.id);
+      setRolesReady(true);
+      return { error: null };
+    } catch (roleError) {
+      setRolesReady(true);
+      return {
+        error: roleError instanceof Error
+          ? roleError
+          : new Error('Unable to load account permissions'),
+      };
+    }
   };
 
   const signUp = async (email: string, password: string, fullName: string) => {

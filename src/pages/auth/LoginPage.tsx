@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -15,10 +15,37 @@ export default function LoginPage() {
   const [isForgot, setIsForgot] = useState(false);
   const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signIn, signUp } = useAuth();
+  const {
+    user,
+    rolesReady,
+    isAdmin,
+    isOrganization,
+    isStaff,
+    isMarketing,
+    signIn,
+    signUp,
+  } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const nextPath = searchParams.get('next') || '/';
+  const nextPath = searchParams.get('next');
+
+  useEffect(() => {
+    if (!user || !rolesReady) return;
+
+    if (nextPath) {
+      navigate(nextPath, { replace: true });
+    } else if (isAdmin) {
+      navigate('/admin', { replace: true });
+    } else if (isOrganization) {
+      navigate('/org', { replace: true });
+    } else if (isStaff) {
+      navigate('/staff/classrooms', { replace: true });
+    } else if (isMarketing) {
+      navigate('/admin/crm/leads', { replace: true });
+    } else {
+      navigate('/student', { replace: true });
+    }
+  }, [user, rolesReady, isAdmin, isOrganization, isStaff, isMarketing, nextPath, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,7 +65,6 @@ export default function LoginPage() {
       } else {
         const { error } = await signIn(email, password);
         if (error) throw error;
-        navigate(nextPath);
       }
     } catch (err: any) {
       toast.error(err.message);

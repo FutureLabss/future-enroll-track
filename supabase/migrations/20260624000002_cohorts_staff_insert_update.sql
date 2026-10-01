@@ -11,7 +11,9 @@ CREATE POLICY "Staff with can_edit_cohorts can insert cohorts"
       JOIN classrooms cl ON cl.id = cs.classroom_id
       JOIN classroom_permissions cp ON cp.classroom_staff_id = cs.id
       WHERE cs.user_id = auth.uid()
+        AND cs.status = 'active'
         AND cp.can_edit_cohorts = true
+        AND cs.classroom_id = cohorts.classroom_id
         AND cohorts.hub_id = cl.hub_id
     )
   );
@@ -25,7 +27,9 @@ CREATE POLICY "Staff with can_edit_cohorts can update cohorts"
       JOIN classrooms cl ON cl.id = cs.classroom_id
       JOIN classroom_permissions cp ON cp.classroom_staff_id = cs.id
       WHERE cs.user_id = auth.uid()
+        AND cs.status = 'active'
         AND cp.can_edit_cohorts = true
+        AND cs.classroom_id = cohorts.classroom_id
         AND cohorts.hub_id = cl.hub_id
     )
   )
@@ -36,7 +40,9 @@ CREATE POLICY "Staff with can_edit_cohorts can update cohorts"
       JOIN classrooms cl ON cl.id = cs.classroom_id
       JOIN classroom_permissions cp ON cp.classroom_staff_id = cs.id
       WHERE cs.user_id = auth.uid()
+        AND cs.status = 'active'
         AND cp.can_edit_cohorts = true
+        AND cs.classroom_id = cohorts.classroom_id
         AND cohorts.hub_id = cl.hub_id
     )
   );

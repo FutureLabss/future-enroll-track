@@ -12,6 +12,9 @@ FROM public.programs p
 WHERE p.id = c.program_id
   AND c.hub_id IS NULL;
 
+ALTER TABLE public.cohorts
+  ALTER COLUMN hub_id SET NOT NULL;
+
 -- Wire up the same auto-fill trigger used on every other top-level table
 DROP TRIGGER IF EXISTS trg_cohorts_set_hub_id ON public.cohorts;
 CREATE TRIGGER trg_cohorts_set_hub_id

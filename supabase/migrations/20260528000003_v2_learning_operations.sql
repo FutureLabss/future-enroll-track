@@ -39,10 +39,9 @@ AS $$
       OR EXISTS (
         SELECT 1
         FROM public.classroom_staff cs
-        JOIN public.staff s ON s.id = cs.staff_id
         WHERE cs.classroom_id = p_classroom_id
           AND cs.status = 'active'
-          AND (cs.user_id = auth.uid() OR s.user_id = auth.uid())
+          AND cs.user_id = auth.uid()
       )
       OR EXISTS (
         SELECT 1

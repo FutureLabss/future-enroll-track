@@ -120,15 +120,13 @@ CREATE POLICY "Staff manage curricula in their classroom"
   USING (
     EXISTS (
       SELECT 1 FROM public.classroom_staff cs
-      JOIN public.staff s ON s.id = cs.staff_id
-      WHERE cs.classroom_id = curricula.classroom_id AND s.user_id = auth.uid()
+      WHERE cs.classroom_id = curricula.classroom_id AND cs.user_id = auth.uid() AND cs.status = 'active'
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM public.classroom_staff cs
-      JOIN public.staff s ON s.id = cs.staff_id
-      WHERE cs.classroom_id = curricula.classroom_id AND s.user_id = auth.uid()
+      WHERE cs.classroom_id = curricula.classroom_id AND cs.user_id = auth.uid() AND cs.status = 'active'
     )
   );
 
@@ -174,16 +172,14 @@ CREATE POLICY "Staff manage tracks in their classroom"
     EXISTS (
       SELECT 1 FROM public.curricula cu
       JOIN public.classroom_staff cs ON cs.classroom_id = cu.classroom_id
-      JOIN public.staff s ON s.id = cs.staff_id
-      WHERE cu.id = tracks.curriculum_id AND s.user_id = auth.uid()
+      WHERE cu.id = tracks.curriculum_id AND cs.user_id = auth.uid() AND cs.status = 'active'
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM public.curricula cu
       JOIN public.classroom_staff cs ON cs.classroom_id = cu.classroom_id
-      JOIN public.staff s ON s.id = cs.staff_id
-      WHERE cu.id = tracks.curriculum_id AND s.user_id = auth.uid()
+      WHERE cu.id = tracks.curriculum_id AND cs.user_id = auth.uid() AND cs.status = 'active'
     )
   );
 
@@ -233,8 +229,7 @@ CREATE POLICY "Staff manage modules in their classroom"
       SELECT 1 FROM public.tracks t
       JOIN public.curricula cu ON cu.id = t.curriculum_id
       JOIN public.classroom_staff cs ON cs.classroom_id = cu.classroom_id
-      JOIN public.staff s ON s.id = cs.staff_id
-      WHERE t.id = modules.track_id AND s.user_id = auth.uid()
+      WHERE t.id = modules.track_id AND cs.user_id = auth.uid() AND cs.status = 'active'
     )
   )
   WITH CHECK (
@@ -242,8 +237,7 @@ CREATE POLICY "Staff manage modules in their classroom"
       SELECT 1 FROM public.tracks t
       JOIN public.curricula cu ON cu.id = t.curriculum_id
       JOIN public.classroom_staff cs ON cs.classroom_id = cu.classroom_id
-      JOIN public.staff s ON s.id = cs.staff_id
-      WHERE t.id = modules.track_id AND s.user_id = auth.uid()
+      WHERE t.id = modules.track_id AND cs.user_id = auth.uid() AND cs.status = 'active'
     )
   );
 
@@ -297,8 +291,7 @@ CREATE POLICY "Staff manage units in their classroom"
       JOIN public.tracks t ON t.id = m.track_id
       JOIN public.curricula cu ON cu.id = t.curriculum_id
       JOIN public.classroom_staff cs ON cs.classroom_id = cu.classroom_id
-      JOIN public.staff s ON s.id = cs.staff_id
-      WHERE m.id = units.module_id AND s.user_id = auth.uid()
+      WHERE m.id = units.module_id AND cs.user_id = auth.uid() AND cs.status = 'active'
     )
   )
   WITH CHECK (
@@ -307,8 +300,7 @@ CREATE POLICY "Staff manage units in their classroom"
       JOIN public.tracks t ON t.id = m.track_id
       JOIN public.curricula cu ON cu.id = t.curriculum_id
       JOIN public.classroom_staff cs ON cs.classroom_id = cu.classroom_id
-      JOIN public.staff s ON s.id = cs.staff_id
-      WHERE m.id = units.module_id AND s.user_id = auth.uid()
+      WHERE m.id = units.module_id AND cs.user_id = auth.uid() AND cs.status = 'active'
     )
   );
 
@@ -366,8 +358,7 @@ CREATE POLICY "Staff manage lessons in their classroom"
       JOIN public.tracks t ON t.id = m.track_id
       JOIN public.curricula cu ON cu.id = t.curriculum_id
       JOIN public.classroom_staff cs ON cs.classroom_id = cu.classroom_id
-      JOIN public.staff s ON s.id = cs.staff_id
-      WHERE u.id = lessons.unit_id AND s.user_id = auth.uid()
+      WHERE u.id = lessons.unit_id AND cs.user_id = auth.uid() AND cs.status = 'active'
     )
   )
   WITH CHECK (
@@ -377,8 +368,7 @@ CREATE POLICY "Staff manage lessons in their classroom"
       JOIN public.tracks t ON t.id = m.track_id
       JOIN public.curricula cu ON cu.id = t.curriculum_id
       JOIN public.classroom_staff cs ON cs.classroom_id = cu.classroom_id
-      JOIN public.staff s ON s.id = cs.staff_id
-      WHERE u.id = lessons.unit_id AND s.user_id = auth.uid()
+      WHERE u.id = lessons.unit_id AND cs.user_id = auth.uid() AND cs.status = 'active'
     )
   );
 
@@ -425,15 +415,13 @@ CREATE POLICY "Staff manage schedules in their classroom"
   USING (
     EXISTS (
       SELECT 1 FROM public.classroom_staff cs
-      JOIN public.staff s ON s.id = cs.staff_id
-      WHERE cs.classroom_id = schedules.classroom_id AND s.user_id = auth.uid()
+      WHERE cs.classroom_id = schedules.classroom_id AND cs.user_id = auth.uid() AND cs.status = 'active'
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM public.classroom_staff cs
-      JOIN public.staff s ON s.id = cs.staff_id
-      WHERE cs.classroom_id = schedules.classroom_id AND s.user_id = auth.uid()
+      WHERE cs.classroom_id = schedules.classroom_id AND cs.user_id = auth.uid() AND cs.status = 'active'
     )
   );
 

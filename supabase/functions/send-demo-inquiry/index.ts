@@ -1,3 +1,5 @@
+import { getSiteConfig } from "../_shared/site-config.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -15,6 +17,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
+    const site = getSiteConfig();
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY")!;
     const payload: Payload = await req.json();
     const { name, email, organization, size, message } = payload;
@@ -27,13 +30,13 @@ Deno.serve(async (req) => {
   <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:16px;padding:40px;box-shadow:0 1px 3px rgba(0,0,0,.08)">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:24px">
       <div style="width:36px;height:36px;background:#7c3aed;border-radius:8px;display:flex;align-items:center;justify-content:center">
-        <span style="color:#fff;font-weight:700;font-size:16px">F</span>
+        <span style="color:#fff;font-weight:700;font-size:16px">C</span>
       </div>
-      <span style="font-size:18px;font-weight:700"><span style="color:#7c3aed">Future</span>Labs LMS</span>
+      <span style="font-size:18px;font-weight:700">${site.productName}</span>
     </div>
 
     <h2 style="margin:0 0 6px;font-size:20px;font-weight:700">New Demo Inquiry 🎉</h2>
-    <p style="margin:0 0 28px;color:#6b7280;font-size:14px">Someone is interested in getting started with FutureLabs LMS.</p>
+    <p style="margin:0 0 28px;color:#6b7280;font-size:14px">Someone is interested in getting started with ${site.productName}.</p>
 
     <table style="width:100%;border-collapse:collapse">
       <tr>
@@ -76,8 +79,8 @@ Deno.serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "FutureLabs LMS <no-reply@futurelabs.ng>",
-        to: ["manny@futurelabs.com.ng"],
+        from: site.emailFrom,
+        to: site.adminNotifyEmails,
         reply_to: email,
         subject: `Demo inquiry from ${name}${organization ? ` — ${organization}` : ''}`,
         html,

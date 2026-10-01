@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getSiteConfig } from "../_shared/site-config.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,7 +15,8 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY")!;
-    const FRONTEND_URL = Deno.env.get("FRONTEND_URL") || "https://admin.futurelabs.ng";
+    const site = getSiteConfig();
+    const FRONTEND_URL = site.frontendUrl;
 
     const { email } = await req.json();
     if (!email || !email.includes("@")) {
@@ -82,9 +84,9 @@ Deno.serve(async (req) => {
         <path d="M22 10v6M2 10l10-5 10 5-10 5-10-5z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     </div>
-    <h1 style="font-size:24px;font-weight:700;color:#09090b;margin:0 0 8px">Your FutureLabs demo is ready</h1>
+    <h1 style="font-size:24px;font-weight:700;color:#09090b;margin:0 0 8px">Your ${site.productName} demo is ready</h1>
     <p style="color:#71717a;font-size:15px;line-height:1.6;margin:0 0 28px">
-      You requested a live demo of <strong style="color:#09090b">FutureLabs LMS</strong>.
+      You requested a live demo of <strong style="color:#09090b">${site.productName}</strong>.
       Click the button below to log in as an admin and explore the full platform —
       programs, cohorts, curriculum, finance, enrollment, and more.
     </p>
@@ -109,7 +111,7 @@ Deno.serve(async (req) => {
     </div>
     <p style="margin-top:28px;font-size:12px;color:#a1a1aa;line-height:1.6">
       If you didn't request a demo, you can safely ignore this email.<br>
-      Questions? Reply here or reach us at <a href="mailto:manny@futurelabs.com.ng" style="color:#7c3aed">manny@futurelabs.com.ng</a>
+      Questions? Reply here or reach us at <a href="mailto:${site.supportEmail}" style="color:#2563eb">${site.supportEmail}</a>
     </p>
   </div>
 </body>
@@ -122,9 +124,9 @@ Deno.serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "FutureLabs <no-reply@futurelabs.ng>",
+        from: site.emailFrom,
         to: [normalizedEmail],
-        subject: "Your FutureLabs demo is ready — 1-hour admin access",
+        subject: `Your ${site.productName} demo is ready — 1-hour admin access`,
         html,
       }),
     });

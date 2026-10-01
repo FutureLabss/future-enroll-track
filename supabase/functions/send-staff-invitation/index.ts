@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getSiteConfig } from "../_shared/site-config.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -22,7 +23,8 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const FRONTEND_URL = Deno.env.get("FRONTEND_URL") || "https://admin.futurelabs.ng";
+    const site = getSiteConfig();
+    const FRONTEND_URL = site.frontendUrl;
 
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: auth } },
@@ -142,7 +144,7 @@ Deno.serve(async (req) => {
             </a>
             <p style="font-size:13px;color:#64748b;margin-top:24px;word-break:break-all;">${existingUserRedirectTo}</p>
             <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;"/>
-            <p style="font-size:12px;color:#94a3b8;margin:0;">FutureLabs · This link expires in 7 days.</p>
+            <p style="font-size:12px;color:#94a3b8;margin:0;">${site.productName} · This link expires in 7 days.</p>
           </div></body></html>`;
       } else {
         subject = "You've been added as staff — access your account";
@@ -158,7 +160,7 @@ Deno.serve(async (req) => {
             </a>
             <p style="font-size:13px;color:#64748b;margin-top:24px;word-break:break-all;">${existingUserRedirectTo}</p>
             <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;"/>
-            <p style="font-size:12px;color:#94a3b8;margin:0;">FutureLabs · If you were not expecting this email, you can ignore it.</p>
+            <p style="font-size:12px;color:#94a3b8;margin:0;">${site.productName} · If you were not expecting this email, you can ignore it.</p>
           </div></body></html>`;
       }
 
@@ -169,7 +171,7 @@ Deno.serve(async (req) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: "FutureLabs <no-reply@futurelabs.ng>",
+          from: site.emailFrom,
           to: [email],
           subject,
           html,

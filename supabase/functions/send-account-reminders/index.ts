@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getSiteConfig } from "../_shared/site-config.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -6,12 +7,13 @@ const corsHeaders = {
 };
 
 async function sendEmail(to: string, subject: string, html: string) {
+  const site = getSiteConfig();
   const key = Deno.env.get("RESEND_API_KEY");
   if (!key) throw new Error("RESEND_API_KEY not configured");
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: "FutureLabs <notifications@futurelabs.ng>", to: [to], subject, html }),
+    body: JSON.stringify({ from: site.emailFrom, to: [to], subject, html }),
   });
   if (!res.ok) throw new Error(`Resend [${res.status}]: ${await res.text()}`);
 }
@@ -22,7 +24,7 @@ function signupEmail(name: string, signupUrl: string) {
     <h1 style="font-size:20px;margin:0 0 16px;color:#1e1b4b;">Complete Your Account Setup</h1>
     <p style="font-size:15px;line-height:1.6;margin-bottom:16px;">Hi ${name || "there"},</p>
     <p style="font-size:15px;line-height:1.6;margin-bottom:24px;">
-      You're enrolled at FutureLabs but haven't created your student account yet.
+      You're enrolled at Coriftech but haven't created your student account yet.
       Click the button below to set up your login and access your classroom.
     </p>
     <a href="${signupUrl}" style="display:inline-block;background:#4f46e5;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:600;font-size:15px;">
@@ -30,7 +32,7 @@ function signupEmail(name: string, signupUrl: string) {
     </a>
     <p style="font-size:13px;color:#64748b;margin-top:24px;word-break:break-all;">${signupUrl}</p>
     <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;"/>
-    <p style="font-size:12px;color:#94a3b8;margin:0;">FutureLabs · If you've already signed up, you can ignore this email.</p>
+    <p style="font-size:12px;color:#94a3b8;margin:0;">Coriftech LMS · If you've already signed up, you can ignore this email.</p>
   </div></body></html>`;
 }
 
@@ -40,7 +42,7 @@ function profileEmail(name: string, loginUrl: string) {
     <h1 style="font-size:20px;margin:0 0 16px;color:#1e1b4b;">Complete Your Profile</h1>
     <p style="font-size:15px;line-height:1.6;margin-bottom:16px;">Hi ${name || "there"},</p>
     <p style="font-size:15px;line-height:1.6;margin-bottom:24px;">
-      Your FutureLabs account is active but your profile is incomplete. Please log in and
+      Your Coriftech account is active but your profile is incomplete. Please log in and
       update your name so your tutors and classmates can identify you.
     </p>
     <a href="${loginUrl}" style="display:inline-block;background:#4f46e5;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:600;font-size:15px;">
@@ -48,7 +50,7 @@ function profileEmail(name: string, loginUrl: string) {
     </a>
     <p style="font-size:13px;color:#64748b;margin-top:24px;word-break:break-all;">${loginUrl}</p>
     <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;"/>
-    <p style="font-size:12px;color:#94a3b8;margin:0;">FutureLabs · Settings → Profile to update your details.</p>
+    <p style="font-size:12px;color:#94a3b8;margin:0;">Coriftech LMS · Settings → Profile to update your details.</p>
   </div></body></html>`;
 }
 
@@ -60,7 +62,7 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const FRONTEND_URL = Deno.env.get("FRONTEND_URL") || "https://admin.futurelabs.ng";
+    const FRONTEND_URL = getSiteConfig().frontendUrl;
 
     const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: auth } } });
     const { data: userRes } = await userClient.auth.getUser();
@@ -131,9 +133,9 @@ Deno.serve(async (req) => {
       const results = await Promise.all(batch.map(async ({ e, kind }) => {
         try {
           if (kind === "signup") {
-            await sendEmail(e.email, "Complete your FutureLabs account setup", signupEmail(e.full_name, `${FRONTEND_URL}/students/${e.id}`));
+            await sendEmail(e.email, "Complete your Coriftech account setup", signupEmail(e.full_name, `${FRONTEND_URL}/students/${e.id}`));
           } else {
-            await sendEmail(e.email, "Please complete your FutureLabs profile", profileEmail(e.full_name, `${FRONTEND_URL}/profile`));
+            await sendEmail(e.email, "Please complete your Coriftech profile", profileEmail(e.full_name, `${FRONTEND_URL}/profile`));
           }
           return { ok: true as const, e, kind };
         } catch (err) {

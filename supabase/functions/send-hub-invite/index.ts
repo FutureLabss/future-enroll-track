@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getSiteConfig } from "../_shared/site-config.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,7 +22,8 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const FRONTEND_URL = Deno.env.get("FRONTEND_URL") || "https://admin.futurelabs.ng";
+    const site = getSiteConfig();
+    const FRONTEND_URL = site.frontendUrl;
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY")!;
 
     // Verify caller is a superadmin
@@ -71,7 +73,7 @@ Deno.serve(async (req) => {
 <head><meta charset="UTF-8"></head>
 <body style="font-family:system-ui,sans-serif;background:#f4f4f5;margin:0;padding:40px 20px">
   <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:16px;padding:40px;box-shadow:0 1px 3px rgba(0,0,0,.08)">
-    <h1 style="font-size:22px;font-weight:700;margin:0 0 8px">You're invited to join ${hubName} on FutureLabs LMS</h1>
+    <h1 style="font-size:22px;font-weight:700;margin:0 0 8px">You're invited to join ${hubName} on ${site.productName}</h1>
     <p style="color:#6b7280;margin:0 0 28px;font-size:15px">
       You have been invited as an administrator for <strong>${hubName}</strong>.
       Click the button below to accept and set up your hub.
@@ -89,9 +91,9 @@ Deno.serve(async (req) => {
       method: "POST",
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: "FutureLabs <no-reply@futurelabs.ng>",
+        from: site.emailFrom,
         to: [email],
-        subject: `You're invited to manage ${hubName} on FutureLabs`,
+        subject: `You're invited to manage ${hubName} on ${site.productName}`,
         html,
       }),
     });

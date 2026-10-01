@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getSiteConfig } from "../_shared/site-config.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,12 +8,13 @@ const corsHeaders = {
 };
 
 async function sendEmail(to: string, subject: string, html: string) {
+  const site = getSiteConfig();
   const key = Deno.env.get("RESEND_API_KEY");
   if (!key) throw new Error("RESEND_API_KEY not configured");
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: "FutureLabs <notifications@futurelabs.ng>", to: [to], subject, html }),
+    body: JSON.stringify({ from: site.emailFrom, to: [to], subject, html }),
   });
   if (!res.ok) throw new Error(`Resend error ${res.status}: ${await res.text()}`);
 }
@@ -44,7 +46,7 @@ function buildEmail(item: any, daysOut: number | 'overdue'): { subject: string; 
   const html = `
     <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
       <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:32px;text-align:center;">
-        <h1 style="color:#fff;margin:0;font-size:24px;">FutureLabs</h1>
+        <h1 style="color:#fff;margin:0;font-size:24px;">Coriftech</h1>
       </div>
       <div style="padding:32px;">
         <h2 style="color:#1a1a2e;margin-top:0;">${isOverdue ? 'Overdue Payment Notice' : 'Payment Reminder'}</h2>
@@ -62,7 +64,7 @@ function buildEmail(item: any, daysOut: number | 'overdue'): { subject: string; 
         <p>${isOverdue ? 'Please contact us immediately if you have any questions.' : 'Please ensure payment is made on time. Contact us if you have any questions.'}</p>
       </div>
       <div style="background:#f9fafb;padding:20px;text-align:center;font-size:12px;color:#6b7280;">
-        <p>FutureLabs Payment Tracking System</p>
+        <p>Coriftech Payment Tracking System</p>
       </div>
     </div>`;
   return { subject, html };
@@ -74,7 +76,7 @@ function buildWhatsAppText(item: any, daysOut: number | 'overdue'): string {
   const isOverdue = daysOut === 'overdue';
   const urgency = isOverdue ? "OVERDUE" : daysOut === 1 ? "tomorrow" : `in ${daysOut} days`;
   const icon = isOverdue ? "⛔" : "⏰";
-  return `${icon} *${isOverdue ? 'Overdue Payment' : 'Payment Reminder'} — FutureLabs*\n\nHi ${item.payer_name},\n\nYour recurring payment of *${amt}* ${isOverdue ? `was due on ${due} and is now *overdue*` : `is due *${urgency}* (${due})`}.\n\nCategory: ${item.category}\nFrequency: ${item.frequency}\n\n${isOverdue ? 'Please settle this as soon as possible.' : 'Please ensure timely payment.'}`;
+  return `${icon} *${isOverdue ? 'Overdue Payment' : 'Payment Reminder'} — Coriftech*\n\nHi ${item.payer_name},\n\nYour recurring payment of *${amt}* ${isOverdue ? `was due on ${due} and is now *overdue*` : `is due *${urgency}* (${due})`}.\n\nCategory: ${item.category}\nFrequency: ${item.frequency}\n\n${isOverdue ? 'Please settle this as soon as possible.' : 'Please ensure timely payment.'}`;
 }
 
 function addDays(date: Date, n: number): Date {

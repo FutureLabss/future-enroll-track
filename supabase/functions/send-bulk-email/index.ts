@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getSiteConfig } from "../_shared/site-config.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -33,6 +34,7 @@ interface Recipient {
 }
 
 async function sendEmail(to: string, subject: string, html: string) {
+  const site = getSiteConfig();
   const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
   if (!RESEND_API_KEY) throw new Error("RESEND_API_KEY not configured");
   const res = await fetch("https://api.resend.com/emails", {
@@ -42,7 +44,7 @@ async function sendEmail(to: string, subject: string, html: string) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: "FutureLabs <notifications@futurelabs.ng>",
+      from: site.emailFrom,
       to: [to],
       subject,
       html,
@@ -69,7 +71,7 @@ function buildHtml(subject: string, message: string) {
       <h1 style="font-size:18px;margin:0 0 16px;color:#1e1b4b;">${escapeHtml(subject)}</h1>
       <div style="font-size:15px;line-height:1.6;">${safe}</div>
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;"/>
-      <p style="font-size:12px;color:#64748b;margin:0;">FutureLabs Invoicing & Enrollment</p>
+      <p style="font-size:12px;color:#64748b;margin:0;">Coriftech Learning & Enrollment</p>
     </div></body></html>`;
 }
 

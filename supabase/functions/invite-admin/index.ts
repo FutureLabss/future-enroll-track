@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { getSiteConfig } from "../_shared/site-config.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -39,7 +40,7 @@ Deno.serve(async (req) => {
 
     // Try to send Supabase invitation email (works if user doesn't exist).
     // New users land on /set-password to choose a password, then go to /admin.
-    const FRONTEND_URL = Deno.env.get("FRONTEND_URL") || "https://admin.futurelabs.ng";
+    const FRONTEND_URL = getSiteConfig().frontendUrl;
     const redirectTo = `${FRONTEND_URL}/set-password?next=%2Fadmin`;
     const { data: inviteData, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
       redirectTo,

@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getSiteConfig } from "../_shared/site-config.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -6,19 +7,20 @@ const corsHeaders = {
 };
 
 const HUB_NAMES: Record<string, string> = {
-  "00000000-0000-0000-0000-000000000001": "FutureLabs",
+  "00000000-0000-0000-0000-000000000001": "Coriftech",
   "00000000-0000-0000-0000-000000000002": "RhemaHub",
 };
 
 const naira = (n: number) => `₦${Number(n).toLocaleString("en-NG")}`;
 
 async function sendEmail(to: string, subject: string, html: string) {
+  const site = getSiteConfig();
   const key = Deno.env.get("RESEND_API_KEY");
   if (!key) throw new Error("RESEND_API_KEY not configured");
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: "FutureLabs <notifications@futurelabs.ng>", to: [to], subject, html }),
+    body: JSON.stringify({ from: site.emailFrom, to: [to], subject, html }),
   });
   if (!res.ok) throw new Error(`Resend error ${res.status}: ${await res.text()}`);
 }
@@ -65,7 +67,7 @@ Deno.serve(async (req) => {
     const yStart = yesterday.toISOString().slice(0, 10);
     const yEnd = today.toISOString().slice(0, 10); // exclusive upper bound
 
-    // 1. Revenue collected yesterday, per hub (FutureLabs: installments.paid_at, RhemaHub: payments.payment_date)
+    // 1. Revenue collected yesterday, per hub (primary hub: installments.paid_at, demo hub: payments.payment_date)
     const [instRevRes, payRevRes] = await Promise.all([
       supabase
         .from("installments")
@@ -147,7 +149,7 @@ Deno.serve(async (req) => {
     const html = `
       <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
         <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:32px;text-align:center;">
-          <h1 style="color:#fff;margin:0;font-size:24px;">FutureLabs — Daily Brief</h1>
+          <h1 style="color:#fff;margin:0;font-size:24px;">Coriftech — Daily Brief</h1>
           <p style="color:#9ca3af;margin:8px 0 0;font-size:13px;">${dateLabel}</p>
         </div>
         <div style="padding:32px;">
@@ -158,7 +160,7 @@ Deno.serve(async (req) => {
           ${section("Newly overdue installments", overdueRows)}
         </div>
         <div style="background:#f9fafb;padding:20px;text-align:center;font-size:12px;color:#6b7280;">
-          <p>FutureLabs Admin — Daily Brief</p>
+          <p>Coriftech Admin — Daily Brief</p>
         </div>
       </div>`;
 

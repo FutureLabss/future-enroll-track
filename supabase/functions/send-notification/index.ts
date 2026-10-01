@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { bankTransferText, getSiteConfig } from "../_shared/site-config.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,6 +16,7 @@ interface NotificationPayload {
 }
 
 async function sendEmail(to: string, subject: string, html: string) {
+  const site = getSiteConfig();
   const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
   if (!RESEND_API_KEY) throw new Error("RESEND_API_KEY not configured");
 
@@ -25,7 +27,7 @@ async function sendEmail(to: string, subject: string, html: string) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: "FutureLabs <notifications@futurelabs.ng>",
+      from: site.emailFrom,
       to: [to],
       subject,
       html,
@@ -76,7 +78,7 @@ async function sendWhatsApp(to: string, body: string) {
 }
 
 function buildEmailContent(type: string, data: Record<string, any>): { subject: string; html: string } {
-  const { full_name, invoice_number, total_amount, currency, due_date, amount_paid, outstanding_balance, installment_amount, payment_reference, payment_method, program_name, enrollment_id, invoice_id, FRONTEND_URL } = data;
+  const { full_name, invoice_number, total_amount, currency, due_date, amount_paid, outstanding_balance, installment_amount, payment_reference, payment_method, program_name, enrollment_id, FRONTEND_URL, PRODUCT_NAME, BANK } = data;
   const currencySymbol = currency === "USD" ? "$" : "₦";
   const fmt = (n: number) => `${currencySymbol}${Number(n).toLocaleString()}`;
   const formattedAmount = fmt(total_amount);
@@ -87,13 +89,13 @@ function buildEmailContent(type: string, data: Record<string, any>): { subject: 
   const wrapper = (content: string) => `
     <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e5e7eb;">
       <div style="background: linear-gradient(135deg, #1a1a2e, #16213e); padding: 32px; text-align: center;">
-        <h1 style="color: #ffffff; margin: 0; font-size: 24px;">FutureEnroll</h1>
+        <h1 style="color: #ffffff; margin: 0; font-size: 24px;">${PRODUCT_NAME}</h1>
       </div>
       <div style="padding: 32px;">
         ${content}
       </div>
       <div style="background: #f9fafb; padding: 20px; text-align: center; font-size: 12px; color: #6b7280;">
-        <p>FutureEnroll Payment Tracking System</p>
+        <p>${PRODUCT_NAME} Payment Tracking</p>
       </div>
     </div>`;
 
@@ -125,11 +127,6 @@ function buildEmailContent(type: string, data: Record<string, any>): { subject: 
             ${due_date ? `<p style="margin: 4px 0;"><strong>Due Date:</strong> ${due_date}</p>` : ""}
           </div>
           <p>Please ensure timely payment to avoid late fees.</p>
-          <div style="margin-top: 24px; padding: 16px; border: 1px solid #e5e7eb; border-radius: 8px; background: #ffffff;">
-            <h3 style="margin-top: 0;">Pay Now</h3>
-            <p>Pay this invoice instantly with card, bank transfer, or USSD via Paystack.</p>
-            <a href="${FRONTEND_URL}/student/invoices/${invoice_id || ''}?pay=1" style="display: inline-block; padding: 12px 24px; background: #16a34a; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">💳 Pay with Paystack</a>
-          </div>
           <div style="margin-top: 16px; padding: 16px; border: 1px solid #e5e7eb; border-radius: 8px; background: #ffffff;">
             <h3 style="margin-top: 0;">Action Required: Complete Your Enrollment</h3>
             <p>Please complete your profile to finalize your enrollment.</p>
@@ -168,16 +165,16 @@ function buildEmailContent(type: string, data: Record<string, any>): { subject: 
               <tr><td style="padding:5px 0; color:#6b7280;">Due Date</td><td style="padding:5px 0; text-align:right; font-weight:600;">${fmtDate(due_date)}</td></tr>
             </table>
           </div>
-          <a href="${FRONTEND_URL}/student/invoices/${invoice_id}?pay=1" style="display:inline-block; padding:12px 24px; background:#16a34a; color:#fff; text-decoration:none; border-radius:6px; font-weight:bold; margin-bottom:24px;">💳 Pay with Paystack</a>
+          ${BANK.enabled ? `
           <div style="background:#f9fafb; border-radius:8px; padding:16px; margin-top:8px; border:1px solid #e5e7eb;">
-            <p style="margin:0 0 8px; font-size:13px; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em;">Or pay by bank transfer</p>
+            <p style="margin:0 0 8px; font-size:13px; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em;">Pay by bank transfer</p>
             <table style="width:100%; font-size:14px; border-collapse:collapse;">
-              <tr><td style="padding:4px 0; color:#6b7280;">Account Name</td><td style="padding:4px 0; text-align:right; font-weight:600;">FutureLabs Ltd</td></tr>
-              <tr><td style="padding:4px 0; color:#6b7280;">Account Number</td><td style="padding:4px 0; text-align:right; font-weight:700; font-size:16px; letter-spacing:0.05em;">8288339819</td></tr>
-              <tr><td style="padding:4px 0; color:#6b7280;">Bank</td><td style="padding:4px 0; text-align:right; font-weight:600;">Moniepoint MFB</td></tr>
+              <tr><td style="padding:4px 0; color:#6b7280;">Account Name</td><td style="padding:4px 0; text-align:right; font-weight:600;">${BANK.accountName}</td></tr>
+              <tr><td style="padding:4px 0; color:#6b7280;">Account Number</td><td style="padding:4px 0; text-align:right; font-weight:700; font-size:16px; letter-spacing:0.05em;">${BANK.accountNumber}</td></tr>
+              <tr><td style="padding:4px 0; color:#6b7280;">Bank</td><td style="padding:4px 0; text-align:right; font-weight:600;">${BANK.bankName}</td></tr>
             </table>
             <p style="margin:12px 0 0; font-size:12px; color:#9ca3af;">After transferring, log in and upload your receipt so we can confirm your payment.</p>
-          </div>
+          </div>` : ''}
         `),
       };
 
@@ -199,16 +196,16 @@ function buildEmailContent(type: string, data: Record<string, any>): { subject: 
               <tr><td style="padding:5px 0; color:#6b7280;">Due Date</td><td style="padding:5px 0; text-align:right; font-weight:600; color:#dc2626;">${fmtDate(due_date)} (OVERDUE)</td></tr>
             </table>
           </div>
-          <a href="${FRONTEND_URL}/student/invoices/${invoice_id}?pay=1" style="display:inline-block; padding:12px 24px; background:#dc2626; color:#fff; text-decoration:none; border-radius:6px; font-weight:bold; margin-bottom:24px;">💳 Pay Now</a>
+          ${BANK.enabled ? `
           <div style="background:#f9fafb; border-radius:8px; padding:16px; margin-top:8px; border:1px solid #e5e7eb;">
-            <p style="margin:0 0 8px; font-size:13px; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em;">Or pay by bank transfer</p>
+            <p style="margin:0 0 8px; font-size:13px; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em;">Pay by bank transfer</p>
             <table style="width:100%; font-size:14px; border-collapse:collapse;">
-              <tr><td style="padding:4px 0; color:#6b7280;">Account Name</td><td style="padding:4px 0; text-align:right; font-weight:600;">FutureLabs Ltd</td></tr>
-              <tr><td style="padding:4px 0; color:#6b7280;">Account Number</td><td style="padding:4px 0; text-align:right; font-weight:700; font-size:16px; letter-spacing:0.05em;">8288339819</td></tr>
-              <tr><td style="padding:4px 0; color:#6b7280;">Bank</td><td style="padding:4px 0; text-align:right; font-weight:600;">Moniepoint MFB</td></tr>
+              <tr><td style="padding:4px 0; color:#6b7280;">Account Name</td><td style="padding:4px 0; text-align:right; font-weight:600;">${BANK.accountName}</td></tr>
+              <tr><td style="padding:4px 0; color:#6b7280;">Account Number</td><td style="padding:4px 0; text-align:right; font-weight:700; font-size:16px; letter-spacing:0.05em;">${BANK.accountNumber}</td></tr>
+              <tr><td style="padding:4px 0; color:#6b7280;">Bank</td><td style="padding:4px 0; text-align:right; font-weight:600;">${BANK.bankName}</td></tr>
             </table>
             <p style="margin:12px 0 0; font-size:12px; color:#9ca3af;">After transferring, log in and upload your receipt so we can confirm your payment.</p>
-          </div>
+          </div>` : ''}
         `),
       };
 
@@ -237,7 +234,7 @@ function buildWhatsAppMessage(type: string, data: Record<string, any>): string {
   const paid = fmt(amount_paid ?? 0);
   const balance = fmt(outstanding_balance ?? 0);
   const dueNow = installment_amount != null ? `\nDue now: ${fmt(installment_amount)}` : "";
-  const bankLine = `\n\nBank transfer:\nFutureLabs Ltd · 8288339819 · Moniepoint MFB\n(Upload receipt after paying)`;
+  const bankLine = bankTransferText(getSiteConfig());
 
   switch (type) {
     case "invoice_created":
@@ -245,9 +242,9 @@ function buildWhatsAppMessage(type: string, data: Record<string, any>): string {
     case "payment_received":
       return `✅ *Payment Received*\n\nHi ${full_name},\nInvoice: ${invoice_number}\nAmount Paid: ${paid}\n\nThank you!`;
     case "payment_reminder":
-      return `⏰ *Payment Reminder*\n\nHi ${full_name},\nInvoice: ${invoice_number}${program_name ? ` · ${program_name}` : ""}\nTotal: ${amt} | Paid: ${paid} | Balance: ${balance}${dueNow}\nDue: ${due_date}\n\nPay online: ${FRONTEND_URL}/student/invoices/${invoice_id}?pay=1${bankLine}`;
+      return `⏰ *Payment Reminder*\n\nHi ${full_name},\nInvoice: ${invoice_number}${program_name ? ` · ${program_name}` : ""}\nTotal: ${amt} | Paid: ${paid} | Balance: ${balance}${dueNow}\nDue: ${due_date}${bankLine}`;
     case "overdue":
-      return `⚠️ *Payment Overdue*\n\nHi ${full_name},\nInvoice: ${invoice_number}${program_name ? ` · ${program_name}` : ""}\nTotal: ${amt} | Paid: ${paid} | Balance: ${balance}${dueNow}\nDue: ${due_date} (OVERDUE)\n\nPay immediately: ${FRONTEND_URL}/student/invoices/${invoice_id}?pay=1${bankLine}`;
+      return `⚠️ *Payment Overdue*\n\nHi ${full_name},\nInvoice: ${invoice_number}${program_name ? ` · ${program_name}` : ""}\nTotal: ${amt} | Paid: ${paid} | Balance: ${balance}${dueNow}${bankLine}`;
     case "invoice_settled":
       return `🎉 *Invoice Fully Paid*\n\nHi ${full_name},\nInvoice: ${invoice_number}\nTotal: ${amt}\n\nThank you for completing payment!`;
     default:
@@ -261,6 +258,7 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const site = getSiteConfig();
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
@@ -321,7 +319,9 @@ Deno.serve(async (req) => {
       outstanding_balance: Math.max(totalAmount - amountPaid, 0),
       enrollment_id: enrollment_id,
       invoice_id: invoice_id || null,
-      FRONTEND_URL: "https://admin.futurelabs.ng",
+      FRONTEND_URL: originBase || site.frontendUrl,
+      PRODUCT_NAME: site.productName,
+      BANK: site.bank,
       ...extra,
       installment_amount: extra?.installment_amount ?? (nextDue ? Number(nextDue.amount) : null),
     };
@@ -330,7 +330,7 @@ Deno.serve(async (req) => {
     const results: string[] = [];
 
     // Admin notification emails for new enrollments
-    const ADMIN_NOTIFY_EMAILS = ["manny@futurelabs.com.ng", "hello@futurelabs.africa"];
+    const ADMIN_NOTIFY_EMAILS = site.adminNotifyEmails;
     if (type === "invoice_created") {
       for (const adminEmail of ADMIN_NOTIFY_EMAILS) {
         try {

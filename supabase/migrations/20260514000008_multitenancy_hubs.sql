@@ -1,7 +1,7 @@
 -- =====================================================================
 -- Multitenancy: Hub (tenant) isolation
 -- Each hub is a separate school/organization using this platform.
--- Existing data is migrated to the default "FutureLabs" hub.
+-- Existing data is migrated to the default Coriftech hub.
 -- =====================================================================
 
 -- 1. Superadmins table (avoids enum transaction ordering issues)
@@ -63,9 +63,9 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER AS $$
   SELECT EXISTS (SELECT 1 FROM public.superadmins WHERE user_id = auth.uid());
 $$;
 
--- 6. Seed the default hub for existing FutureLabs data
+-- 6. Seed the default Coriftech hub
 INSERT INTO public.hubs (id, name, slug, status, plan)
-VALUES ('00000000-0000-0000-0000-000000000001'::uuid, 'FutureLabs', 'futurelabs', 'active', 'enterprise')
+VALUES ('00000000-0000-0000-0000-000000000001'::uuid, 'Coriftech', 'coriftech', 'active', 'enterprise')
 ON CONFLICT (id) DO NOTHING;
 
 -- 7. Add hub_id to top-level entity tables

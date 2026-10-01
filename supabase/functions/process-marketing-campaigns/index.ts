@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getSiteConfig } from "../_shared/site-config.ts";
 
 const personalize = (value: string, lead: any, hub: any, owner: any) => value
   .replace(/{{\s*name\s*}}/gi, lead.full_name || "")
@@ -33,7 +34,7 @@ Deno.serve(async (req) => {
       const renderedSubject = personalize(step.marketing_email_templates.subject, lead, enrollment.hubs, owner);
       const renderedHtml = `${personalize(step.marketing_email_templates.html_body, lead, enrollment.hubs, owner)}<p style="font-size:12px;color:#64748b"><a href="${unsubscribe}">Unsubscribe</a></p>`;
       await db.from("marketing_email_deliveries").update({ recipient_email: lead.email, rendered_subject: renderedSubject, rendered_html: renderedHtml }).eq("id", reservation.data.id);
-      const response = await fetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: `Bearer ${Deno.env.get("RESEND_API_KEY")}`, "Content-Type": "application/json" }, body: JSON.stringify({ from: Deno.env.get("MARKETING_FROM") || "FutureLabs <notifications@futurelabs.ng>", to: [lead.email], subject: renderedSubject, html: renderedHtml }) });
+      const response = await fetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: `Bearer ${Deno.env.get("RESEND_API_KEY")}`, "Content-Type": "application/json" }, body: JSON.stringify({ from: Deno.env.get("MARKETING_FROM") || getSiteConfig().emailFrom, to: [lead.email], subject: renderedSubject, html: renderedHtml }) });
       if (!response.ok) throw new Error(await response.text());
       const provider = await response.json();
       await db.from("marketing_email_deliveries").update({ status: "sent", sent_at: new Date().toISOString(), provider_message_id: provider.id }).eq("id", reservation.data.id);

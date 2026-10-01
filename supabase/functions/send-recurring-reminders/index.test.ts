@@ -19,7 +19,7 @@ function buildWhatsAppText(item: Record<string, string>, daysOut: number | "over
   const isOverdue = daysOut === "overdue";
   const urgency = isOverdue ? "OVERDUE" : daysOut === 1 ? "tomorrow" : `in ${daysOut} days`;
   const icon = isOverdue ? "⛔" : "⏰";
-  return `${icon} *${isOverdue ? "Overdue Payment" : "Payment Reminder"} — FutureLabs*\n\nHi ${item.payer_name},\n\nYour recurring payment of *${amt}* ${
+  return `${icon} *${isOverdue ? "Overdue Payment" : "Payment Reminder"} — Coriftech*\n\nHi ${item.payer_name},\n\nYour recurring payment of *${amt}* ${
     isOverdue
       ? `was due on ${due} and is now *overdue*`
       : `is due *${urgency}* (${due})`

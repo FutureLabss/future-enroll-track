@@ -1,5 +1,5 @@
 Feature: Finance revenue bucketing by hub
-  Per CLAUDE.md, revenue is bucketed differently by hub: FutureLabs revenue
+  Per CLAUDE.md, revenue is bucketed differently by hub: Coriftech revenue
   is bucketed by installments.due_date where status = 'paid'; RhemaHub
   revenue is bucketed by payments.created_at. Getting this wrong misstates
   monthly revenue for one hub without necessarily breaking anything visibly.
@@ -11,8 +11,8 @@ Feature: Finance revenue bucketing by hub
   gauntlet plan) to actually execute it against real rows.
 
   @pending-db-infra
-  Scenario: FutureLabs revenue is bucketed by installment due date
-    Given a FutureLabs invoice with an installment due in March, paid in April
+  Scenario: Coriftech revenue is bucketed by installment due date
+    Given a Coriftech invoice with an installment due in March, paid in April
     When the finance summary is computed for March
     Then the installment's amount counts toward March revenue
 

@@ -46,7 +46,7 @@ describe('buildICSContent', () => {
     const lines = parseLines(buildICSContent(BASE_EVENT));
     const uidLine = lines.find(l => l.startsWith('UID:'));
     expect(uidLine).toBeDefined();
-    expect(uidLine).toContain('@futurelabs-lms');
+    expect(uidLine).toContain('@coriftech-lms');
   });
 
   it('includes a DTSTAMP line', () => {

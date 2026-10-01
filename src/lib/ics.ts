@@ -28,12 +28,12 @@ export function buildICSContent(event: ICSEvent): string {
     'Z',
   ].join('');
 
-  const uid = `${Date.now()}-${Math.random().toString(36).slice(2)}@futurelabs-lms`;
+  const uid = `${Date.now()}-${Math.random().toString(36).slice(2)}@${siteConfig.calendarDomain}`;
 
   const lines: string[] = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//FutureLabs LMS//EN',
+    `PRODID:${siteConfig.calendarProductId}`,
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     'BEGIN:VEVENT',
@@ -61,3 +61,4 @@ export function downloadICS(event: ICSEvent): void {
   anchor.click();
   URL.revokeObjectURL(url);
 }
+import { siteConfig } from '@/lib/siteConfig';

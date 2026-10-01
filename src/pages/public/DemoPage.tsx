@@ -16,6 +16,7 @@ import {
   UserPlus, FileCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { siteConfig } from '@/lib/siteConfig';
 
 // ─────────────────────────────────────────────────────────────────────
 // Demo seed data
@@ -281,11 +282,11 @@ function GetStartedModal({ open, onClose }: { open: boolean; onClose: () => void
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
             <Sparkles className="h-5 w-5 text-primary" />
-            Try FutureLabs LMS — Free Demo
+            Try {siteConfig.productName} — Free Demo
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
             Enter your email and we'll send you a magic link to log straight into
-            the <strong>FutureLabs</strong> admin dashboard as a demo admin.
+            the <strong>Coriftech</strong> admin dashboard as a demo admin.
           </p>
         </DialogHeader>
         <div className="space-y-4 mt-2">
@@ -325,7 +326,7 @@ function GetStartedModal({ open, onClose }: { open: boolean; onClose: () => void
           </Button>
           <p className="text-xs text-center text-muted-foreground">
             No password needed · Instant access · Questions?{' '}
-            <a href="mailto:manny@futurelabs.com.ng" className="underline">manny@futurelabs.com.ng</a>
+            <a href={`mailto:${siteConfig.supportEmail}`} className="underline">{siteConfig.supportEmail}</a>
           </p>
         </div>
       </DialogContent>
@@ -360,7 +361,7 @@ export default function DemoPage() {
       {/* Top banner */}
       <div className="bg-primary text-primary-foreground py-2.5 px-4 text-center text-sm flex items-center justify-center gap-3 flex-wrap">
         <Sparkles className="h-4 w-4 flex-shrink-0" />
-        <span>You're viewing the <strong>FutureLabs LMS Demo</strong> — sample data only, nothing is saved.</span>
+        <span>You're viewing the <strong>{siteConfig.productName} Demo</strong> — sample data only, nothing is saved.</span>
         <Button size="sm" variant="secondary" className="h-7 px-3 text-xs" onClick={() => setGetStartedOpen(true)}>
           Get Started <ArrowRight className="h-3 w-3 ml-1" />
         </Button>
@@ -385,7 +386,7 @@ export default function DemoPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Hero */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Welcome to FutureLabs LMS</h1>
+          <h1 className="text-3xl font-bold mb-2">Welcome to {siteConfig.productName}</h1>
           <p className="text-muted-foreground max-w-2xl">
             The all-in-one learning management system built for African coding academies.
             Enrollment, invoicing, curriculum, attendance, payroll — all in one place.
@@ -689,7 +690,7 @@ export default function DemoPage() {
           <Sparkles className="h-8 w-8 mx-auto mb-3 text-primary" />
           <h2 className="text-2xl font-bold mb-2">Ready to power your academy?</h2>
           <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-            FutureLabs LMS handles everything — enrollment, invoicing, curriculum, attendance, payroll, and multi-hub management — built for African tech education.
+            {siteConfig.productName} handles everything — enrollment, invoicing, curriculum, attendance, payroll, and multi-hub management — built for African tech education.
           </p>
           <div className="flex items-center justify-center gap-3 flex-wrap">
             <Button size="lg" onClick={() => setGetStartedOpen(true)}>
@@ -701,7 +702,7 @@ export default function DemoPage() {
           </div>
           <p className="text-xs text-muted-foreground mt-4">
             Questions? Email us directly at{' '}
-            <a href="mailto:manny@futurelabs.com.ng" className="underline text-primary">manny@futurelabs.com.ng</a>
+            <a href={`mailto:${siteConfig.supportEmail}`} className="underline text-primary">{siteConfig.supportEmail}</a>
           </p>
         </div>
       </main>

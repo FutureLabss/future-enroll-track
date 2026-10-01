@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { siteConfig } from '@/lib/siteConfig';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatCard } from '@/components/shared/StatCard';
@@ -496,7 +497,7 @@ export default function StudentDashboard() {
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <Button asChild variant="outline" className="justify-start">
-              <a href="mailto:support@futurelabs.ng?subject=Student%20support%20request">
+              <a href={`mailto:${siteConfig.supportEmail}?subject=Student%20support%20request`}>
                 <Mail className="mr-2 h-4 w-4" /> Email Support
               </a>
             </Button>

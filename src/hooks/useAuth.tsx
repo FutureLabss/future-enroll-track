@@ -2,6 +2,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { siteConfig } from '@/lib/siteConfig';
 
 function logAuthEvent(action: 'user_login' | 'user_logout', userId: string, email?: string) {
   supabase.from('audit_logs').insert({
@@ -128,7 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
       options: {
         data: { full_name: fullName },
-        emailRedirectTo: "https://admin.futurelabs.ng",
+        emailRedirectTo: siteConfig.frontendUrl,
       },
     });
     return { error: error as Error | null };

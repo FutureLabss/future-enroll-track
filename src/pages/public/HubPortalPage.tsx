@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { GraduationCap, Loader2, ArrowRight, ShieldAlert } from 'lucide-react';
+import { siteConfig } from '@/lib/siteConfig';
 
 export default function HubPortalPage() {
   const { hubSlug } = useParams<{ hubSlug: string }>();
@@ -119,7 +120,7 @@ export default function HubPortalPage() {
             Sign In <ArrowRight className="h-4 w-4 ml-2" />
           </Button>
           <p className="text-xs text-center text-muted-foreground">
-            Powered by <span className="font-semibold">FutureLabs LMS</span>
+            Powered by <span className="font-semibold">{siteConfig.productName}</span>
           </p>
         </div>
       </div>

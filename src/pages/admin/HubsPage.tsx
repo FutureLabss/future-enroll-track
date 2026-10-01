@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { siteConfig } from '@/lib/siteConfig';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -187,7 +188,7 @@ export default function HubsPage() {
                 <div className="flex-1 min-w-0">
                   <h3 className="font-semibold text-base truncate">{hub.name}</h3>
                   <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                    <Globe className="h-3 w-3" />{hub.slug}.futurelabs.ng
+                    <Globe className="h-3 w-3" />{siteConfig.hubDomainSuffix ? `${hub.slug}.${siteConfig.hubDomainSuffix}` : `/${hub.slug}`}
                   </p>
                 </div>
                 <div className="flex flex-col gap-1.5 items-end">

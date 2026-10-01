@@ -10,6 +10,7 @@ import { Loader2, CalendarDays, Download, AlertTriangle, CheckCircle2 } from 'lu
 import { useCurriculumV2 } from '@/hooks/useCurriculumV2';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { siteConfig } from '@/lib/siteConfig';
 
 const DAYS = [
   { label: 'Sun', value: 0 },
@@ -44,7 +45,7 @@ function buildIcs(sessions: any[], classroomName: string) {
   const now = new Date().toISOString().replace(/[-:.Z]/g, '').slice(0, 15) + 'Z';
   const events = sessions.map(s => [
     'BEGIN:VEVENT',
-    `UID:${s.id}@futurelabs.lms`,
+    `UID:${s.id}@${siteConfig.calendarDomain}`,
     `DTSTAMP:${now}`,
     `DTSTART:${fmtDt(s.scheduled_date, s.start_time)}`,
     `DTEND:${fmtDt(s.scheduled_date, s.end_time)}`,
@@ -52,7 +53,7 @@ function buildIcs(sessions: any[], classroomName: string) {
     'STATUS:CONFIRMED',
     'END:VEVENT',
   ].join('\r\n')).join('\r\n');
-  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//FutureLabs LMS//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', events, 'END:VCALENDAR'].join('\r\n');
+  return ['BEGIN:VCALENDAR', 'VERSION:2.0', `PRODID:${siteConfig.calendarProductId}`, 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', events, 'END:VCALENDAR'].join('\r\n');
 }
 
 interface Props {

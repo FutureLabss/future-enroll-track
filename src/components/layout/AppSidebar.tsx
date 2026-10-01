@@ -36,6 +36,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { ThemeToggle } from '@/components/shared/ThemeToggle';
+import { siteConfig } from '@/lib/siteConfig';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -179,7 +180,7 @@ function HubSwitcher({ userId }: { userId: string }) {
 export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps) {
   const { isAdmin, isOrganization, isStaff, isMarketing, isSuperadmin: isSA, isDemo, signOut, user } = useAuth();
 
-  const isSuperadmin = isSA || user?.email?.toLowerCase() === 'manassehudim@gmail.com';
+  const isSuperadmin = isSA;
   const nav = useMemo(() => {
     const rawBaseNav = isAdmin ? adminNav : isMarketing ? marketingNav : isOrganization ? orgNav : isStaff ? staffNav : studentNav;
     const baseNav = isDemo ? rawBaseNav.filter(item => !DEMO_HIDDEN_ROUTES.has(item.to)) : rawBaseNav;
@@ -209,9 +210,7 @@ export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps)
   return (
     <Wrapper className={containerClass}>
       <div className="px-6 py-6 border-b border-sidebar-border">
-        <h1 className="font-heading text-xl font-bold tracking-tight">
-          <span className="text-sidebar-primary">Future</span>Labs
-        </h1>
+        <img src={siteConfig.logoPath} alt={siteConfig.organizationName} className="h-9 w-auto max-w-[180px] object-contain object-left brightness-0 invert" />
         <p className="text-xs text-sidebar-foreground/60 mt-1">
           {isAdmin ? 'Admin Portal' : isOrganization ? 'Sponsor Portal' : isStaff ? 'Staff Portal' : 'Student Portal'}
         </p>

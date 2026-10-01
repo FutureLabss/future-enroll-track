@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
+import { getAppUrl, siteConfig } from '@/lib/siteConfig';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -25,7 +26,7 @@ export default function LoginPage() {
     try {
       if (isForgot) {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `https://admin.futurelabs.ng/reset-password`,
+          redirectTo: getAppUrl('/reset-password'),
         });
         if (error) throw error;
         toast.success('Password reset email sent! Check your inbox.');
@@ -50,10 +51,8 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md animate-fade-in">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-heading font-bold tracking-tight">
-            <span className="text-primary">Future</span>Labs
-          </h1>
-          <p className="text-muted-foreground mt-2">Invoicing & Enrollment System</p>
+          <img src={siteConfig.logoPath} alt={siteConfig.organizationName} className="mx-auto h-14 w-auto max-w-[280px] object-contain" />
+          <p className="text-muted-foreground mt-3">{siteConfig.tagline}</p>
         </div>
 
         <div className="glass-card rounded-2xl p-8">

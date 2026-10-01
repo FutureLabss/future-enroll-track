@@ -10,12 +10,9 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER AS $$
 $$;
 
 -- ================================================================
--- 2. Insert the platform superadmin
+-- 2. Environment-specific superadmin assignment intentionally omitted.
+--    Bootstrap privileged users explicitly after deployment.
 -- ================================================================
-INSERT INTO public.superadmins (user_id)
-VALUES ('a2c98e42-d039-4750-a928-84285aa1536b')
-ON CONFLICT DO NOTHING;
-
 -- ================================================================
 -- 3. Add hub-scoped admin write policy for staff.
 --    Previously only superadmins could INSERT/UPDATE/DELETE staff;

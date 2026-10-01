@@ -1,3 +1,6 @@
+-- Demo enrollment and finance data intentionally omitted. This migration
+-- remains as a no-op to preserve its timestamp in migration history.
+/*
 -- Seed RhemaHub (00000000-0000-0000-0000-000000000002) with demo data:
 -- 7 enrollments, 7 invoices, 4 payments, 4 expenses, 2 other_income records.
 -- Applied to production DB via MCP on 2026-05-14; this file is the git record.
@@ -60,3 +63,4 @@ VALUES
   ('dc000001-0000-0000-0000-000000000001'::uuid, 'Workshop',   'Zenith Tech (Corporate)', 75000, '2026-05-07', 'Bank Transfer', 'INC-WS-001',   'One-day React workshop', '00000000-0000-0000-0000-000000000002'::uuid, '2026-05-07 09:00:00+00'),
   ('dc000001-0000-0000-0000-000000000002'::uuid, 'Consulting', 'BuildNG Startup',         50000, '2026-05-10', 'Transfer',      'INC-CONS-001', 'Tech curriculum consulting', '00000000-0000-0000-0000-000000000002'::uuid, '2026-05-10 09:00:00+00')
 ON CONFLICT (id) DO NOTHING;
+*/

@@ -38,10 +38,8 @@ CREATE TRIGGER enforce_admin_role_grant_trg
 BEFORE INSERT OR UPDATE ON public.user_roles
 FOR EACH ROW EXECUTE FUNCTION public.enforce_admin_role_grant();
 
--- Ensure superadmin always has admin role
-INSERT INTO public.user_roles (user_id, role)
-SELECT id, 'admin'::app_role FROM auth.users WHERE LOWER(email) = LOWER('Manassehudim@gmail.com')
-ON CONFLICT DO NOTHING;
+-- Environment-specific superadmin assignment intentionally omitted.
+-- Bootstrap privileged users explicitly after deployment.
 
 -- RPC: superadmin invites an existing user to become admin by email
 CREATE OR REPLACE FUNCTION public.invite_admin(p_email text)

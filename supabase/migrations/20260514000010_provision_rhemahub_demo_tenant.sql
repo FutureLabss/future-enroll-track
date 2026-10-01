@@ -1,3 +1,6 @@
+-- Demo tenant provisioning intentionally omitted. This migration remains as a
+-- no-op to preserve its timestamp in migration history for existing projects.
+/*
 -- Provision RhemaHub as a fully seeded demo tenant.
 -- Hub UUID: 00000000-0000-0000-0000-000000000002
 -- Applied to production DB via MCP on 2026-05-14; this file is the git record.
@@ -15,7 +18,7 @@ VALUES (
 ON CONFLICT (id) DO NOTHING;
 
 -- Programs
-INSERT INTO public.programs (id, name, description, hub_id)
+INSERT INTO public.programs (id, program_name, description, hub_id)
 VALUES
   ('d1000001-0000-0000-0000-000000000001'::uuid, 'Full-Stack Web Development', 'Comprehensive full-stack program covering HTML, CSS, JS, React, and Node.js', '00000000-0000-0000-0000-000000000002'::uuid),
   ('d1000001-0000-0000-0000-000000000002'::uuid, 'Data Science & Machine Learning', 'Python, pandas, scikit-learn, and real-world ML projects', '00000000-0000-0000-0000-000000000002'::uuid),
@@ -75,3 +78,4 @@ VALUES
   ('d7000001-0000-0000-0000-000000000008'::uuid, 'd6000001-0000-0000-0000-000000000007'::uuid, 'Hooks Reference', 'link', 'https://react.dev/reference/react'),
   ('d7000001-0000-0000-0000-000000000009'::uuid, 'd6000001-0000-0000-0000-000000000007'::uuid, 'Hooks Deep Dive Video', 'video', 'https://youtu.be/example3')
 ON CONFLICT (id) DO NOTHING;
+*/

@@ -125,18 +125,5 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.get_finance_summary(int, date, date) TO authenticated;
 
--- ── 3. Schedule check-due-reminders daily at 07:00 UTC (08:00 WAT) ────────────
-SELECT cron.schedule(
-  'daily-due-reminders',
-  '0 7 * * *',
-  $$
-  SELECT net.http_post(
-    url     := 'https://ozjxktxbzhkujavmzjrf.supabase.co/functions/v1/check-due-reminders',
-    headers := jsonb_build_object(
-      'Content-Type',  'application/json',
-      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im96anhrdHhiemhrdWphdm16anJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1ODMxNjIsImV4cCI6MjA5NDE1OTE2Mn0.RWHwniqPDcJ_F4DUuendWvvLCHoJDWYvUUi0jvcaqO4'
-    ),
-    body    := '{}'::jsonb
-  ) AS request_id;
-  $$
-);
+-- ── 3. Environment-specific HTTP cron intentionally omitted. ──────────────────
+-- Configure the job after deployment with this project's URL and credentials.

@@ -1,5 +1,5 @@
 -- Hub-scope remaining functions and tables.
--- 1. enrollment_targets: add hub_id, fix unique constraint, update RLS, seed RhemaHub
+-- 1. enrollment_targets: add hub_id, fix unique constraint, update RLS
 -- 2. get_enrollment_performance: hub scope + created_at (not installments)
 -- 3. list_outstanding_invoices: hub scope + payments (not installments) for amount_paid
 -- 4. approve_staff_invoice / post_recurring_expense / post_recurring_income: pass hub_id
@@ -33,17 +33,7 @@ CREATE POLICY "Admins manage enrollment targets"
     OR (public.has_role(auth.uid(), 'admin'::app_role) AND hub_id = public.get_my_hub_id())
   );
 
--- ── 2. Seed RhemaHub enrollment targets ──────────────────────────────────────
-INSERT INTO public.enrollment_targets (id, target_month, target_count, hub_id)
-VALUES
-  ('e0000001-0000-0000-0000-000000000001'::uuid, '2026-01-01', 3, '00000000-0000-0000-0000-000000000002'::uuid),
-  ('e0000001-0000-0000-0000-000000000002'::uuid, '2026-02-01', 3, '00000000-0000-0000-0000-000000000002'::uuid),
-  ('e0000001-0000-0000-0000-000000000003'::uuid, '2026-03-01', 4, '00000000-0000-0000-0000-000000000002'::uuid),
-  ('e0000001-0000-0000-0000-000000000004'::uuid, '2026-04-01', 4, '00000000-0000-0000-0000-000000000002'::uuid),
-  ('e0000001-0000-0000-0000-000000000005'::uuid, '2026-05-01', 5, '00000000-0000-0000-0000-000000000002'::uuid)
-ON CONFLICT (hub_id, target_month) DO NOTHING;
-
--- ── 3. get_enrollment_performance: hub scope, use enrollments.created_at ──────
+-- ── 2. get_enrollment_performance: hub scope, use enrollments.created_at ──────
 CREATE OR REPLACE FUNCTION public.get_enrollment_performance(
   p_months     int  DEFAULT 12,
   p_start_date date DEFAULT NULL,
@@ -110,7 +100,7 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.get_enrollment_performance(int, date, date) TO authenticated;
 
--- ── 4. list_outstanding_invoices: hub scope + payments for amount_paid ─────────
+-- ── 3. list_outstanding_invoices: hub scope + payments for amount_paid ─────────
 CREATE OR REPLACE FUNCTION public.list_outstanding_invoices(p_only_overdue boolean DEFAULT false)
 RETURNS TABLE (
   invoice_id            uuid,
@@ -189,7 +179,7 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.list_outstanding_invoices(boolean) TO authenticated;
 
--- ── 5. approve_staff_invoice: include hub_id ──────────────────────────────────
+-- ── 4. approve_staff_invoice: include hub_id ──────────────────────────────────
 CREATE OR REPLACE FUNCTION public.approve_staff_invoice(
   p_id           uuid,
   p_payment_date date DEFAULT NULL
@@ -230,7 +220,7 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.approve_staff_invoice(uuid, date) TO authenticated;
 
--- ── 6. post_recurring_expense: include hub_id ─────────────────────────────────
+-- ── 5. post_recurring_expense: include hub_id ─────────────────────────────────
 CREATE OR REPLACE FUNCTION public.post_recurring_expense(
   p_id           uuid,
   p_payment_date date DEFAULT NULL
@@ -273,7 +263,7 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.post_recurring_expense(uuid, date) TO authenticated;
 
--- ── 7. post_recurring_income: include hub_id ──────────────────────────────────
+-- ── 6. post_recurring_income: include hub_id ──────────────────────────────────
 CREATE OR REPLACE FUNCTION public.post_recurring_income(
   p_id           uuid,
   p_payment_date date DEFAULT NULL

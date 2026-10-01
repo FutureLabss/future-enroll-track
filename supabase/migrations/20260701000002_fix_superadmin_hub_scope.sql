@@ -27,14 +27,8 @@ BEGIN
 END;
 $$;
 
--- ── 2. Seed superadmin into hub_members (FutureLabs as default) ──────────────
-INSERT INTO public.hub_members (user_id, hub_id, hub_role)
-SELECT u.id, '00000000-0000-0000-0000-000000000001'::uuid, 'owner'
-FROM auth.users u
-WHERE u.email = 'manassehudim@gmail.com'
-ON CONFLICT (user_id) DO UPDATE
-  SET hub_id   = EXCLUDED.hub_id,
-      hub_role = EXCLUDED.hub_role;
+-- ── 2. Environment-specific superadmin membership intentionally omitted. ─────
+-- Bootstrap privileged users explicitly after deployment.
 
 -- ── 3. Rewrite RLS policies ───────────────────────────────────────────────────
 

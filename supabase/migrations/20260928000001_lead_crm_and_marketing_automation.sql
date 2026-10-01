@@ -402,17 +402,5 @@ GRANT EXECUTE ON FUNCTION public.complete_lead_follow_up(uuid,text,timestamptz) 
 GRANT EXECUTE ON FUNCTION public.seed_crm_defaults() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.activate_marketing_campaign(uuid) TO authenticated;
 
-SELECT cron.schedule('process-marketing-campaigns', '*/5 * * * *', $$
-  SELECT net.http_post(
-    url := 'https://ozjxktxbzhkujavmzjrf.supabase.co/functions/v1/process-marketing-campaigns',
-    headers := jsonb_build_object('Content-Type','application/json','x-cron-secret',(SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='crm_cron_secret' LIMIT 1)),
-    body := '{}'::jsonb
-  );
-$$);
-SELECT cron.schedule('process-lead-follow-ups', '0 * * * *', $$
-  SELECT net.http_post(
-    url := 'https://ozjxktxbzhkujavmzjrf.supabase.co/functions/v1/process-lead-follow-ups',
-    headers := jsonb_build_object('Content-Type','application/json','x-cron-secret',(SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='crm_cron_secret' LIMIT 1)),
-    body := '{}'::jsonb
-  );
-$$);
+-- Environment-specific HTTP cron jobs intentionally omitted. Configure them
+-- after deployment with this project's URL and credentials.

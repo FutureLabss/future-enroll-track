@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { ArrowLeft, CreditCard, Building2, Upload, Copy, Check, AlertTriangle, CheckCircle2, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
-import { PAYMENT_BANK } from '@/lib/siteConfig';
+import { siteConfig } from '@/lib/siteConfig';
 
 export default function StudentInvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -67,7 +67,7 @@ export default function StudentInvoiceDetailPage() {
   useEffect(() => {
     if (autoPayTriggered.current) return;
     if (!invoice || loading) return;
-    if (searchParams.get('pay') !== '1') return;
+    if (!siteConfig.onlinePaymentsEnabled || searchParams.get('pay') !== '1') return;
     const next = installments.find(i => i.status !== 'paid');
     const amt = next ? Number(next.amount) : (Number(invoice.total_amount) - installments.filter(i=>i.status==='paid').reduce((s,i)=>s+Number(i.amount),0));
     if (amt > 0) {
@@ -150,7 +150,7 @@ export default function StudentInvoiceDetailPage() {
   };
 
   const copyAccount = () => {
-    navigator.clipboard.writeText(PAYMENT_BANK.account);
+    navigator.clipboard.writeText(siteConfig.bankTransfer.accountNumber);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -241,40 +241,43 @@ export default function StudentInvoiceDetailPage() {
               : `Outstanding balance: ${formatCurrency(outstanding)}`}
           </p>
 
-          <Tabs defaultValue="paystack">
+          {(siteConfig.onlinePaymentsEnabled || siteConfig.bankTransfer.enabled) ? (
+          <Tabs defaultValue={siteConfig.bankTransfer.enabled ? 'bank' : 'online'}>
             <TabsList>
-              <TabsTrigger value="paystack"><CreditCard className="h-4 w-4 mr-2" /> Pay with Paystack</TabsTrigger>
-              <TabsTrigger value="bank"><Building2 className="h-4 w-4 mr-2" /> Bank transfer</TabsTrigger>
+              {siteConfig.bankTransfer.enabled && <TabsTrigger value="bank"><Building2 className="h-4 w-4 mr-2" /> Bank transfer</TabsTrigger>}
+              {siteConfig.onlinePaymentsEnabled && <TabsTrigger value="online"><CreditCard className="h-4 w-4 mr-2" /> Pay online</TabsTrigger>}
             </TabsList>
-            <TabsContent value="paystack" className="mt-4">
-              <p className="text-sm text-muted-foreground mb-3">Pay instantly with card, bank, USSD, or transfer via Paystack.</p>
-              <Button
-                disabled={paying}
-                onClick={() => handlePaystack(defaultPayAmount, nextInstallment?.id)}
-              >
+            {siteConfig.onlinePaymentsEnabled && <TabsContent value="online" className="mt-4">
+              <p className="text-sm text-muted-foreground mb-3">Pay securely by card, bank, USSD, or transfer.</p>
+              <Button disabled={paying} onClick={() => handlePaystack(defaultPayAmount, nextInstallment?.id)}>
                 {paying ? 'Redirecting…' : `Pay ${formatCurrency(defaultPayAmount)} now`}
               </Button>
-            </TabsContent>
-            <TabsContent value="bank" className="mt-4">
+            </TabsContent>}
+            {siteConfig.bankTransfer.enabled && <TabsContent value="bank" className="mt-4">
               <div className="bg-muted/50 rounded-lg p-4 mb-4">
                 <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Send transfer to</p>
                 <div className="space-y-1 text-sm">
-                  <div className="flex justify-between"><span className="text-muted-foreground">Account name</span><span className="font-medium">Future Labs Ltd</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Account name</span><span className="font-medium">{siteConfig.bankTransfer.accountName}</span></div>
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">Account number</span>
                     <button onClick={copyAccount} className="font-mono font-semibold flex items-center gap-2 hover:text-primary">
-                      {PAYMENT_BANK.account} {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                      {siteConfig.bankTransfer.accountNumber} {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                     </button>
                   </div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Bank</span><span className="font-medium">{PAYMENT_BANK.name}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Bank</span><span className="font-medium">{siteConfig.bankTransfer.bankName}</span></div>
                 </div>
                 <p className="text-xs text-muted-foreground mt-3">After transferring, upload your receipt below. Your payment will be credited once verified by an admin.</p>
               </div>
               <Button onClick={() => openBankDialog(defaultPayAmount, nextInstallment?.id)}>
                 <Upload className="h-4 w-4 mr-2" /> Upload payment receipt
               </Button>
-            </TabsContent>
+            </TabsContent>}
           </Tabs>
+          ) : (
+            <div className="rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-muted-foreground">
+              Payment instructions are not configured yet. Contact <a className="font-medium text-primary hover:underline" href={`mailto:${siteConfig.supportEmail}`}>{siteConfig.supportEmail}</a> for assistance.
+            </div>
+          )}
         </div>
       )}
 
@@ -349,9 +352,9 @@ export default function StudentInvoiceDetailPage() {
                 {inst.status !== 'paid' && new Date(`${inst.due_date}T00:00:00`) < new Date() && (
                   <Badge variant="outline" className="border-destructive/30 text-destructive">Overdue</Badge>
                 )}
-                {inst.status !== 'paid' && (
-                  <Button size="sm" disabled={paying} onClick={() => handlePaystack(Number(inst.amount), inst.id)}>
-                    Pay {formatCurrency(Number(inst.amount))}
+                {inst.status !== 'paid' && siteConfig.bankTransfer.enabled && (
+                  <Button size="sm" onClick={() => openBankDialog(Number(inst.amount), inst.id)}>
+                    Upload receipt
                   </Button>
                 )}
               </div>

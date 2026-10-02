@@ -84,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }).catch(() => { setLoading(false); setRolesReady(true); });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         if (!initialised) return;
         setSession(session);
         setUser(session?.user ?? null);
@@ -98,8 +98,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           currentUserRef.current = { id: newUserId, email: session!.user.email };
           setRolesReady(false);
-          await fetchRoles(newUserId);
-          setRolesReady(true);
+          // Supabase holds an internal auth lock while this callback runs. A
+          // query awaited here can race (or deadlock) with signInWithPassword,
+          // so defer permission hydration until the auth callback has returned.
+          setTimeout(() => {
+            fetchRoles(newUserId)
+              .catch(() => {
+                setRoles([]);
+                setIsSuperadmin(false);
+                setIsHubManager(false);
+                setHubId(null);
+              })
+              .finally(() => setRolesReady(true));
+          }, 0);
         } else if (!newUserId && prevUserId) {
           if (event === 'SIGNED_OUT') {
             logAuthEvent('user_logout', prevUserId, currentUserRef.current?.email);

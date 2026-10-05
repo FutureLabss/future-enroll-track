@@ -13,9 +13,4 @@ describeFeature(feature, ({ Scenario }) => {
     Then('the installment\'s amount counts toward March revenue', () => {});
   });
 
-  Scenario.skip('RhemaHub revenue is bucketed by payment date', ({ Given, When, Then }) => {
-    Given('a RhemaHub invoice with a payment recorded in April for a March due date', () => {});
-    When('the finance summary is computed for April', () => {});
-    Then('the payment\'s amount counts toward April revenue', () => {});
-  });
 });

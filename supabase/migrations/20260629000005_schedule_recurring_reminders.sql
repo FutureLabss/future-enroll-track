@@ -1,2 +1,0 @@
--- Environment-specific HTTP cron intentionally omitted. Configure it after
--- deployment with this project's URL and credentials.

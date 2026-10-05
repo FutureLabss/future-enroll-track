@@ -1,2 +1,0 @@
--- Environment-specific admin grant intentionally omitted.
--- Bootstrap privileged users explicitly after deployment.

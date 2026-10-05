@@ -47,12 +47,12 @@ Deno.serve(async (req) => {
       .eq("role", "admin")
       .maybeSingle();
 
-    // Also allow superadmins
-    const { data: saRow } = !roleRow
-      ? await admin.from("superadmins").select("user_id").eq("user_id", userRes.user.id).maybeSingle()
+    // Also allow system owners.
+    const { data: ownerRow } = !roleRow
+      ? await admin.from("system_owners").select("user_id").eq("user_id", userRes.user.id).maybeSingle()
       : { data: null };
 
-    if (!roleRow && !saRow) {
+    if (!roleRow && !ownerRow) {
       return new Response(JSON.stringify({ error: "Admin only" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -185,16 +185,9 @@ Deno.serve(async (req) => {
       : `${name} invited as staff (payroll onboarding)`;
 
     // Non-fatal: notification is audit-only — don't let it block a successful email send.
-    // Pass hub_id explicitly because get_my_hub_id() returns NULL under the service role.
     try {
-      const { data: hubRow } = await admin
-        .from("hub_members")
-        .select("hub_id")
-        .eq("user_id", userRes.user.id)
-        .maybeSingle();
       await admin.from("notifications").insert({
         user_id: null,
-        hub_id: hubRow?.hub_id ?? null,
         type: "staff_invitation",
         title: `Invitation sent to ${email}`,
         message: notifMessage,

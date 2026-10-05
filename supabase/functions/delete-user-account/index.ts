@@ -31,15 +31,15 @@ Deno.serve(async (req) => {
       .from("user_roles")
       .select("role")
       .eq("user_id", callerId);
-    const { data: callerSuperadmin } = await admin
-      .from("superadmins")
+    const { data: callerOwner } = await admin
+      .from("system_owners")
       .select("user_id")
       .eq("user_id", callerId)
       .maybeSingle();
 
     if (callerRolesErr) return json({ error: callerRolesErr.message }, 400);
     const isAdmin = (callerRoles || []).some((r) => r.role === "admin");
-    if (!isAdmin && !callerSuperadmin) return json({ error: "Only admins can delete user accounts" }, 403);
+    if (!isAdmin && !callerOwner) return json({ error: "Only admins can delete user accounts" }, 403);
 
     const { account_type, id } = await req.json() as { account_type?: AccountType; id?: string };
     if ((account_type !== "enrollment" && account_type !== "staff") || !id) {
@@ -186,12 +186,12 @@ async function canDeleteAuthUser(
   userId: string,
   expectedRole: "student" | "staff",
 ) {
-  const { data: superadmin } = await admin
-    .from("superadmins")
+  const { data: owner } = await admin
+    .from("system_owners")
     .select("user_id")
     .eq("user_id", userId)
     .maybeSingle();
-  if (superadmin) return { ok: false, error: "Cannot delete a superadmin auth account from this flow" };
+  if (owner) return { ok: false, error: "Cannot delete a system owner account from this flow" };
 
   const { data: roles, error } = await admin
     .from("user_roles")

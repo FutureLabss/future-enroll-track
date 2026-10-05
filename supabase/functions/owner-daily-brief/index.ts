@@ -6,11 +6,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const HUB_NAMES: Record<string, string> = {
-  "00000000-0000-0000-0000-000000000001": "Coriftech",
-  "00000000-0000-0000-0000-000000000002": "RhemaHub",
-};
-
 const naira = (n: number) => `₦${Number(n).toLocaleString("en-NG")}`;
 
 async function sendEmail(to: string, subject: string, html: string) {
@@ -36,22 +31,6 @@ function section(title: string, rows: string[]): string {
     </div>`;
 }
 
-type HubRow = { programs: { hub_id: string } | { hub_id: string }[] };
-
-function hubIdOf(row: HubRow): string | undefined {
-  const p = Array.isArray(row.programs) ? row.programs[0] : row.programs;
-  return p?.hub_id;
-}
-
-function sumByHub(rows: { amount: number; hub_id?: string }[]): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const r of rows) {
-    if (!r.hub_id) continue;
-    out[r.hub_id] = (out[r.hub_id] || 0) + Number(r.amount);
-  }
-  return out;
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -67,38 +46,36 @@ Deno.serve(async (req) => {
     const yStart = yesterday.toISOString().slice(0, 10);
     const yEnd = today.toISOString().slice(0, 10); // exclusive upper bound
 
-    // 1. Revenue collected yesterday, per hub (primary hub: installments.paid_at, demo hub: payments.payment_date)
+    // 1. Revenue collected yesterday.
     const [instRevRes, payRevRes] = await Promise.all([
       supabase
         .from("installments")
-        .select("amount, invoices!inner(status, enrollments!inner(programs!inner(hub_id)))")
+        .select("amount, invoices!inner(status)")
         .eq("status", "paid")
         .neq("invoices.status", "cancelled")
         .gte("paid_at", yStart)
         .lt("paid_at", yEnd),
       supabase
         .from("payments")
-        .select("amount, invoices!inner(status, enrollments!inner(programs!inner(hub_id)))")
+        .select("amount, invoices!inner(status)")
         .neq("invoices.status", "cancelled")
         .eq("payment_date", yStart),
     ]);
     if (instRevRes.error) throw instRevRes.error;
     if (payRevRes.error) throw payRevRes.error;
 
-    const revenueByHub = sumByHub([
-      ...(instRevRes.data || []).map((r: any) => ({ amount: r.amount, hub_id: hubIdOf(r.invoices.enrollments) })),
-      ...(payRevRes.data || []).map((r: any) => ({ amount: r.amount, hub_id: hubIdOf(r.invoices.enrollments) })),
-    ]);
+    const totalRevenue = [...(instRevRes.data || []), ...(payRevRes.data || [])]
+      .reduce((sum: number, row: any) => sum + Number(row.amount), 0);
 
-    // 2. New enrollments yesterday, per hub
+    // 2. New enrollments yesterday.
     const { data: newEnrollments, error: enrollErr } = await supabase
       .from("enrollments")
-      .select("id, full_name, programs!inner(hub_id, program_name)")
+      .select("id, full_name, programs(program_name)")
       .gte("created_at", yStart)
       .lt("created_at", yEnd);
     if (enrollErr) throw enrollErr;
 
-    // 3. Pending invoice edit/delete requests (both hubs — this table has no hub scoping issue for superadmin, but we're on service role anyway)
+    // 3. Pending invoice edit/delete requests.
     const { data: pendingChanges, error: changesErr } = await supabase
       .from("invoice_change_requests")
       .select("id, action, invoices(invoice_number, enrollments(full_name))")
@@ -122,13 +99,10 @@ Deno.serve(async (req) => {
     if (overdueErr) throw overdueErr;
 
     // ── Build email ──────────────────────────────────────────────────────────
-    const hubIds = Object.keys(HUB_NAMES);
-    const revenueRows = hubIds.map((h) => `<strong>${HUB_NAMES[h]}:</strong> ${naira(revenueByHub[h] || 0)}`);
-    const totalRevenue = Object.values(revenueByHub).reduce((s, n) => s + n, 0);
+    const revenueRows = [`<strong>Coriftech:</strong> ${naira(totalRevenue)}`];
 
     const enrollmentRows = (newEnrollments || []).map((e: any) => {
-      const hub = HUB_NAMES[hubIdOf(e) as string] || "Unknown hub";
-      return `${e.full_name} — ${e.programs?.program_name || "—"} (${hub})`;
+      return `${e.full_name} — ${e.programs?.program_name || "—"}`;
     });
 
     const changeRows = (pendingChanges || []).map((c: any) =>
@@ -175,17 +149,17 @@ Deno.serve(async (req) => {
       `Newly overdue: ${overdueRows.length}`,
     ].join(" · ");
 
-    // ── Deliver: email + in-app notification, per superadmin ──────────────────
-    const { data: superadmins, error: superadminErr } = await supabase.from("superadmins").select("user_id");
-    if (superadminErr) throw superadminErr;
-    if (!superadmins || superadmins.length === 0) {
-      return new Response(JSON.stringify({ success: true, sent: 0, note: "No superadmins found" }), {
+    // ── Deliver: email + in-app notification, per system owner ────────────────
+    const { data: owners, error: ownerErr } = await supabase.from("system_owners").select("user_id");
+    if (ownerErr) throw ownerErr;
+    if (!owners || owners.length === 0) {
+      return new Response(JSON.stringify({ success: true, sent: 0, note: "No system owners found" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const results: string[] = [];
-    for (const { user_id } of superadmins) {
+    for (const { user_id } of owners) {
       const { data: profile } = await supabase.from("profiles").select("email").eq("user_id", user_id).maybeSingle();
       const errors: string[] = [];
 

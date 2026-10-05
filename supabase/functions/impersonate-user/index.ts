@@ -6,8 +6,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const SUPERADMIN_EMAIL = "manassehudim@gmail.com";
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -19,22 +17,20 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    // Only superadmin may impersonate
+    // Only a system owner may impersonate.
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
     const { data: userData, error: userErr } = await userClient.auth.getUser();
     if (userErr || !userData.user) return json({ error: "Unauthorized" }, 401);
-    if (userData.user.email?.toLowerCase() !== SUPERADMIN_EMAIL) {
-      return json({ error: "Only the superadmin can impersonate users" }, 403);
-    }
-
     const { user_id } = await req.json();
     if (!user_id || typeof user_id !== "string") {
       return json({ error: "user_id required" }, 400);
     }
 
     const admin = createClient(supabaseUrl, serviceKey);
+    const { data: owner } = await admin.from("system_owners").select("user_id").eq("user_id", userData.user.id).maybeSingle();
+    if (!owner) return json({ error: "Only a system owner can impersonate users" }, 403);
 
     // Look up the target user's email (needed for generateLink)
     const { data: targetUser, error: lookupErr } = await admin.auth.admin.getUserById(user_id);

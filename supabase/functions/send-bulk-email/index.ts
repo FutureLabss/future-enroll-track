@@ -118,19 +118,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Scope audience-wide sends to the acting admin's hub — the service role
-    // bypasses RLS, so without this a bare audience_type fetched every
-    // student/staff member on the platform
-    let hubId: string | null = null;
-    if (actingUserId) {
-      const { data: member } = await admin
-        .from("hub_members")
-        .select("hub_id")
-        .eq("user_id", actingUserId)
-        .maybeSingle();
-      hubId = member?.hub_id ?? null;
-    }
-
     const body = (await req.json()) as Payload;
     if (!body.subject || !body.message) {
       return new Response(JSON.stringify({ error: "subject and message required" }), {
@@ -152,10 +139,6 @@ Deno.serve(async (req) => {
       if (f.program_id) q = q.eq("program_id", f.program_id);
       if (f.cohort_id) q = q.eq("cohort_id", f.cohort_id);
       if (f.enrollment_status) q = q.eq("enrollment_status", f.enrollment_status);
-      if (!f.program_id && !f.cohort_id && hubId) {
-        const { data: hubPrograms } = await admin.from("programs").select("id").eq("hub_id", hubId);
-        q = q.in("program_id", (hubPrograms || []).map((p: any) => p.id));
-      }
 
       const { data: enrollments, error: enrollErr } = await q;
       if (enrollErr) throw enrollErr;
@@ -197,11 +180,10 @@ Deno.serve(async (req) => {
         }
         staffRows = Array.from(seen.values());
       } else {
-        let staffQ = admin
+        const staffQ = admin
           .from("staff")
           .select("id, full_name, email")
           .eq("active", true);
-        if (hubId) staffQ = staffQ.eq("hub_id", hubId);
         const { data, error: staffErr } = await staffQ;
         if (staffErr) throw staffErr;
         staffRows = data || [];

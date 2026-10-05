@@ -6,8 +6,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const SUPERADMIN_EMAIL = "manassehudim@gmail.com";
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -19,20 +17,18 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    // Verify caller is the superadmin
+    // Verify caller is a system owner.
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
     const { data: userData, error: userErr } = await userClient.auth.getUser();
     if (userErr || !userData.user) return json({ error: "Unauthorized" }, 401);
-    if (userData.user.email?.toLowerCase() !== SUPERADMIN_EMAIL) {
-      return json({ error: "Only the superadmin can invite admins" }, 403);
-    }
-
     const { email } = await req.json();
     if (!email || typeof email !== "string") return json({ error: "Email required" }, 400);
 
     const admin = createClient(supabaseUrl, serviceKey);
+    const { data: owner } = await admin.from("system_owners").select("user_id").eq("user_id", userData.user.id).maybeSingle();
+    if (!owner) return json({ error: "Only a system owner can invite admins" }, 403);
 
     // Record pending admin invite first (so signup auto-promotes)
     const { error: rpcErr } = await userClient.rpc("create_admin_invite" as any, { p_email: email });

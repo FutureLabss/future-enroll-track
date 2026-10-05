@@ -75,10 +75,10 @@ Deno.serve(async (req) => {
     const admin = createClient(supabaseUrl, serviceKey);
     const { data: roleRow } = await admin.from("user_roles").select("role")
       .eq("user_id", userRes.user.id).eq("role", "admin").maybeSingle();
-    const { data: saRow } = !roleRow
-      ? await admin.from("superadmins").select("user_id").eq("user_id", userRes.user.id).maybeSingle()
+    const { data: ownerRow } = !roleRow
+      ? await admin.from("system_owners").select("user_id").eq("user_id", userRes.user.id).maybeSingle()
       : { data: null };
-    if (!roleRow && !saRow) {
+    if (!roleRow && !ownerRow) {
       return new Response(JSON.stringify({ error: "Admin only" }), {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

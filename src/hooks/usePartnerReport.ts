@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/hooks/useAuth';
+import { siteConfig } from '@/lib/siteConfig';
 import {
   computePartnerReport,
   PartnerReportInput,
@@ -11,7 +11,7 @@ import {
 
 const CHUNK = 100;
 
-// The generated types predate hub_id, hubs and cohort_students, so this hook
+// The generated types predate some reporting tables, so this hook
 // queries through an untyped handle rather than disabling checks for the file.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
@@ -50,21 +50,17 @@ async function inChunks<T>(ids: string[], fetch: (chunk: string[]) => PromiseLik
   return out;
 }
 
-// Loads everything computePartnerReport needs for the active hub. Money is
+// Loads everything computePartnerReport needs. Money is
 // fetched from the start of the previous year so any quarter (and the one
 // before it, for the income-change column) can be computed without refetching.
 export function usePartnerReport(year: number, quarter: number) {
-  const { hubId } = useAuth();
-
   const query = useQuery({
-    queryKey: ['partner-report', hubId, year],
-    enabled: Boolean(hubId),
+    queryKey: ['partner-report', year],
     staleTime: 1000 * 60 * 5,
     queryFn: async () => {
-      const [hubRes, programsRes, fieldsRes] = await Promise.all([
-        db.from('hubs').select('name, contact_email').eq('id', hubId!).maybeSingle(),
-        db.from('programs').select('id').eq('hub_id', hubId!),
-        db.from('custom_fields').select('id, key').eq('hub_id', hubId!).in('key', ['date_of_birth', 'age_category']),
+      const [programsRes, fieldsRes] = await Promise.all([
+        db.from('programs').select('id'),
+        db.from('custom_fields').select('id, key').in('key', ['date_of_birth', 'age_category']),
       ]);
       if (programsRes.error) throw programsRes.error;
       const programIds = (programsRes.data ?? []).map((p: { id: string }) => p.id);
@@ -108,9 +104,9 @@ export function usePartnerReport(year: number, quarter: number) {
             .in('invoices.enrollment_id', chunk)
             .gte('payment_date', since),
         ),
-        db.from('cohorts').select('id, cohort_label, start_date, end_date').eq('hub_id', hubId!),
-        db.from('other_income').select('amount, payment_date').eq('hub_id', hubId!).gte('payment_date', since),
-        db.from('staff').select('full_name, role_title, created_at').eq('hub_id', hubId!).gte('created_at', since),
+        db.from('cohorts').select('id, cohort_label, start_date, end_date'),
+        db.from('other_income').select('amount, payment_date').gte('payment_date', since),
+        db.from('staff').select('full_name, role_title, created_at').gte('created_at', since),
       ]);
       for (const r of [cohortsRes, otherIncomeRes, staffRes]) if (r.error) throw r.error;
 
@@ -166,7 +162,7 @@ export function usePartnerReport(year: number, quarter: number) {
         otherIncome: otherIncomeRes.data ?? [],
         staff: staffRes.data ?? [],
       };
-      return { hub: hubRes.data as { name: string; contact_email: string | null } | null, input };
+      return { organization: { name: siteConfig.organizationName, contact_email: siteConfig.supportEmail }, input };
     },
   });
 
@@ -178,7 +174,7 @@ export function usePartnerReport(year: number, quarter: number) {
 
   return {
     data: report,
-    hub: query.data?.hub ?? null,
+    organization: query.data?.organization ?? null,
     loading: query.isLoading,
     error: query.error as Error | null,
     refetch: query.refetch,

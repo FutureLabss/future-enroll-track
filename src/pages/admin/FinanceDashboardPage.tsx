@@ -25,7 +25,7 @@ export default function FinanceDashboardPage() {
 
   const { rows, loading, error, totals } = useFinanceSummary({ mode, months, startDate, endDate });
 
-  // Payment-date basis re-buckets primary-hub installments by paid_at instead of due_date,
+  // Payment-date basis re-buckets installments by paid_at instead of due_date,
   // so a payment approved this month shows up this month rather than under whenever it
   // was originally due. Derived once here so the chart/cards/table below stay unchanged.
   const displayRows = useMemo(() => rows.map(r => {

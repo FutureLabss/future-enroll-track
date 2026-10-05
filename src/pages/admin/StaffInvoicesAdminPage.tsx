@@ -15,7 +15,7 @@ import { Check, X, FileText, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function StaffInvoicesAdminPage() {
-  const { user, isSuperadmin } = useAuth();
+  const { user, isOwner } = useAuth();
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
@@ -27,9 +27,9 @@ export default function StaffInvoicesAdminPage() {
 
   const fetchRows = async () => {
     setLoading(true);
-    // Always fetch everything RLS permits — superadmin ALL policy and
+    // Always fetch everything RLS permits; display filtering happens below.
     // admin SELECT policy both grant full access; staff see only their own.
-    // Display filtering happens below so isSuperadmin timing never blocks data.
+    // Display filtering happens below so owner-role hydration never blocks data.
     const { data } = await supabase.from('staff_invoices' as any).select('*').order('created_at', { ascending: false });
     setRows(data || []);
     setLoading(false);
@@ -63,7 +63,7 @@ export default function StaffInvoicesAdminPage() {
         evidence_url,
       });
       if (error) throw error;
-      toast.success('Invoice submitted for superadmin approval');
+      toast.success('Invoice submitted for owner approval');
       setOpen(false);
       setForm({ title: '', description: '', amount: '', file: null });
       fetchRows();
@@ -93,8 +93,7 @@ export default function StaffInvoicesAdminPage() {
   };
 
   // Superadmin sees all; everyone else sees only their own submissions.
-  // Computed every render so isSuperadmin resolving async never causes a stale view.
-  const visibleRows = isSuperadmin ? rows : rows.filter((r: any) => r.submitted_by === user?.id);
+  const visibleRows = isOwner ? rows : rows.filter((r: any) => r.submitted_by === user?.id);
   const filterByStatus = (s: string) => visibleRows.filter((r: any) => r.status === s);
 
   const renderList = (items: any[]) => (
@@ -121,7 +120,7 @@ export default function StaffInvoicesAdminPage() {
                 )}
                 {r.rejection_reason && <p className="text-xs text-destructive">Reason: {r.rejection_reason}</p>}
                 <p className="text-xs text-muted-foreground">Submitted {new Date(r.created_at).toLocaleString()}</p>
-                {isSuperadmin && r.status === 'pending' && (
+                {isOwner && r.status === 'pending' && (
                   <div className="flex gap-2 pt-2">
                     <Button size="sm" disabled={busy === r.id} onClick={() => approve(r.id)}>
                       <Check className="h-4 w-4 mr-1" /> Approve & record expense
@@ -163,10 +162,10 @@ export default function StaffInvoicesAdminPage() {
   return (
     <div>
       <PageHeader
-        title={isSuperadmin ? 'Staff & Admin Invoices' : 'My Invoice Submissions'}
-        description={isSuperadmin ? 'Review and approve invoice requests — approved invoices are recorded as expenses' : 'Submit invoices to the superadmin for approval'}
+        title={isOwner ? 'Staff & Admin Invoices' : 'My Invoice Submissions'}
+        description={isOwner ? 'Review and approve invoice requests — approved invoices are recorded as expenses' : 'Submit invoices to the system owner for approval'}
         actions={
-          !isSuperadmin ? (
+          !isOwner ? (
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
                 <Button><Plus className="h-4 w-4 mr-2" /> New Invoice</Button>

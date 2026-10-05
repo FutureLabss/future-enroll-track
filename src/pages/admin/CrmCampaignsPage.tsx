@@ -95,7 +95,7 @@ export default function CrmCampaignsPage() {
           <div><Label>Entry qualification</Label><Select value={form.qualification} onValueChange={qualification => setForm({ ...form, qualification })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{['all','cold','warm','hot'].map(x => <SelectItem key={x} value={x}>{x}</SelectItem>)}</SelectContent></Select></div>
           <div><Label>Send email after (hours)</Label><Input type="number" min="0" value={form.delay_hours} onChange={e => setForm({ ...form, delay_hours: e.target.value })} /></div>
           <div><Label>Subject</Label><Input value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })} placeholder="Hello {{name}}" /></div>
-          <div><Label>HTML content</Label><Textarea rows={8} value={form.html_body} onChange={e => setForm({ ...form, html_body: e.target.value })} /><p className="text-xs text-muted-foreground mt-1">Placeholders: name, source, owner, program, hub</p></div>
+          <div><Label>HTML content</Label><Textarea rows={8} value={form.html_body} onChange={e => setForm({ ...form, html_body: e.target.value })} /><p className="text-xs text-muted-foreground mt-1">Placeholders: name, source, owner, program, organization</p></div>
           <Button onClick={create}>Create draft</Button>
         </CardContent>
       </Card>

@@ -72,7 +72,7 @@ export default function StaffInvoicesPage() {
     <div>
       <PageHeader title="Staff Invoices" description="Submit invoices to the company" />
       <Card><CardContent className="py-12 text-center text-muted-foreground">
-        Your account ({user?.email}) is not registered as staff. Ask the superadmin to add you under Payroll → Staff.
+        Your account ({user?.email}) is not registered as staff. Ask the system owner to add you under Payroll → Staff.
       </CardContent></Card>
     </div>
   );
@@ -81,7 +81,7 @@ export default function StaffInvoicesPage() {
     <div>
       <PageHeader
         title="My Invoices to Company"
-        description="Submit reimbursement / service invoices for superadmin approval"
+        description="Submit reimbursement / service invoices for owner approval"
         actions={
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>

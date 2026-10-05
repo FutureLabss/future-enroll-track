@@ -17,7 +17,7 @@ type Inst = { id?: string; amount: string; due_date: string; status: 'pending' |
 export default function EditInvoicePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isAdmin, isSuperadmin } = useAuth();
+  const { isAdmin, isOwner } = useAuth();
   const [saving, setSaving] = useState(false);
   const [total, setTotal] = useState('');
   const [installments, setInstallments] = useState<Inst[]>([]);
@@ -98,7 +98,7 @@ export default function EditInvoicePage() {
           paid_at: i.status === 'paid' ? (i.paid_at || new Date().toISOString()) : null,
         })),
       };
-      if (isSuperadmin) {
+      if (isOwner) {
         const { error } = await supabase.rpc('admin_update_invoice' as any, {
           p_invoice_id: id,
           p_total_amount: totalNum,
@@ -114,7 +114,7 @@ export default function EditInvoicePage() {
           p_payload: payload,
         });
         if (error) throw error;
-        toast.success('Edit request sent for superadmin approval');
+        toast.success('Edit request sent for owner approval');
         navigate(`/admin/invoices/${id}`);
       }
     } catch (e: any) {
@@ -210,12 +210,12 @@ export default function EditInvoicePage() {
 
       <div className="mt-6 flex gap-3">
         <Button onClick={handleSave} disabled={saving} size="lg">
-          <Save className="h-4 w-4 mr-2" /> {saving ? 'Saving…' : isSuperadmin ? 'Save changes' : 'Request changes'}
+          <Save className="h-4 w-4 mr-2" /> {saving ? 'Saving…' : isOwner ? 'Save changes' : 'Request changes'}
         </Button>
         <Button variant="outline" onClick={() => navigate(`/admin/invoices/${id}`)}>Cancel</Button>
       </div>
-      {!isSuperadmin && (
-        <p className="text-xs text-muted-foreground mt-3">Edits require superadmin approval.</p>
+      {!isOwner && (
+        <p className="text-xs text-muted-foreground mt-3">Edits require owner approval.</p>
       )}
     </div>
   );

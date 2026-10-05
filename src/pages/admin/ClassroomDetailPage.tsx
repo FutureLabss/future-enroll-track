@@ -577,7 +577,7 @@ function ClassroomEditModal({ classroom, onSave }: { classroom: any; onSave: (pa
 export default function ClassroomDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isSuperadmin } = useAuth();
+  const { isOwner } = useAuth();
   const { classroom, loading, updateClassroom } = useClassroom(id!);
   const { cohorts, refetch: refetchCohorts } = useClassroomCohorts(id!);
   const { sessions, generateSession, closeSession, regenerateCode } = useAttendance(id!);
@@ -633,13 +633,7 @@ export default function ClassroomDetailPage() {
   const { data: localData } = useQuery({
     queryKey: ['classroom-local', id],
     queryFn: async () => {
-      // Resolve the classroom's hub first (PK lookup) so the roster query is
-      // hub-filtered server-side — for superadmin, the unfiltered query
-      // shipped every hub's staff on each page load
-      const { data: cls } = await supabase.from('classrooms').select('hub_id').eq('id', id!).maybeSingle();
-      const hubId = (cls as any)?.hub_id;
-      let rosterQuery = supabase.from('staff').select('id, full_name, role_title, email, program_id, hub_id').eq('active', true);
-      if (hubId) rosterQuery = rosterQuery.eq('hub_id', hubId);
+      const rosterQuery = supabase.from('staff').select('id, full_name, role_title, email, program_id').eq('active', true);
       const [staffRes, lessonsRes, rosterRes] = await Promise.all([
         supabase.from('classroom_staff')
           .select('*, staff(full_name, email, role_title), classroom_permissions(*)')
@@ -1086,13 +1080,13 @@ export default function ClassroomDetailPage() {
       ].filter(Boolean);
       return <span className="text-sm">{flags.length ? flags.join(', ') : 'View only'}</span>;
     }},
-    { key: 'actions', header: '', render: (r: any) => isSuperadmin ? (
+    { key: 'actions', header: '', render: (r: any) => isOwner ? (
       <div className="flex gap-2">
         <Button size="sm" variant="outline" onClick={() => openPermissions(r)}><Pencil className="h-3.5 w-3.5 mr-1" />Permissions</Button>
         <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => handleRevokeStaff(r.id)}><Ban className="h-3.5 w-3.5 mr-1" />Revoke</Button>
       </div>
     ) : null },
-  ], [handleRevokeStaff, openPermissions, isSuperadmin]);
+  ], [handleRevokeStaff, openPermissions, isOwner]);
 
   const studentColumns = useMemo(() => [
     { key: 'name', header: 'Student', render: (r: any) => r.full_name || <span className="text-muted-foreground text-sm">—</span> },

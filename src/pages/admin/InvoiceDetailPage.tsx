@@ -32,7 +32,7 @@ export default function InvoiceDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [payTarget, setPayTarget] = useState<Installment | null>(null);
   const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
-  const { isAdmin, isSuperadmin } = useAuth();
+  const { isAdmin, isOwner } = useAuth();
 
   const { data, isLoading: loading } = useQuery({
     queryKey: ['invoice', id],
@@ -56,7 +56,7 @@ export default function InvoiceDetailPage() {
     if (!id) return;
     setDeleting(true);
     try {
-      if (isSuperadmin) {
+      if (isOwner) {
         const { error } = await supabase.rpc('admin_delete_invoice' as any, { p_invoice_id: id });
         if (error) throw error;
         toast.success('Invoice deleted');
@@ -66,7 +66,7 @@ export default function InvoiceDetailPage() {
           p_invoice_id: id, p_action: 'delete', p_payload: null,
         });
         if (error) throw error;
-        toast.success('Delete request sent for superadmin approval');
+        toast.success('Delete request sent for owner approval');
         setDeleting(false);
       }
     } catch (err: any) {

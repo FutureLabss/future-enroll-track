@@ -74,7 +74,7 @@ export default function EnrollmentsPage() {
     queryKey: ['enrollments-list', statusFilter, programFilter, dbDateFrom, dbDateTo, dbPaymentFilter, page],
     queryFn: async () => {
       let query = supabase.from('enrollments')
-        .select('*, programs(program_name, hubs(name)), cohorts(cohort_label), organizations(organization_name)', { count: 'exact' })
+        .select('*, programs(program_name), cohorts(cohort_label), organizations(organization_name)', { count: 'exact' })
         .order('first_payment_date', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false })
         .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
@@ -169,7 +169,7 @@ export default function EnrollmentsPage() {
       const cv = valueMap.get(e.id) || {};
       return [
         e.full_name, e.email, e.phone || '',
-        e.programs?.program_name || '', e.programs?.hubs?.name || '', e.cohorts?.cohort_label || '',
+        e.programs?.program_name || '', e.cohorts?.cohort_label || '',
         e.organizations?.organization_name || '',
         e.enrollment_status, getPaymentStatus(e),
         Number(e.total_amount), Number(e.amount_paid), Number(e.outstanding_balance),

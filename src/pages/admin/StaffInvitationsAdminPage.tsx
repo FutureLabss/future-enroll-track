@@ -28,7 +28,7 @@ export default function StaffInvitationsAdminPage() {
   }, []);
 
   const handlePromoteToAdmin = useCallback(async (invitation: any) => {
-    if (!confirm(`Promote ${invitation.staff?.full_name} to admin? They'll have full admin access to this hub.`)) return;
+    if (!confirm(`Promote ${invitation.staff?.full_name} to admin? They'll have full administrative access.`)) return;
     const { data: cs, error: csErr } = await supabase
       .from('classroom_staff')
       .select('user_id')

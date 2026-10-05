@@ -24,7 +24,7 @@ interface FieldValue {
 export default function EnrollmentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isSuperadmin } = useAuth();
+  const { isOwner } = useAuth();
   const queryClient = useQueryClient();
   const [verifying, setVerifying] = useState(false);
   const [showEvidence, setShowEvidence] = useState(false);
@@ -111,7 +111,7 @@ export default function EnrollmentDetailPage() {
     queryFn: async () => {
       const [eRes, fRes, rRes] = await Promise.all([
         supabase.from('enrollments')
-          .select('*, programs(program_name, hub_id, hubs(name)), cohorts(cohort_label), organizations(organization_name)')
+          .select('*, programs(program_name), cohorts(cohort_label), organizations(organization_name)')
           .eq('id', id!).single(),
         supabase.from('field_values')
           .select('id, value, custom_fields(label, key, sort_order, field_type)')
@@ -140,7 +140,7 @@ export default function EnrollmentDetailPage() {
           switchHistory = history.map((h: any) => ({ ...h, admin: adminMap.get(h.user_id) }));
         }
       }
-      const reportingFields = (rRes.data || []).filter((field: any) => !field.hub_id || field.hub_id === eRes.data.programs?.hub_id);
+      const reportingFields = rRes.data || [];
       return { enrollment: eRes.data, fieldValues: (fRes.data as FieldValue[]) || [], reportingFields, switchHistory };
     },
     enabled: !!id,
@@ -297,12 +297,12 @@ export default function EnrollmentDetailPage() {
                 <Pencil className="h-4 w-4 mr-2" /> Program Reporting
               </Button>
             )}
-            {isSuperadmin && (
+            {isOwner && (
               <Button variant="outline" onClick={openEdit}>
                 <Pencil className="h-4 w-4 mr-2" /> Edit Student
               </Button>
             )}
-            {isSuperadmin && enrollment?.user_id && (
+            {isOwner && enrollment?.user_id && (
               <Button variant="outline" onClick={handlePreview} disabled={previewing}>
                 <Eye className="h-4 w-4 mr-2" />
                 {previewing ? 'Generating...' : 'Preview as Student'}
@@ -384,7 +384,7 @@ export default function EnrollmentDetailPage() {
             ['Full Name', enrollment.full_name],
             ['Email', enrollment.email],
             ['Phone', enrollment.phone || '—'],
-            ['Training Partner', enrollment.programs?.hubs?.name || '—'],
+            ['Training Partner', 'Coriftech Solutions Ltd.'],
             ['Address', (enrollment as any).address || '—'],
             ['Guardian Name', (enrollment as any).guardian_name || '—'],
             ['Guardian Phone', (enrollment as any).guardian_phone || '—'],
@@ -525,7 +525,7 @@ export default function EnrollmentDetailPage() {
           </div>
         </DialogContent>
       </Dialog>
-      {/* Edit Student Dialog (superadmin only) */}
+      {/* Edit Student Dialog (owner only) */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Edit Student Details</DialogTitle></DialogHeader>

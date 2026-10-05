@@ -2,7 +2,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable } from '@/components/shared/DataTable';
 import { Button } from '@/components/ui/button';
@@ -39,7 +38,6 @@ const monthOptions = () => {
 };
 
 export default function PayrollPage() {
-  const { hubId } = useAuth();
   const [selectedMonth, setSelectedMonth] = useState(() => toMonthValue(new Date()));
   const queryClient = useQueryClient();
 
@@ -70,10 +68,9 @@ export default function PayrollPage() {
   }, []);
 
   const { data: payrollData, isLoading: loading } = useQuery({
-    queryKey: ['payroll', selectedMonth, hubId],
+    queryKey: ['payroll', selectedMonth],
     queryFn: async () => {
-      let staffQuery = supabase.from('staff').select('*, programs(program_name)').order('full_name');
-      if (hubId) staffQuery = staffQuery.eq('hub_id', hubId);
+      const staffQuery = supabase.from('staff').select('*, programs(program_name)').order('full_name');
       const [s, r, p] = await Promise.all([
         staffQuery,
         supabase.from('payroll_runs').select('*, staff(full_name, role_title)').eq('pay_month', selectedMonth).order('created_at', { ascending: false }),
@@ -129,7 +126,7 @@ export default function PayrollPage() {
       };
       const { error } = editingStaffId
         ? await supabase.from('staff').update(payload).eq('id', editingStaffId)
-        : await supabase.from('staff').insert({ ...payload, hub_id: hubId });
+        : await supabase.from('staff').insert(payload);
       if (error) throw error;
 
       // Send onboarding email to new staff members who have an email address

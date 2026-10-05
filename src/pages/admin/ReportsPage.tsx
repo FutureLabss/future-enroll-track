@@ -30,7 +30,7 @@ export default function ReportsPage() {
         supabase.from('programs').select('id, program_name'),
         supabase.from('cohorts').select('id, cohort_label'),
         supabase.from('organizations').select('id, organization_name'),
-        supabase.from('enrollments').select('*, programs(program_name, hubs(name)), cohorts(cohort_label), organizations(organization_name)').order('first_payment_date', { ascending: false, nullsFirst: false }),
+        supabase.from('enrollments').select('*, programs(program_name), cohorts(cohort_label), organizations(organization_name)').order('first_payment_date', { ascending: false, nullsFirst: false }),
         supabase.from('custom_fields').select('id, key, label, sort_order').eq('active', true).order('sort_order'),
       ]);
 
@@ -205,7 +205,6 @@ export default function ReportsPage() {
         e.email,
         e.phone || '',
         e.programs?.program_name || '',
-        e.programs?.hubs?.name || '',
         e.cohorts?.cohort_label || '',
         e.organizations?.organization_name || '',
         e.enrollment_status,

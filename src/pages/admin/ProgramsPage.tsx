@@ -44,7 +44,6 @@ export default function ProgramsPage() {
   const handleCreate = async () => {
     if (!form.program_name.trim()) { toast.error('Name required'); return; }
     setSaving(true);
-    // hub_id is set automatically by the DB trigger (programs_set_hub_id)
     const { error } = await supabase.from('programs').insert({
       program_name: form.program_name.trim(),
       description: form.description.trim() || null,

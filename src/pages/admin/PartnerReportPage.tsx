@@ -46,7 +46,7 @@ const naira = (v: number) => `₦${Number(v).toLocaleString('en-NG', { maximumFr
 const date = (iso: string) => new Date(iso).toLocaleDateString('en-NG');
 const pctText = (v: number | null) => (v === null ? 'n/a' : `${v}%`);
 
-function buildFields(r: PartnerReportResult, hub: { name: string; contact_email: string | null } | null): Field[] {
+function buildFields(r: PartnerReportResult, organization: { name: string; contact_email: string | null } | null): Field[] {
   const y = r.period.year;
   const partial = r.period.inProgress ? ` The quarter is still running, so this is the figure to date (${date(r.period.asOf)}).` : '';
   const staffHint = r.newStaff.length
@@ -55,8 +55,8 @@ function buildFields(r: PartnerReportResult, hub: { name: string; contact_email:
   const sponsorLines = r.sponsorIncome.map(s => `${s.name} ${naira(s.amount)}`).join(' · ');
 
   return [
-    { col: 'B', question: 'Name of Partner Organization', kind: 'text', value: hub?.name?.toUpperCase() ?? '', note: 'Hub name.' },
-    { col: 'C', question: 'Organization Email Address', kind: 'text', value: hub?.contact_email ?? '', note: 'Hub contact email.' },
+    { col: 'B', question: 'Name of Partner Organization', kind: 'text', value: organization?.name?.toUpperCase() ?? '', note: 'Configured organization name.' },
+    { col: 'C', question: 'Organization Email Address', kind: 'text', value: organization?.contact_email ?? '', note: 'Configured support email.' },
     {
       col: 'D',
       question: `In ${y}, what is the total number of persons that have completed training with your organization?`,
@@ -181,14 +181,14 @@ function readOverrides(key: string): Record<string, string> {
 
 export default function PartnerReportPage() {
   const navigate = useNavigate();
-  const { isAdmin, isSuperadmin, hubId } = useAuth();
+  const { isAdmin } = useAuth();
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [quarter, setQuarter] = useState(Math.floor(now.getMonth() / 3) + 1);
   const [statusFilter, setStatusFilter] = useState<'all' | 'year' | 'quarter' | TrainingStatus>('all');
-  const { data: report, hub, loading, error } = usePartnerReport(year, quarter);
+  const { data: report, organization, loading, error } = usePartnerReport(year, quarter);
 
-  const storageKey = `partner-report:${hubId}:${year}-Q${quarter}`;
+  const storageKey = `partner-report:${year}-Q${quarter}`;
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   useEffect(() => setOverrides(readOverrides(storageKey)), [storageKey]);
   const setOverride = (col: string, value: string | null) => {
@@ -205,7 +205,7 @@ export default function PartnerReportPage() {
     });
   };
 
-  const fields = useMemo(() => (report ? buildFields(report, hub) : []), [report, hub]);
+  const fields = useMemo(() => (report ? buildFields(report, organization) : []), [report, organization]);
   const answer = (f: Field) => overrides[f.col] ?? (f.value === null || f.value === undefined ? '' : String(f.value));
 
   const trainees = useMemo(() => {
@@ -216,7 +216,7 @@ export default function PartnerReportPage() {
     return rows.filter(t => t.status === statusFilter);
   }, [report, statusFilter]);
 
-  if (!isAdmin && !isSuperadmin) return <div>Access denied</div>;
+  if (!isAdmin) return <div>Access denied</div>;
 
   const rowValues = () => ['1', ...fields.map(f => toCell(f.kind, answer(f)))];
 
@@ -272,7 +272,6 @@ export default function PartnerReportPage() {
         }
       />
 
-      {!hubId && <p className="text-muted-foreground">Select a hub to build its report.</p>}
       {loading && <p className="text-muted-foreground">Loading report…</p>}
       {error && <p className="text-destructive">Could not load the report: {error.message}</p>}
 

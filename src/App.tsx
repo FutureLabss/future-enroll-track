@@ -35,7 +35,6 @@ const BulkEmailPage = lazy(() => import("@/pages/admin/BulkEmailPage"));
 const OutstandingInvoicesPage = lazy(() => import("@/pages/admin/OutstandingInvoicesPage"));
 const InvoiceApprovalsPage = lazy(() => import("@/pages/admin/InvoiceApprovalsPage"));
 const StaffInvoicesAdminPage = lazy(() => import("@/pages/admin/StaffInvoicesAdminPage"));
-const HubsPage = lazy(() => import("@/pages/admin/HubsPage"));
 const ClassroomsPage = lazy(() => import("@/pages/admin/ClassroomsPage"));
 const ClassroomDetailPage = lazy(() => import("@/pages/admin/ClassroomDetailPage"));
 const CohortsPage = lazy(() => import("@/pages/admin/CohortsPage"));
@@ -72,9 +71,6 @@ const PresentationDetailPage = lazy(() => import("@/pages/shared/PresentationDet
 const EnrollPage = lazy(() => import("@/pages/public/EnrollPage"));
 const StudentSignupPage = lazy(() => import("@/pages/public/StudentSignupPage"));
 const AcceptInvitationPage = lazy(() => import("@/pages/public/AcceptInvitationPage"));
-const AcceptHubInvitationPage = lazy(() => import("@/pages/public/AcceptHubInvitationPage"));
-const DemoPage = lazy(() => import("@/pages/public/DemoPage"));
-const HubPortalPage = lazy(() => import("@/pages/public/HubPortalPage"));
 
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -92,11 +88,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AdminGuard() {
-  const { isAdmin, isStaff, isMarketing, isHubManager, loading, rolesReady } = useAuth();
+  const { isAdmin, isStaff, isMarketing, loading, rolesReady } = useAuth();
   const location = useLocation();
   if (loading || !rolesReady) return <PageSpinner />;
-  // Hub managers (CEO, training manager) can access classroom management only
-  if (!isAdmin && isHubManager && location.pathname.startsWith('/admin/classrooms')) return <Outlet />;
   if (!isAdmin && isMarketing && location.pathname.startsWith('/admin/crm')) return <Outlet />;
   if (!isAdmin) return <Navigate to={isStaff ? '/staff/classrooms' : '/student'} replace />;
   return <Outlet />;
@@ -162,9 +156,7 @@ const App = () => (
               <Route path="/enroll" element={<EnrollPage />} />
               <Route path="/students/:id" element={<StudentSignupPage />} />
               <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
-              <Route path="/accept-hub-invitation" element={<AcceptHubInvitationPage />} />
               <Route path="/set-password" element={<SetPasswordPage />} />
-              <Route path="/demo" element={<DemoPage />} />
               <Route path="/enroll/complete/:id" element={<LegacyEnrollRedirect />} />
               <Route path="/" element={<ProtectedRoute><RoleRedirect /></ProtectedRoute>} />
 
@@ -202,7 +194,6 @@ const App = () => (
                   <Route path="/admin/outstanding" element={<OutstandingInvoicesPage />} />
                   <Route path="/admin/invoice-approvals" element={<InvoiceApprovalsPage />} />
                   <Route path="/admin/staff-invoices" element={<StaffInvoicesAdminPage />} />
-                  <Route path="/admin/hubs" element={<HubsPage />} />
                   <Route path="/admin/classrooms" element={<ClassroomsPage />} />
                   <Route path="/admin/classrooms/:id" element={<ClassroomDetailPage />} />
                   <Route path="/admin/assignments/:id" element={<AssignmentDetailPage />} />
@@ -239,7 +230,6 @@ const App = () => (
                 <Route path="/profile" element={<ProfilePage />} />
               </Route>
 
-              <Route path="/:hubSlug" element={<HubPortalPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>

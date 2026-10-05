@@ -29,7 +29,7 @@ interface StaffRow {
 }
 
 export default function ManageAdminsPage() {
-  const { isSuperadmin, rolesReady } = useAuth();
+  const { isOwner, rolesReady } = useAuth();
   const [admins, setAdmins] = useState<AdminRow[]>([]);
   const [staffUsers, setStaffUsers] = useState<StaffRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,7 +64,7 @@ export default function ManageAdminsPage() {
   const promoteToAdmin = (row: StaffRow) => {
     setPendingConfirm({
       title: 'Promote to Admin?',
-      description: `${row.full_name} will get full admin access to this hub.`,
+      description: `${row.full_name} will get full administrative access.`,
       onConfirm: async () => {
         setPromoting(row.user_id);
         const { error } = await supabase.rpc('promote_staff_to_admin' as any, { p_user_id: row.user_id });
@@ -81,13 +81,13 @@ export default function ManageAdminsPage() {
   };
 
   useEffect(() => {
-    if (isSuperadmin) { loadAdmins(); loadStaff(); }
-  }, [isSuperadmin]);
+    if (isOwner) { loadAdmins(); loadStaff(); }
+  }, [isOwner]);
 
   // Wait for the async role fetch — redirecting on the initial false value
-  // bounced real superadmins off this page before roles resolved
+  // Avoid bouncing owners before roles resolve.
   if (!rolesReady) return null;
-  if (!isSuperadmin) return <Navigate to="/admin" replace />;
+  if (!isOwner) return <Navigate to="/admin" replace />;
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -144,7 +144,7 @@ export default function ManageAdminsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Manage Admins"
-        description="Only the superadmin can invite or revoke admin access. Invites are sent by email — recipients become admin as soon as they sign up."
+        description="Only the system owner can invite or revoke admin access. Invites are sent by email — recipients become admin as soon as they sign up."
       />
 
       <div className="glass-card rounded-xl p-6">
@@ -183,7 +183,7 @@ export default function ManageAdminsPage() {
         {staffLoading ? (
           <p className="text-sm text-muted-foreground">Loading...</p>
         ) : staffUsers.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No staff members found in this hub.</p>
+          <p className="text-sm text-muted-foreground">No staff members found.</p>
         ) : (
           <ul className="divide-y divide-border">
             {staffUsers.map(s => (

@@ -1,7 +1,6 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { useEffect, useMemo, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { useMemo } from 'react';
 import {
   LayoutDashboard,
   FileText,
@@ -26,36 +25,14 @@ import {
   Inbox,
   School,
   BookOpen,
-  ChevronsUpDown,
-  Check,
   Contact,
   Megaphone,
   CalendarClock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
 import { ThemeToggle } from '@/components/shared/ThemeToggle';
 import { siteConfig } from '@/lib/siteConfig';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-
-// Routes hidden from demo users — contain unscoped or sensitive data
-const DEMO_HIDDEN_ROUTES = new Set([
-  '/admin/staff-invitations',
-  '/admin/organizations',
-  '/admin/custom-fields',
-  '/admin/notifications',
-  '/admin/bulk-email',
-  '/admin/reports',
-  '/admin/audit-logs',
-]);
 
 const adminNav = [
   { to: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
@@ -115,90 +92,24 @@ interface AppSidebarProps {
   onNavigate?: () => void;
 }
 
-function HubSwitcher({ userId }: { userId: string }) {
-  const navigate = useNavigate();
-  const [hubs, setHubs] = useState<{ id: string; name: string; slug: string }[]>([]);
-  const [activeHubId, setActiveHubId] = useState<string | null>(null);
-  const [switching, setSwitching] = useState(false);
-
-  useEffect(() => {
-    let mounted = true;
-    Promise.all([
-      supabase.rpc('list_hubs' as any),
-      supabase.rpc('get_my_hub_context' as any).maybeSingle(),
-    ]).then(([hubsRes, ctxRes]) => {
-      if (!mounted) return;
-      if (hubsRes.data) setHubs(hubsRes.data as { id: string; name: string; slug: string }[]);
-      if (ctxRes.data) setActiveHubId((ctxRes.data as any).hub_id);
-    });
-    return () => { mounted = false; };
-  }, [userId]);
-
-  const switchHub = async (hub: { id: string; slug: string }) => {
-    if (hub.id === activeHubId || switching) return;
-    setSwitching(true);
-    const { error } = await supabase.rpc('switch_hub_context' as any, { p_hub_id: hub.id });
-    if (error) { toast.error(`Hub switch failed: ${error.message}`); setSwitching(false); return; }
-    navigate(`/${hub.slug}`, { replace: true });
-    window.location.reload();
-  };
-
-  const activeHub = hubs.find(h => h.id === activeHubId);
-
-  return (
-    <div className="px-3 pb-2">
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium bg-sidebar-accent/50 hover:bg-sidebar-accent transition-colors text-left">
-            <Building2 className="h-3.5 w-3.5 text-sidebar-foreground/60 flex-shrink-0" />
-            <span className="flex-1 truncate text-sidebar-foreground/80">
-              {switching ? 'Switching…' : (activeHub?.name ?? 'Select hub')}
-            </span>
-            <ChevronsUpDown className="h-3 w-3 text-sidebar-foreground/40 flex-shrink-0" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent side="right" align="end" className="w-52">
-          <DropdownMenuLabel className="text-xs text-muted-foreground">Switch hub context</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          {hubs.map(hub => (
-            <DropdownMenuItem
-              key={hub.id}
-              onClick={() => switchHub(hub)}
-              className="flex items-center gap-2 cursor-pointer"
-            >
-              {hub.id === activeHubId && <Check className="h-3.5 w-3.5 text-primary flex-shrink-0" />}
-              {hub.id !== activeHubId && <span className="w-3.5" />}
-              <span className="truncate">{hub.name}</span>
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
-  );
-}
-
 export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps) {
-  const { isAdmin, isOrganization, isStaff, isMarketing, isSuperadmin: isSA, isDemo, signOut, user } = useAuth();
-
-  const isSuperadmin = isSA;
+  const { isAdmin, isOrganization, isStaff, isMarketing, isOwner, signOut, user } = useAuth();
   const nav = useMemo(() => {
-    const rawBaseNav = isAdmin ? adminNav : isMarketing ? marketingNav : isOrganization ? orgNav : isStaff ? staffNav : studentNav;
-    const baseNav = isDemo ? rawBaseNav.filter(item => !DEMO_HIDDEN_ROUTES.has(item.to)) : rawBaseNav;
+    const baseNav = isAdmin ? adminNav : isMarketing ? marketingNav : isOrganization ? orgNav : isStaff ? staffNav : studentNav;
     const adminExtras = isAdmin
       ? [
           { to: '/admin/invoice-approvals', icon: ClipboardCheck, label: 'Invoice Approvals' },
-          { to: '/admin/staff-invoices', icon: Inbox, label: isSuperadmin ? 'Staff Invoices' : 'My Invoices' },
-          ...(isSuperadmin
+          { to: '/admin/staff-invoices', icon: Inbox, label: isOwner ? 'Staff Invoices' : 'My Invoices' },
+          ...(isOwner
             ? [
                 { to: '/admin/payroll', icon: Banknote, label: 'Payroll' },
                 { to: '/admin/manage-admins', icon: ShieldCheck, label: 'Manage Admins' },
-                { to: '/admin/hubs', icon: Building2, label: 'Hub Management' },
               ]
             : []),
         ]
       : [];
     return [...baseNav, ...adminExtras];
-  }, [isAdmin, isOrganization, isStaff, isMarketing, isSuperadmin, isDemo]);
+  }, [isAdmin, isOrganization, isStaff, isMarketing, isOwner]);
 
   const containerClass =
     variant === 'mobile'
@@ -237,13 +148,6 @@ export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps)
           </NavLink>
         ))}
       </nav>
-
-      {isSuperadmin && user && (
-        <div className="border-t border-sidebar-border pt-2">
-          <p className="px-6 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/40">Hub Context</p>
-          <HubSwitcher userId={user.id} />
-        </div>
-      )}
 
       <div className="px-3 py-4 border-t border-sidebar-border">
         <div className="px-3 py-2 mb-2">

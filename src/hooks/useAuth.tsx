@@ -22,15 +22,11 @@ interface AuthContextType {
   roles: AppRole[];
   loading: boolean;
   rolesReady: boolean;
-  hubId: string | null;
   isAdmin: boolean;
   isOrganization: boolean;
   isStaff: boolean;
   isMarketing: boolean;
-  isSuperadmin: boolean;
-  isHubManager: boolean;
-  isDemo: boolean;
-  demoExpiresAt: Date | null;
+  isOwner: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -42,30 +38,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
-  const [isSuperadmin, setIsSuperadmin] = useState(false);
-  const [isHubManager, setIsHubManager] = useState(false);
-  const [hubId, setHubId] = useState<string | null>(null);
-  const [demoExpiresAt, setDemoExpiresAt] = useState<Date | null>(null);
+  const [isOwner, setIsOwner] = useState(false);
   const [loading, setLoading] = useState(true);
   const [rolesReady, setRolesReady] = useState(false);
   const currentUserRef = useRef<{ id: string; email?: string } | null>(null);
 
   const fetchRoles = async (userId: string) => {
-    const [rolesRes, saRes, memberRes] = await Promise.all([
+    const [rolesRes, ownerRes] = await Promise.all([
       supabase.from('user_roles').select('role').eq('user_id', userId),
-      supabase.from('superadmins').select('user_id').eq('user_id', userId).maybeSingle(),
-      supabase.from('hub_members').select('hub_id, hub_role, demo_expires_at').eq('user_id', userId).maybeSingle(),
+      supabase.from('system_owners').select('user_id').eq('user_id', userId).maybeSingle(),
     ]);
 
-    const error = rolesRes.error ?? saRes.error ?? memberRes.error;
+    const error = rolesRes.error ?? ownerRes.error;
     if (error) throw error;
 
     setRoles((rolesRes.data ?? []).map(r => r.role as AppRole));
-    setIsSuperadmin(!!saRes.data);
-    setIsHubManager(memberRes.data?.hub_role === 'manager');
-    setHubId(memberRes.data?.hub_id ?? null);
-    const exp = memberRes.data?.demo_expires_at;
-    setDemoExpiresAt(exp ? new Date(exp) : null);
+    setIsOwner(!!ownerRes.data);
   };
 
   useEffect(() => {
@@ -105,9 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             fetchRoles(newUserId)
               .catch(() => {
                 setRoles([]);
-                setIsSuperadmin(false);
-                setIsHubManager(false);
-                setHubId(null);
+                setIsOwner(false);
               })
               .finally(() => setRolesReady(true));
           }, 0);
@@ -117,9 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           currentUserRef.current = null;
           setRoles([]);
-          setIsSuperadmin(false);
-          setIsHubManager(false);
-          setHubId(null);
+          setIsOwner(false);
           setRolesReady(true);
         }
       }
@@ -176,21 +160,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     roles,
     loading,
     rolesReady,
-    hubId,
-    isAdmin: roles.includes('admin') || isSuperadmin,
+    isAdmin: roles.includes('admin') || isOwner,
     isOrganization: roles.includes('organization'),
-    isStaff: roles.includes('staff') && !roles.includes('admin') && !isSuperadmin,
+    isStaff: roles.includes('staff') && !roles.includes('admin') && !isOwner,
     isMarketing: roles.includes('marketing'),
-    isSuperadmin,
-    isHubManager,
-    isDemo: !!demoExpiresAt && demoExpiresAt > new Date(),
-    demoExpiresAt,
+    isOwner,
     signIn,
     signOut,
     signUp,
   // signIn/signOut/signUp are defined once and never change
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [user, session, roles, loading, rolesReady, hubId, isSuperadmin, isHubManager, demoExpiresAt]);
+  }), [user, session, roles, loading, rolesReady, isOwner]);
 
   return (
     <AuthContext.Provider value={value}>

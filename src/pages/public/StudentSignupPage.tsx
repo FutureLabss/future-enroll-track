@@ -60,7 +60,6 @@ export default function EnrollCompletePage() {
           .select('*')
           .eq('active', true)
           .eq('visible_to_student', true)
-          .eq('hub_id', enrollData.hub_id)
           .order('sort_order', { ascending: true });
 
         if (fieldsErr) throw fieldsErr;

@@ -11,7 +11,6 @@ interface ImportMetaEnv {
   readonly VITE_BANK_ACCOUNT_NUMBER?: string;
   readonly VITE_BANK_NAME?: string;
   readonly VITE_CALENDAR_DOMAIN?: string;
-  readonly VITE_HUB_DOMAIN_SUFFIX?: string;
   readonly VITE_ONLINE_PAYMENTS_ENABLED?: string;
 }
 

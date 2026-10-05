@@ -37,21 +37,16 @@ export function CompleteProfileBanner() {
       // Get student's enrollments
       const { data: enrs } = await supabase
         .from('enrollments')
-        .select('id, profile_requirements_version, programs(hub_id)')
+        .select('id, profile_requirements_version')
         .eq('user_id', user.id);
       setEnrollments(enrs || []);
 
-      const primaryEnrollment = enrs?.[0] as any;
-      const hubId = primaryEnrollment?.programs?.hub_id;
-
-      // Get required custom fields for this enrollment's training hub.
-      let fieldQuery = supabase
+      const fieldQuery = supabase
         .from('custom_fields')
         .select('*')
         .eq('active', true)
         .eq('visible_to_student', true)
         .order('sort_order');
-      if (hubId) fieldQuery = fieldQuery.eq('hub_id', hubId);
       const { data: fields } = await fieldQuery;
       setCustomFields(fields || []);
 

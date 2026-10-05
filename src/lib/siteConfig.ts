@@ -17,7 +17,6 @@ export interface SiteConfig {
   emailSender: string;
   calendarDomain: string;
   calendarProductId: string;
-  hubDomainSuffix: string;
   onlinePaymentsEnabled: boolean;
   bankTransfer: BankTransferConfig;
 }
@@ -44,7 +43,6 @@ export function createSiteConfig(source: PublicEnv, browserOrigin = ''): SiteCon
     emailSender: env(source.VITE_EMAIL_SENDER),
     calendarDomain: env(source.VITE_CALENDAR_DOMAIN) || 'coriftech-lms',
     calendarProductId: '-//Coriftech LMS//EN',
-    hubDomainSuffix: env(source.VITE_HUB_DOMAIN_SUFFIX),
     onlinePaymentsEnabled: source.VITE_ONLINE_PAYMENTS_ENABLED?.toLowerCase() === 'true',
     bankTransfer: {
       ...bankTransfer,

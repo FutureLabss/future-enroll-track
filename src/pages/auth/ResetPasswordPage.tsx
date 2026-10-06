@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { siteConfig } from '@/lib/siteConfig';
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState('');
@@ -68,9 +69,11 @@ export default function ResetPasswordPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md animate-fade-in">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-heading font-bold tracking-tight">
-            <span className="text-primary">Future</span>Labs
-          </h1>
+          <img
+            src={siteConfig.logoPath}
+            alt={siteConfig.organizationName}
+            className="mx-auto h-14 w-auto max-w-[280px] object-contain"
+          />
         </div>
         <div className="glass-card rounded-2xl p-8">
           <h2 className="text-xl font-heading font-semibold mb-6">Set New Password</h2>

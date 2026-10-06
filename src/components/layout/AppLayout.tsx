@@ -4,6 +4,7 @@ import { AppSidebar } from './AppSidebar';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Menu } from 'lucide-react';
+import { siteConfig } from '@/lib/siteConfig';
 
 export function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -35,9 +36,11 @@ export function AppLayout() {
           >
             <Menu className="h-5 w-5" />
           </Button>
-          <h1 className="font-heading text-lg font-bold tracking-tight">
-            <span className="text-primary">Future</span>Labs
-          </h1>
+          <img
+            src={siteConfig.logoPath}
+            alt={siteConfig.organizationName}
+            className="h-7 w-auto max-w-[180px] object-contain object-left"
+          />
         </header>
 
         <div className="p-4 sm:p-6 lg:p-8 max-w-7xl">

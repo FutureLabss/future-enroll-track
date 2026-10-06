@@ -1,7 +1,11 @@
 import fs from 'fs';
 import { Client } from 'pg';
 
-const connectionString = 'postgresql://postgres.xyufhtthhfgcbhaubiun:futurelabs123@aws-0-eu-west-1.pooler.supabase.com:5432/postgres';
+const connectionString = process.env.DATABASE_URL;
+
+if (!connectionString) {
+  throw new Error('DATABASE_URL is required.');
+}
 
 async function main() {
   const client = new Client({ connectionString });

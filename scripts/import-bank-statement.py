@@ -25,7 +25,7 @@ those fail the script exits non-zero rather than emitting a plausible-looking fi
 import re, subprocess, sys, tempfile, os
 from decimal import Decimal
 
-FUTURELABS_HUB = "00000000-0000-0000-0000-000000000001"
+CORIFTECH_HUB = "00000000-0000-0000-0000-000000000001"
 NUM = re.compile(r"\d{1,3}(?:,\d{3})*\.\d{2}")
 SKIP = ("Account Statement", "Business Name", "Account Number", "Opening Balance",
         "Total Debits", "Total Credits", "Closing Balance", "Balance     Balance",
@@ -105,7 +105,7 @@ def blocks(text, lay):
 def payer(text):
     for p in [r"(?:Transfer|TRF|TRANSFER)\s+from\s+([A-Za-z][A-Za-z',\.\- ]{4,60})",
               r"\bFROM\s+([A-Z][A-Za-z',\.\- ]{4,60})",
-              r"\b([A-Z][A-Z',\.\- ]{6,60}?)\s+TO\s+Future Labs",
+              r"\b([A-Z][A-Z',\.\- ]{6,60}?)\s+TO\s+CORIFTECH(?: SOLUTIONS(?: LTD\.?)?)?",
               r"\|([A-Z][A-Z ]{6,60})\s*$",
               r"([A-Z][A-Za-z]+ [A-Z][A-Za-z]+ [A-Z][A-Za-z]+)\s*:\s*\d{10,}"]:
         m = re.search(p, text)
@@ -123,8 +123,8 @@ def classify(text, own_accounts):
     # "needs review", not "exclude from revenue"; excluding it wholesale understates
     # January by N261,500 and March by N187,200.
     if any(a in u for a in own_accounts) \
-       or "FUTURE LABS LTD TO FUTURE LABS LTD" in u \
-       or "FUTURE LABS HQ TO FUTURE LABS LTD" in u:
+       or "CORIFTECH SOLUTIONS LTD TO CORIFTECH SOLUTIONS LTD" in u \
+       or "CORIFTECH HQ TO CORIFTECH SOLUTIONS LTD" in u:
         return "internal_transfer"
     if "REFUND" in u:
         return "refund"
@@ -242,7 +242,7 @@ def main():
         print("INSERT INTO public.bank_transactions "
               "(hub_id, account_number, occurred_at, amount, balance_after, "
               "transaction_ref, narration, payer, kind, statement_source) VALUES ("
-              f"'{FUTURELABS_HUB}', {sql_str(acct)}, {sql_str(r['occurred_at'])}, "
+              f"'{CORIFTECH_HUB}', {sql_str(acct)}, {sql_str(r['occurred_at'])}, "
               f"{r['amount']}, {r['balance_after']}, {sql_str(r['transaction_ref'])}, "
               f"{sql_str(r['narration'])}, {sql_str(r['payer'])}, {sql_str(r['kind'])}, "
               f"{sql_str(os.path.basename(pdf))}) "

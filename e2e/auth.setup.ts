@@ -1,6 +1,6 @@
 import { test as setup, expect } from '@playwright/test';
 
-const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL || 'admin@futurelabs.ng';
+const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL || 'admin@coriftech.com';
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD || 'test-password';
 
 setup('authenticate as admin', async ({ page }) => {

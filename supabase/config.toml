@@ -16,6 +16,12 @@ verify_jwt = false  # scheduled invocation authenticates with the CRM cron secre
 [functions.process-lead-follow-ups]
 verify_jwt = false  # scheduled invocation authenticates with the CRM cron secret
 
+[functions.process-feedback]
+verify_jwt = false  # scheduled invocation requires the CRON_SECRET bearer token
+
+[functions.generate-certificates]
+verify_jwt = false  # accepts either a signed-in learner JWT or the CRON_SECRET bearer token
+
 [functions.unsubscribe-lead]
 verify_jwt = false  # public unsubscribe links are protected by signed tokens
 

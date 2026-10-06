@@ -1,7 +1,7 @@
 # The testing gauntlet playbook
 
 A portable checklist for setting up the "don't read the code, trust the gauntlet"
-testing approach in any project. Built and proven on `future-enroll-track`
+testing approach in any project. Built and proven on Coriftech LMS
 (see PR #1); copy this file into any other repo and work through it fresh —
 every check here is meant to be re-verified per project, not assumed.
 

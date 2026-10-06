@@ -1,4 +1,4 @@
-# Refactoring Plan — FutureEnroll Track
+# Refactoring Plan — Coriftech LMS
 
 Priority tiers: **P0** = bug/security, **P1** = quality, **P2** = nice-to-have.
 
@@ -18,7 +18,7 @@ Priority tiers: **P0** = bug/security, **P1** = quality, **P2** = nice-to-have.
 
 ### P0.3 Hardcoded callback URL
 - **File**: `src/pages/student/StudentInvoiceDetailPage.tsx` line 92
-- **Problem**: `https://admin.futurelabs.ng/student/invoices/${id}/payment-callback` breaks on other domains.
+- **Problem**: A hardcoded deployment domain in `/student/invoices/${id}/payment-callback` breaks on other domains.
 - **Fix**: `window.location.origin + /student/invoices/${id}/payment-callback`
 
 ### P0.4 `confirm()` used instead of Dialog
@@ -82,7 +82,7 @@ Priority tiers: **P0** = bug/security, **P1** = quality, **P2** = nice-to-have.
 - **Fix**: Define function name constants or a typed enum.
 
 ### P2.4 Dual-bucket finance model not documented in code
-- **Problem**: FutureLabs vs RhemaHub revenue bucketing is documented only in CLAUDE.md, not in the code.
+- **Problem**: Coriftech vs RhemaHub revenue bucketing is documented only in CLAUDE.md, not in the code.
 - **Fix**: Add a comment block in `useFinanceSummary.ts` explaining the two-leg approach.
 
 ### P2.5 Invoice approvals page tied to superadmin email

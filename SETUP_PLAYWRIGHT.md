@@ -45,7 +45,7 @@ Create `e2e/` directory with these files:
 ```ts
 import { test as setup, expect } from '@playwright/test';
 
-const ADMIN_EMAIL = 'admin@futurelabs.ng';
+const ADMIN_EMAIL = 'admin@coriftech.com';
 const ADMIN_PASSWORD = 'test-password';
 
 setup('authenticate as admin', async ({ page }) => {

@@ -31,6 +31,8 @@ import {
   UserPlus, UserMinus, UserCheck, Trash2, Bell,
 } from 'lucide-react';
 import { downloadICS } from '@/lib/ics';
+import { MessageSquareHeart } from 'lucide-react';
+import { ClassroomFeedbackPanel } from '@/components/feedback/ClassroomFeedbackPanel';
 
 const STATUS_COLOURS: Record<string, string> = {
   upcoming: 'bg-blue-500/15 text-blue-600 border-blue-500/30',
@@ -720,6 +722,7 @@ export default function ClassroomWorkspacePage() {
           <TabsTrigger value="attendance"><ClipboardList className="h-4 w-4 mr-1.5" />Attendance</TabsTrigger>
           {can.can_view_students && <TabsTrigger value="students"><Users className="h-4 w-4 mr-1.5" />Students ({students.length})</TabsTrigger>}
           {canViewAssignments && <TabsTrigger value="assignments"><BookOpen className="h-4 w-4 mr-1.5" />Assignments</TabsTrigger>}
+          <TabsTrigger value="feedback"><MessageSquareHeart className="h-4 w-4 mr-1.5" />Feedback</TabsTrigger>
         </TabsList>
 
         {/* CURRICULUM */}
@@ -1286,6 +1289,9 @@ export default function ClassroomWorkspacePage() {
             </div>
           </TabsContent>
         )}
+        <TabsContent value="feedback">
+          <ClassroomFeedbackPanel classroomId={id!} instructorView />
+        </TabsContent>
       </Tabs>
 
       {/* Attendance drill-down modal */}

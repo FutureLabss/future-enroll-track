@@ -25,6 +25,8 @@ import {
 import { DataTable } from '@/components/shared/DataTable';
 import { CurriculumTreeV2 } from '@/components/classroom/CurriculumTreeV2';
 import { AutoScheduleWizard } from '@/components/classroom/AutoScheduleWizard';
+import { ClassroomFeedbackPanel } from '@/components/feedback/ClassroomFeedbackPanel';
+import { MessageSquareHeart } from 'lucide-react';
 import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -1335,6 +1337,7 @@ export default function ClassroomDetailPage() {
           <TabsTrigger value="assignments"><ClipboardCheck className="h-4 w-4 mr-1.5" />Assignments</TabsTrigger>
           <TabsTrigger value="presentations"><Presentation className="h-4 w-4 mr-1.5" />Presentations ({presentations.length})</TabsTrigger>
           <TabsTrigger value="attendance"><ClipboardList className="h-4 w-4 mr-1.5" />Attendance</TabsTrigger>
+          <TabsTrigger value="feedback"><MessageSquareHeart className="h-4 w-4 mr-1.5" />Feedback</TabsTrigger>
         </TabsList>
 
         {/* OVERVIEW */}
@@ -1565,6 +1568,9 @@ export default function ClassroomDetailPage() {
           </div>
 
           <AttendanceTab sessions={sessions} cohorts={cohorts} onView={s => setSessionModal({ open: true, session: s })} />
+        </TabsContent>
+        <TabsContent value="feedback">
+          <ClassroomFeedbackPanel classroomId={id!} />
         </TabsContent>
       </Tabs>
 

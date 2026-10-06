@@ -20,6 +20,7 @@ import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { StudentCurriculumView } from '@/components/classroom/StudentCurriculumView';
+import { CompletionJourneyCard } from '@/components/completion/CompletionJourneyCard';
 import {
   Calendar, CalendarPlus, ClipboardList, BookOpen, BarChart2, Loader2,
   CheckCircle2, Clock, AlertCircle, MapPin, ChevronDown, ChevronUp, LayoutList,
@@ -169,7 +170,7 @@ const GRADUATION_COLOURS: Record<string, string> = {
   pending: 'bg-muted text-muted-foreground border-muted',
 };
 
-function ProgressTab({ progress }: { progress: any }) {
+function ProgressTab({ progress, cohortId }: { progress: any; cohortId: string }) {
   if (!progress) {
     return <p className="text-muted-foreground text-center py-10">No progress data yet — join a cohort to start tracking</p>;
   }
@@ -204,6 +205,7 @@ function ProgressTab({ progress }: { progress: any }) {
           {' · '}Presentations passed: {progress.presentations_passed ?? 0}/{progress.presentations_required ?? 0}
         </p>
       </div>
+      {cohortId && <CompletionJourneyCard cohortId={cohortId} />}
     </div>
   );
 }
@@ -978,7 +980,7 @@ export default function StudentClassroomPage() {
         </TabsContent>
 
         <TabsContent value="progress">
-          <ProgressTab progress={progress} />
+          <ProgressTab progress={progress} cohortId={cohortId} />
         </TabsContent>
       </Tabs>
     </div>

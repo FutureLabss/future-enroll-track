@@ -28,6 +28,7 @@ import {
   Contact,
   Megaphone,
   CalendarClock,
+  MessageSquareHeart,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -51,6 +52,8 @@ const adminNav = [
   { to: '/admin/programs', icon: GraduationCap, label: 'Programs' },
   { to: '/admin/classrooms', icon: School, label: 'Classrooms' },
   { to: '/admin/cohorts', icon: BookOpen, label: 'Cohorts' },
+  { to: '/admin/feedback', icon: MessageSquareHeart, label: 'Learner Feedback' },
+  { to: '/admin/completion', icon: GraduationCap, label: 'Completion' },
   { to: '/admin/staff-invitations', icon: Mail, label: 'Staff Invitations' },
   { to: '/admin/organizations', icon: Building2, label: 'Organizations' },
   { to: '/admin/custom-fields', icon: FormInput, label: 'Custom Fields' },
@@ -64,6 +67,7 @@ const studentNav = [
   { to: '/student', icon: LayoutDashboard, label: 'My Dashboard' },
   { to: '/student/classrooms', icon: School, label: 'My Classrooms' },
   { to: '/student/notifications', icon: Bell, label: 'Notifications' },
+  { to: '/student/feedback', icon: MessageSquareHeart, label: 'Feedback' },
   { to: '/student/invoices', icon: FileText, label: 'My Invoices' },
   { to: '/student/payments', icon: CreditCard, label: 'Payment History' },
 ];

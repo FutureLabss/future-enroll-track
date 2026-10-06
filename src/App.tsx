@@ -45,6 +45,8 @@ const CrmLeadDetailPage = lazy(() => import("@/pages/admin/CrmLeadDetailPage"));
 const CrmCampaignsPage = lazy(() => import("@/pages/admin/CrmCampaignsPage"));
 const CrmFollowUpsPage = lazy(() => import("@/pages/admin/CrmFollowUpsPage"));
 const CrmReportsPage = lazy(() => import("@/pages/admin/CrmReportsPage"));
+const FeedbackPage = lazy(() => import("@/pages/admin/FeedbackPage"));
+const CompletionManagementPage = lazy(() => import("@/pages/admin/CompletionManagementPage"));
 
 const StaffInvoicesPage = lazy(() => import("@/pages/staff/StaffInvoicesPage"));
 const StaffClassroomsPage = lazy(() => import("@/pages/staff/StaffClassroomsPage"));
@@ -59,6 +61,7 @@ const StudentPaymentsPage = lazy(() => import("@/pages/student/StudentPaymentsPa
 const StudentNotificationsPage = lazy(() => import("@/pages/student/StudentNotificationsPage"));
 const StudentClassroomsPage = lazy(() => import("@/pages/student/StudentClassroomsPage"));
 const StudentClassroomPage = lazy(() => import("@/pages/student/StudentClassroomPage"));
+const StudentFeedbackPage = lazy(() => import("@/pages/student/StudentFeedbackPage"));
 
 const OrgDashboard = lazy(() => import("@/pages/org/OrgDashboard"));
 const OrgEnrollmentsPage = lazy(() => import("@/pages/org/OrgEnrollmentsPage"));
@@ -71,6 +74,7 @@ const PresentationDetailPage = lazy(() => import("@/pages/shared/PresentationDet
 const EnrollPage = lazy(() => import("@/pages/public/EnrollPage"));
 const StudentSignupPage = lazy(() => import("@/pages/public/StudentSignupPage"));
 const AcceptInvitationPage = lazy(() => import("@/pages/public/AcceptInvitationPage"));
+const VerifyCertificatePage = lazy(() => import("@/pages/public/VerifyCertificatePage"));
 
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -157,6 +161,7 @@ const App = () => (
               <Route path="/students/:id" element={<StudentSignupPage />} />
               <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
               <Route path="/set-password" element={<SetPasswordPage />} />
+              <Route path="/verify-certificate/:token" element={<VerifyCertificatePage />} />
               <Route path="/enroll/complete/:id" element={<LegacyEnrollRedirect />} />
               <Route path="/" element={<ProtectedRoute><RoleRedirect /></ProtectedRoute>} />
 
@@ -201,6 +206,8 @@ const App = () => (
                   <Route path="/admin/cohorts" element={<CohortsPage />} />
                   <Route path="/admin/cohorts/:id" element={<CohortDetailPage />} />
                   <Route path="/admin/staff-invitations" element={<StaffInvitationsAdminPage />} />
+                  <Route path="/admin/feedback" element={<FeedbackPage />} />
+                  <Route path="/admin/completion" element={<CompletionManagementPage />} />
                 </Route>
 
                 {/* Staff routes */}
@@ -220,6 +227,7 @@ const App = () => (
                 <Route path="/student/notifications" element={<StudentNotificationsPage />} />
                 <Route path="/student/classrooms" element={<StudentClassroomsPage />} />
                 <Route path="/student/classrooms/:id" element={<StudentClassroomPage />} />
+                <Route path="/student/feedback" element={<StudentFeedbackPage />} />
 
                 {/* Org routes */}
                 <Route path="/org" element={<OrgDashboard />} />

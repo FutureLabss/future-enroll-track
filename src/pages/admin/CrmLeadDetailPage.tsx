@@ -11,11 +11,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
+import { seedCrmDefaults } from '@/hooks/useCrm';
 
 export default function CrmLeadDetailPage() {
   const { user } = useAuth();
   const { id } = useParams(); const navigate = useNavigate(); const [lead, setLead] = useState<any>(); const [activities, setActivities] = useState<any[]>([]); const [programs, setPrograms] = useState<any[]>([]); const [sources, setSources] = useState<any[]>([]); const [program, setProgram] = useState(''); const [note, setNote] = useState(''); const [followUp, setFollowUp] = useState('');
-  const load = async () => { const [l, a, p, s] = await Promise.all([(supabase.from('crm_leads' as any) as any).select('*,lead_sources(name)').eq('id', id).single(), (supabase.from('lead_activities' as any) as any).select('*').eq('lead_id', id).order('occurred_at', { ascending: false }), supabase.from('programs').select('id,program_name').eq('active', true), (supabase.from('lead_sources' as any) as any).select('id,name').eq('active', true).order('name')]); setLead(l.data); setActivities(a.data || []); setPrograms(p.data || []); setSources(s.data || []); };
+  const load = async () => { const { error: seedError } = await seedCrmDefaults(); if (seedError) toast.error(`Unable to prepare lead sources: ${seedError.message}`); const [l, a, p, s] = await Promise.all([(supabase.from('crm_leads' as any) as any).select('*,lead_sources(name)').eq('id', id).single(), (supabase.from('lead_activities' as any) as any).select('*').eq('lead_id', id).order('occurred_at', { ascending: false }), supabase.from('programs').select('id,program_name').eq('active', true), (supabase.from('lead_sources' as any) as any).select('id,name').eq('active', true).order('name')]); if (s.error) toast.error(`Unable to load lead sources: ${s.error.message}`); setLead(l.data); setActivities(a.data || []); setPrograms(p.data || []); setSources(s.data || []); };
   useEffect(() => { load(); }, [id]);
   const update = async (patch: any) => { const { error } = await (supabase.from('crm_leads' as any) as any).update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id); error ? toast.error(error.message) : (toast.success('Lead updated'), load()); };
   const addNote = async () => { if (!note.trim()) return; const { error } = await (supabase.from('lead_activities' as any) as any).insert({ lead_id: id, activity_type: 'note', title: 'Note added', details: { note } }); error ? toast.error(error.message) : (setNote(''), load()); };

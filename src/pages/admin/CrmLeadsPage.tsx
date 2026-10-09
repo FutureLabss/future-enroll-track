@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { createLead, useCrmLeads } from '@/hooks/useCrm';
+import { createLead, seedCrmDefaults, useCrmLeads } from '@/hooks/useCrm';
 import { supabase } from '@/lib/supabase';
 import { parseLeadCsv } from '@/lib/crm';
 import { toast } from 'sonner';
@@ -42,7 +42,52 @@ export default function CrmLeadsPage() {
   useEffect(() => { setSelected(current => current.filter(id => filtered.some(x => x.id === id))); }, [filtered]);
 
   const save = async () => { if (!form.full_name.trim() || (!form.email.trim() && !form.phone.trim())) return toast.error('Name and email or phone are required'); const { error } = await createLead(form); if (error) return toast.error(error.message); toast.success('Lead saved'); setOpen(false); setForm({ full_name: '', email: '', phone: '', source: 'manual', qualification: 'automatic', marketing_consent: false }); refetch(); };
-  const importCsv = async (file?: File) => { if (!file) return; const rows = parseLeadCsv(await file.text()); let imported = 0; for (const row of rows) { const result = await createLead(row); if (!result.error) imported++; } toast.success(`Imported ${imported} of ${rows.length} valid leads`); refetch(); };
+  const importCsv = async (file?: File) => {
+    if (!file) return;
+
+    const rows = parseLeadCsv(await file.text());
+    if (!rows.length) return toast.error('No valid leads found in the CSV');
+
+    const { error: seedError } = await seedCrmDefaults();
+    if (seedError) return toast.error(`Unable to prepare lead sources: ${seedError.message}`);
+
+    const { data: sourceRows, error: sourceError } = await (supabase.from('lead_sources' as any) as any)
+      .select('name,slug')
+      .eq('active', true);
+    if (sourceError) return toast.error(`Unable to load lead sources: ${sourceError.message}`);
+
+    const sourceSlugs = new Map<string, string>();
+    for (const sourceRow of sourceRows || []) {
+      sourceSlugs.set(sourceRow.slug.trim().toLowerCase(), sourceRow.slug);
+      sourceSlugs.set(sourceRow.name.trim().toLowerCase(), sourceRow.slug);
+    }
+
+    const unknownSources = new Set<string>();
+    const validRows = rows.flatMap(row => {
+      const source = row.source.trim().toLowerCase();
+      const slug = sourceSlugs.get(source);
+      if (!slug) {
+        unknownSources.add(row.source);
+        return [];
+      }
+      return [{ ...row, source: slug }];
+    });
+
+    let imported = 0;
+    for (const row of validRows) {
+      const result = await createLead(row);
+      if (!result.error) imported++;
+    }
+
+    if (unknownSources.size) {
+      toast.warning(`Imported ${imported} leads. Skipped ${rows.length - validRows.length} with unknown sources: ${[...unknownSources].join(', ')}`);
+    } else if (imported < validRows.length) {
+      toast.error(`Imported ${imported} of ${validRows.length} leads`);
+    } else {
+      toast.success(`Imported ${imported} leads`);
+    }
+    refetch();
+  };
   const downloadTemplate = () => { const blob = new Blob(['full_name,email,phone,source,marketing_consent\nAda Example,ada@example.com,+2348000000000,referral,yes\n'], { type: 'text/csv' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'lead-import-template.csv'; a.click(); URL.revokeObjectURL(url); };
   const bulkUpdate = async (patch: Record<string, unknown>, message: string) => { if (!selected.length) return; const { error } = await (supabase.from('crm_leads' as any) as any).update({ ...patch, updated_at: new Date().toISOString() }).in('id', selected); if (error) return toast.error(error.message); toast.success(message); setSelected([]); refetch(); };
 

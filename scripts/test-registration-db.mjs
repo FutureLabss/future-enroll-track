@@ -1,0 +1,168 @@
+// Run only against a disposable local PostgreSQL cluster (not your Supabase project).
+import pg from 'pg';
+import { readFile } from 'node:fs/promises';
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+
+const port = Number(process.env.REGISTRATION_TEST_PORT || 55439);
+const config = { host: '127.0.0.1', port, user: 'postgres', database: `registration_test_${Date.now()}` };
+const control = new pg.Client({ ...config, database: 'postgres' });
+await control.connect();
+await control.query(`CREATE DATABASE ${config.database}`);
+const db = new pg.Client(config);
+await db.connect();
+try {
+  await db.query(`
+    DO $$ BEGIN CREATE ROLE anon; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+    DO $$ BEGIN CREATE ROLE authenticated; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+    DO $$ BEGIN CREATE ROLE service_role BYPASSRLS; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+    CREATE SCHEMA auth; CREATE SCHEMA storage; CREATE SCHEMA extensions;
+    CREATE EXTENSION pgcrypto SCHEMA extensions; CREATE EXTENSION pg_trgm;
+    CREATE TABLE auth.users(id uuid PRIMARY KEY,email text,raw_user_meta_data jsonb DEFAULT '{}');
+    CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
+    CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $$ SELECT current_user::text $$;
+    CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$ SELECT jsonb_build_object('sub',auth.uid(),'email',(SELECT email FROM auth.users WHERE id=auth.uid())) $$;
+    CREATE TABLE storage.buckets(id text PRIMARY KEY,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
+    CREATE TABLE storage.objects(id uuid DEFAULT gen_random_uuid(),bucket_id text,name text,owner uuid,metadata jsonb, PRIMARY KEY(id));
+    ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+    CREATE FUNCTION storage.foldername(text) RETURNS text[] LANGUAGE sql AS $$ SELECT (string_to_array($1,'/'))[1:array_length(string_to_array($1,'/'),1)-1] $$;
+    GRANT USAGE ON SCHEMA auth,storage TO anon,authenticated,service_role;
+    GRANT ALL ON storage.objects,storage.buckets TO authenticated,service_role;
+  `);
+  await db.query(await readFile(new URL('../supabase/migrations/20261005000000_initial_schema.sql', import.meta.url), 'utf8'));
+  await db.query('SET search_path=public; SET check_function_bodies=true;');
+  for (const migration of ['20261005000001_single_tenant_owner_bootstrap.sql','20261005000002_storage_buckets.sql','20261006000000_learner_feedback_system.sql','20261006000001_testimonials_and_certificates.sql']) {
+    await db.query(await readFile(new URL(`../supabase/migrations/${migration}`, import.meta.url),'utf8'));
+  }
+  const legacyId=randomUUID(), legacyUser=randomUUID(), legacyCourse=randomUUID();
+  await db.query(`ALTER TABLE enrollments DISABLE TRIGGER trg_enrollment_sync_crm`);
+  await db.query(`INSERT INTO auth.users(id,email) VALUES($1,'legacy@example.test')`,[legacyUser]);
+  await db.query(`INSERT INTO programs(id,program_name) VALUES($1,'Legacy course')`,[legacyCourse]);
+  await db.query(`INSERT INTO enrollments(id,user_id,full_name,email,program_id,total_amount,amount_paid) VALUES($1,$2,'Legacy student','legacy@example.test',$3,75000,25000)`,[legacyId,legacyUser,legacyCourse]);
+  await db.query(await readFile(new URL('../supabase/migrations/20261019000000_two_stage_registration.sql', import.meta.url), 'utf8'));
+  console.log('PASS: migration applies to the existing schema');
+  const q = async (sql, params = []) => (await db.query(sql, params)).rows;
+  const user = randomUUID(), admin = randomUUID(), outsider = randomUUID();
+  const hub = '00000000-0000-0000-0000-000000000001';
+  assert.equal((await q('SELECT count(*)::int AS n FROM hubs'))[0].n,1);
+  await q(`INSERT INTO auth.users(id,email) VALUES($1,'applicant@example.test'),($2,'admin@example.test'),($3,'other@example.test')`, [user,admin,outsider]);
+  await q('ALTER TABLE user_roles DISABLE TRIGGER enforce_admin_role_grant_trg');
+  await q(`INSERT INTO user_roles(user_id,role) VALUES($1,'student'),($2,'admin'),($3,'student')`, [user,admin,outsider]);
+  await q('ALTER TABLE user_roles ENABLE TRIGGER enforce_admin_role_grant_trg');
+  await q(`INSERT INTO hub_members(user_id,hub_id,hub_role) VALUES($1,$2,'admin')`,[admin,hub]);
+  // CRM behavior is covered separately; this fixture has no campaign/source seed data.
+  await q('ALTER TABLE enrollments DISABLE TRIGGER trg_enrollment_sync_crm');
+  const course = randomUUID(), customCourse = randomUUID(), classroom = randomUUID();
+  await q(`INSERT INTO programs(id,program_name,hub_id,tuition_fee,registration_plans) VALUES($1,'Course A',$3,100000,'[{"label":"Two payments","parts":[{"percent":50,"days":0},{"percent":50,"days":30}]}]'),($2,'Course B',$3,80000,'[]')`, [course,customCourse,hub]);
+  await q(`INSERT INTO classrooms(id,name,program_id,hub_id) VALUES($1,'Course A classroom',$2,$3)`, [classroom,course,hub]);
+  const asUser = async (id, sql, params = []) => {
+    await q(`SELECT set_config('request.jwt.claim.sub',$1,false)`, [id]);
+    await q('SET ROLE authenticated');
+    try { return await q(sql,params); } finally { await q('RESET ROLE'); }
+  };
+  const legacy = (await q('SELECT *,registration_eligible(id) AS allowed FROM enrollments WHERE id=$1',[legacyId]))[0];
+  assert.equal(legacy.allowed,true); assert.equal(Number(legacy.amount_paid),25000); assert.match(legacy.registration_number,/^REG-\d{4}-\d{6,}$/);
+  await assert.rejects(asUser(user,`SELECT start_registration($1,'Applicant','+2348012345678')`,[legacyCourse]),/pricing/);
+  await assert.rejects(q(`UPDATE programs SET registration_plans='[{"label":"Bad","parts":[{"percent":10,"days":0},{"percent":10,"days":30}]}]' WHERE id=$1`,[course]),/total 100/);
+  console.log('PASS: legacy backfill/access, missing prices and invalid schedules');
+  const start = () => asUser(user, `SELECT start_registration($1,'Applicant','+2348012345678',NULL,'installment','Two payments') AS id`, [course]);
+  const id = (await start())[0].id;
+  assert.equal((await start())[0].id,id);
+  assert.equal((await q('SELECT count(*)::int AS n FROM invoices WHERE enrollment_id=$1',[id]))[0].n,1);
+  assert.equal((await q('SELECT count(*)::int AS n FROM classroom_students WHERE enrollment_id=$1',[id]))[0].n,0);
+  assert.equal((await asUser(user,'SELECT classroom_read_access($1) AS allowed',[classroom]))[0].allowed,false);
+  assert.equal((await asUser(user,'SELECT registration_eligible($1) AS allowed',[id]))[0].allowed,false);
+  await q('UPDATE programs SET tuition_fee=120000 WHERE id=$1',[course]);
+  assert.equal(Number((await q('SELECT total_amount FROM enrollments WHERE id=$1',[id]))[0].total_amount),100000);
+  await q('UPDATE programs SET tuition_fee=NULL WHERE id=$1',[course]);
+  await assert.rejects(asUser(outsider,`SELECT start_registration($1,'Applicant','+2348012345679')`,[course]),/pricing/);
+  await q('UPDATE programs SET tuition_fee=120000 WHERE id=$1',[course]);
+  await assert.rejects(asUser(outsider,`SELECT submit_enrollment_fields($1,'{}')`,[id]), /own enrollment/);
+  await assert.rejects(asUser(user,`SELECT submit_enrollment_fields($1,'{}')`,[id]), /Submit payment/);
+  console.log('PASS: resumable registration, invoice uniqueness, ownership, and initial access gate');
+  const invoice = (await q('SELECT id FROM invoices WHERE enrollment_id=$1',[id]))[0].id;
+  const part = (await q('SELECT id FROM installments WHERE invoice_id=$1 ORDER BY due_date',[invoice]))[0].id;
+  const path = `${user}/${invoice}/receipt.pdf`;
+  await q(`INSERT INTO storage.objects(bucket_id,name) VALUES('registration-receipts',$1)`,[path]);
+  const pending = (await asUser(user,'SELECT submit_registration_receipt($1,$2) AS id',[id,path]))[0].id;
+  await q(`INSERT INTO custom_fields(key,label,field_type,required,active,visible_to_student,hub_id) VALUES('first_name','First name','text',true,true,true,$1)`,[hub]);
+  await assert.rejects(asUser(user,`SELECT submit_enrollment_fields($1,'{}')`,[id]), /Required fields/);
+  await asUser(user,`SELECT submit_enrollment_fields($1,'{"first_name":"Applicant"}')`,[id]);
+  assert.equal((await q('SELECT registration_eligible($1) AS allowed',[id]))[0].allowed,false);
+  await assert.rejects(asUser(outsider,'SELECT review_registration_transfer($1,true)',[pending]),/Admin access/);
+  await asUser(admin,'SELECT review_registration_transfer($1,true)',[pending]);
+  await asUser(admin,'SELECT review_registration_transfer($1,true)',[pending]);
+  assert.equal((await q('SELECT amount_paid::int AS paid FROM enrollments WHERE id=$1',[id]))[0].paid,50000);
+  assert.equal((await q('SELECT count(*)::int AS n FROM payments WHERE invoice_id=$1',[invoice]))[0].n,1);
+  assert.equal((await asUser(user,'SELECT classroom_read_access($1) AS allowed',[classroom]))[0].allowed,true);
+  console.log('PASS: profile during review, required validation, transfer clearance and repeated approval');
+  const selectedCohort=randomUUID();
+  await q(`INSERT INTO cohorts(id,program_id,cohort_label,status) VALUES($1,$2,'Chosen upcoming cohort','upcoming')`,[selectedCohort,customCourse]);
+  const custom = (await asUser(user,`SELECT start_registration($1,'Applicant','+2348012345678',$2,'custom',NULL,20000) AS id`,[customCourse,selectedCohort]))[0].id;
+  const customInvoice = (await q('SELECT id FROM invoices WHERE enrollment_id=$1',[custom]))[0].id;
+  const customPart = (await q('SELECT id FROM installments WHERE invoice_id=$1',[customInvoice]))[0].id;
+  await q(`INSERT INTO registration_payment_attempts(reference,invoice_id,installment_id,amount) VALUES('TEST-PAYSTACK',$1,$2,20000)`,[customInvoice,customPart]);
+  await q(`SELECT complete_paystack_attempt('TEST-PAYSTACK',now()); SELECT complete_paystack_attempt('TEST-PAYSTACK',now())`);
+  await asUser(user,`SELECT submit_enrollment_fields($1,'{"first_name":"Applicant"}')`,[custom]);
+  assert.equal((await q('SELECT registration_eligible($1) AS allowed',[custom]))[0].allowed,false);
+  await asUser(admin,`SELECT review_custom_registration($1,false,'Deposit too low')`,[custom]);
+  assert.equal((await q('SELECT amount_paid::int AS paid FROM enrollments WHERE id=$1',[custom]))[0].paid,20000);
+  const schedule = JSON.stringify([{amount:60000,due_date:'2030-01-01'}]);
+  await asUser(admin,`SELECT review_custom_registration($1,true,'Agreed schedule',$2)`,[custom,schedule]);
+  await asUser(admin,`SELECT review_custom_registration($1,true,'Agreed schedule',$2)`,[custom,schedule]);
+  assert.equal((await q('SELECT registration_eligible($1) AS allowed',[custom]))[0].allowed,true);
+  assert.equal((await q('SELECT count(*)::int AS n FROM cohort_students WHERE cohort_id=$1 AND enrollment_id=$2',[selectedCohort,custom]))[0].n,1);
+  assert.equal((await q('SELECT count(*)::int AS n FROM installments WHERE invoice_id=$1',[customInvoice]))[0].n,2);
+  console.log('PASS: Paystack idempotency, custom rejection credit preservation and approved schedule');
+  await assert.rejects(q(`UPDATE enrollments SET registration_number='changed' WHERE id=$1`,[id]),/immutable/);
+  const policies = await q(`SELECT qual FROM pg_policies WHERE policyname='Students read lessons for their programs'`);
+  assert.match(policies[0].qual,/registration_eligible/);
+  assert.equal((await asUser(outsider,'SELECT * FROM get_enrollment_for_completion($1)',[id])).length,0);
+  await assert.rejects(asUser(user,`SELECT complete_paystack_attempt('TEST-PAYSTACK',now())`),/permission denied/);
+  console.log('PASS: immutable IDs, course RLS, completion-link ownership and private settlement');
+  // Independent connections exercise the actual row-lock/idempotency path.
+  const secondPart=(await q(`SELECT id FROM installments WHERE invoice_id=$1 AND status<>'paid'`,[invoice]))[0].id;
+  await q(`INSERT INTO registration_payment_attempts(reference,invoice_id,installment_id,amount) VALUES('CONCURRENT',$1,$2,50000)`,[invoice,secondPart]);
+  const connections=await Promise.all([1,2].map(async()=>{ const connection=new pg.Client(config); await connection.connect(); return connection; }));
+  try { await Promise.all(connections.map(c=>c.query(`SELECT public.complete_paystack_attempt('CONCURRENT',now())`))); }
+  finally { await Promise.all(connections.map(c=>c.end())); }
+  assert.equal((await q('SELECT amount_paid::int AS paid FROM enrollments WHERE id=$1',[id]))[0].paid,100000);
+  assert.equal((await q(`SELECT count(*)::int AS n FROM payments WHERE payment_reference='CONCURRENT'`))[0].n,1);
+  console.log('PASS: concurrent callback/webhook settlement records once');
+  const otherCourse=randomUUID();
+  await q(`INSERT INTO programs(id,program_name,tuition_fee) VALUES($1,'Custom transfer order',50000)`,[otherCourse]);
+  const beforePayment=(await asUser(user,`SELECT start_registration($1,'Applicant','+2348012345678',NULL,'custom',NULL,10000) AS id`,[otherCourse]))[0].id;
+  const beforeInvoice=(await q('SELECT id FROM invoices WHERE enrollment_id=$1',[beforePayment]))[0].id;
+  const beforePath=`${user}/${beforeInvoice}/receipt.pdf`;
+  await q(`INSERT INTO storage.objects(bucket_id,name) VALUES('registration-receipts',$1)`,[beforePath]);
+  const beforePending=(await asUser(user,'SELECT submit_registration_receipt($1,$2) AS id',[beforePayment,beforePath]))[0].id;
+  await asUser(user,`SELECT submit_enrollment_fields($1,'{"first_name":"Applicant"}')`,[beforePayment]);
+  await asUser(admin,`SELECT review_custom_registration($1,true,'Approved before transfer review',$2)`,[beforePayment,JSON.stringify([{amount:40000,due_date:'2030-01-01'}])]);
+  assert.equal((await q('SELECT registration_eligible($1) AS allowed',[beforePayment]))[0].allowed,false);
+  await asUser(admin,`SELECT review_registration_transfer($1,false,now(),NULL,'Unreadable receipt')`,[beforePending]);
+  assert.equal((await asUser(user,'SELECT registration_profile_available($1) AS available',[beforePayment]))[0].available,false);
+  const replacement=(await asUser(user,'SELECT submit_registration_receipt($1,$2) AS id',[beforePayment,beforePath]))[0].id;
+  assert.notEqual(replacement,beforePending);
+  await asUser(admin,'SELECT review_registration_transfer($1,true)',[replacement]);
+  assert.equal((await q('SELECT registration_eligible($1) AS allowed',[beforePayment]))[0].allowed,true);
+  console.log('PASS: custom terms before transfer approval, receipt rejection and retry');
+  const concurrentCourse=randomUUID();
+  await q(`INSERT INTO programs(id,program_name,tuition_fee) VALUES($1,'Concurrent registrations',5000)`,[concurrentCourse]);
+  const registrationConnections=await Promise.all([user,outsider].map(async (person,index)=>{
+    const connection=new pg.Client(config); await connection.connect();
+    await connection.query(`SELECT set_config('request.jwt.claim.sub',$1,false)`,[person]);
+    await connection.query('SET ROLE authenticated');
+    return {connection,index};
+  }));
+  try {
+    const created=await Promise.all(registrationConnections.map(({connection,index})=>connection.query(`SELECT public.start_registration($1,'Concurrent applicant',$2) AS id`,[concurrentCourse,`+234801234568${index}`])));
+    assert.notEqual(created[0].rows[0].id,created[1].rows[0].id);
+    const numbers=await q('SELECT registration_number FROM enrollments WHERE program_id=$1',[concurrentCourse]);
+    assert.equal(new Set(numbers.map(row=>row.registration_number)).size,2);
+  } finally { await Promise.all(registrationConnections.map(({connection})=>connection.end())); }
+  console.log('PASS: registration IDs remain unique under concurrent registration');
+} finally {
+  await db.end();
+  await control.query(`DROP DATABASE ${config.database} WITH (FORCE)`);
+  await control.end();
+}

@@ -11,6 +11,7 @@
     "lint:changed": "node scripts/lint-changed.mjs",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:registration-db": "node scripts/test-registration-db.mjs",
     "test:coverage": "vitest run --coverage",
     "test:mutation": "stryker run",
     "test:watch": "vitest",

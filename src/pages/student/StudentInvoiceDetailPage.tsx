@@ -16,6 +16,8 @@ import { Progress } from '@/components/ui/progress';
 import { ArrowLeft, CreditCard, Building2, Upload, Copy, Check, AlertTriangle, CheckCircle2, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { siteConfig } from '@/lib/siteConfig';
+import { ReceiptLink } from '@/components/enrollment/ReceiptLink';
+import { registrationDb } from '@/lib/registration';
 
 export default function StudentInvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -38,7 +40,7 @@ export default function StudentInvoiceDetailPage() {
     queryFn: async () => {
       if (!id || !user) return null;
       const [invRes, instRes, pendRes, payRes] = await Promise.all([
-        supabase.from('invoices').select('*, enrollments!inner(user_id, full_name, programs(program_name))').eq('id', id).single(),
+        registrationDb.from('invoices').select('*, enrollments!inner(user_id, full_name, registration_flow_version, programs(program_name))').eq('id', id).single(),
         supabase.from('installments').select('*').eq('invoice_id', id).order('due_date'),
         supabase.from('pending_payments').select('*').eq('invoice_id', id).order('created_at', { ascending: false }),
         supabase.from('payments').select('*').eq('invoice_id', id).order('created_at', { ascending: false }),
@@ -121,6 +123,17 @@ export default function StudentInvoiceDetailPage() {
     if (!bankForm.file) { toast.error('Upload payment receipt'); return; }
     setSubmitting(true);
     try {
+      if (invoice.enrollments?.registration_flow_version === 2) {
+        const { validateReceipt } = await import('@/lib/registration');
+        validateReceipt(bankForm.file);
+        const ext = bankForm.file.type === 'application/pdf' ? 'pdf' : bankForm.file.type.split('/')[1];
+        const path = `${user.id}/${id}/${crypto.randomUUID()}.${ext}`;
+        const { error: uploadError } = await registrationDb.storage.from('registration-receipts').upload(path, bankForm.file);
+        if (uploadError) throw uploadError;
+        const { error } = await registrationDb.rpc('submit_registration_receipt', { p_enrollment_id: invoice.enrollment_id, p_path: path, p_reference: bankForm.reference || null });
+        if (error) throw error;
+        toast.success('Receipt submitted for review'); setBankOpen(false); fetchData(); return;
+      }
       const ext = bankForm.file.name.split('.').pop();
       const path = `${user.id}/${id}/${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage.from('payment-receipts').upload(path, bankForm.file);
@@ -294,13 +307,7 @@ export default function StudentInvoiceDetailPage() {
                   <p className="text-xs text-muted-foreground">{new Date(p.created_at).toLocaleString()}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  {p.evidence_url && (
-                    <Button asChild size="sm" variant="ghost">
-                      <a href={p.evidence_url} target="_blank" rel="noreferrer">
-                        <ExternalLink className="mr-1.5 h-4 w-4" /> Proof
-                      </a>
-                    </Button>
-                  )}
+                  {p.evidence_url && <ReceiptLink path={p.evidence_url} />}
                   <StatusBadge status={p.status} />
                 </div>
               </div>
@@ -369,7 +376,7 @@ export default function StudentInvoiceDetailPage() {
           <div className="space-y-4 mt-2">
             <div>
               <Label>Amount paid (₦) *</Label>
-              <Input type="number" step="0.01" value={bankForm.amount} onChange={e => setBankForm({ ...bankForm, amount: e.target.value })} className="mt-1.5" />
+              <Input type="number" step="0.01" disabled={invoice.enrollments?.registration_flow_version === 2} value={bankForm.amount} onChange={e => setBankForm({ ...bankForm, amount: e.target.value })} className="mt-1.5" />
             </div>
             <div>
               <Label>Transaction reference</Label>

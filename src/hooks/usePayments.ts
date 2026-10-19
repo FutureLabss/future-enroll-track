@@ -54,7 +54,7 @@ export async function fetchPendingPayments({ signal }: QueryFunctionContext) {
   const s = withTimeout(signal);
   const { data, error } = await supabase
     .from('pending_payments')
-    .select('*, invoices(invoice_number, enrollments(full_name, programs(program_name)))')
+    .select('*, invoices(invoice_number, enrollments(full_name, registration_number, registration_flow_version, programs(program_name)))')
     .order('created_at', { ascending: false })
     .abortSignal(s);
   if (error) throw error;

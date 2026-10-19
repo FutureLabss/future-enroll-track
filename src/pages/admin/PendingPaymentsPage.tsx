@@ -11,6 +11,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { CheckCircle, XCircle, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
+import { registrationDb } from '@/lib/registration';
+import { ReceiptLink } from '@/components/enrollment/ReceiptLink';
 
 interface BankMatch {
   id: string;
@@ -36,6 +38,8 @@ interface PendingPayment {
 }
 
 export default function PendingPaymentsPage() {
+  const [rejectTarget, setRejectTarget] = useState<PendingPayment | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
   const queryClient = useQueryClient();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [approveTarget, setApproveTarget] = useState<PendingPayment | null>(null);
@@ -91,6 +95,20 @@ export default function PendingPaymentsPage() {
   const approve = async (p: PendingPayment, paymentDate: string, match: BankMatch | null) => {
     setBusyId(p.id);
     try {
+      if (p.invoices?.enrollments?.registration_flow_version === 2) {
+        const { data: recorded, error } = await registrationDb.rpc('review_registration_transfer', {
+          p_pending_id: p.id, p_approve: true, p_paid_at: `${paymentDate}T00:00:00.000Z`, p_bank_transaction_id: match?.id || null,
+        });
+        if (error) throw error;
+        if (recorded) {
+          await registrationDb.functions.invoke('send-notification', { body: {
+            type: 'payment_received', channel: 'both', enrollment_id: p.enrollment_id, invoice_id: p.invoice_id,
+            extra: { amount_paid: Number(p.amount), payment_method: 'bank_transfer' },
+          } }).catch(() => {});
+        }
+        toast.success('Transfer approved and recorded');
+        setApproveTarget(null); refetchItems(); return;
+      }
       const reference = p.payment_reference || `BANK-${Date.now()}-${p.id.slice(0, 6).toUpperCase()}`;
       const { error: pErr } = await supabase.from('payments').insert({
         invoice_id: p.invoice_id,
@@ -176,6 +194,11 @@ export default function PendingPaymentsPage() {
   const reject = async (p: any) => {
     setBusyId(p.id);
     try {
+      if (p.invoices?.enrollments?.registration_flow_version === 2) {
+        const { error } = await registrationDb.rpc('review_registration_transfer', { p_pending_id: p.id, p_approve: false, p_reason: rejectionReason });
+        if (error) throw error;
+        toast.success('Transfer rejected'); setRejectTarget(null); refetchItems(); return;
+      }
       await supabase.from('pending_payments').update({
         status: 'rejected',
         reviewed_at: new Date().toISOString(),
@@ -206,7 +229,7 @@ export default function PendingPaymentsPage() {
                 <StatusBadge status={p.status} />
               </div>
               <p className="text-sm text-muted-foreground">
-                {p.invoices?.invoice_number} · {p.invoices?.enrollments?.programs?.program_name || ''}
+                {p.invoices?.enrollments?.registration_number} · {p.invoices?.invoice_number} · {p.invoices?.enrollments?.programs?.program_name || ''}
               </p>
               <p className="mt-2 text-lg font-bold">{formatCurrency(Number(p.amount))}</p>
               <div className="text-xs text-muted-foreground space-y-0.5 mt-1">
@@ -214,9 +237,7 @@ export default function PendingPaymentsPage() {
                 {p.notes && <p>Notes: {p.notes}</p>}
                 <p>Submitted {new Date(p.created_at).toLocaleString()}</p>
               </div>
-              <a href={p.evidence_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 mt-2 text-sm text-primary hover:underline">
-                <ExternalLink className="h-3.5 w-3.5" /> View receipt
-              </a>
+              <ReceiptLink path={p.evidence_url} />
             </div>
             {p.status === 'pending' && (
               <div className="flex gap-2">
@@ -227,7 +248,10 @@ export default function PendingPaymentsPage() {
                 >
                   <CheckCircle className="h-4 w-4 mr-1.5" /> Approve
                 </Button>
-                <Button size="sm" variant="outline" disabled={busyId === p.id} onClick={() => reject(p)}>
+                <Button size="sm" variant="outline" disabled={busyId === p.id} onClick={() => {
+                  if (p.invoices?.enrollments?.registration_flow_version === 2) { setRejectionReason(''); setRejectTarget(p); }
+                  else void reject(p);
+                }}>
                   <XCircle className="h-4 w-4 mr-1.5" /> Reject
                 </Button>
               </div>
@@ -236,6 +260,13 @@ export default function PendingPaymentsPage() {
         ))}
       </div>
 
+      <Dialog open={!!rejectTarget} onOpenChange={open => !open && setRejectTarget(null)}>
+        <DialogContent><DialogHeader><DialogTitle>Reject transfer receipt</DialogTitle></DialogHeader>
+          <Label htmlFor="receipt-rejection-reason">Reason shown to the applicant</Label>
+          <Input id="receipt-rejection-reason" value={rejectionReason} onChange={e => setRejectionReason(e.target.value)} />
+          <Button disabled={!rejectionReason.trim() || busyId === rejectTarget?.id} onClick={() => rejectTarget && reject(rejectTarget)}>Reject receipt</Button>
+        </DialogContent>
+      </Dialog>
       <Dialog open={!!approveTarget} onOpenChange={o => !o && setApproveTarget(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>Approve Payment</DialogTitle></DialogHeader>

@@ -8,6 +8,7 @@ import { DataTable } from '@/components/shared/DataTable';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { CoursePricingEditor } from '@/components/enrollment/CoursePricingEditor';
 import {
   ArrowLeft,
   BookOpen,
@@ -201,6 +202,7 @@ export default function ProgramDetailPage() {
         }
       />
 
+      <CoursePricingEditor programId={id!} />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6 mb-8">
         {stats.map(({ label, value, icon: Icon }) => (
           <div key={label} className="glass-card rounded-xl p-4">

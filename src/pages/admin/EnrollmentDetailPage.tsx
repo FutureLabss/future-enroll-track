@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { ArrowLeft, CheckCircle, XCircle, ExternalLink, Trash2, Pencil, ArrowLeftRight, Eye, ClipboardList, LockKeyhole, Loader2, Save } from 'lucide-react';
 import { toast } from 'sonner';
+import { CustomAmountReview } from '@/components/enrollment/CustomAmountReview';
 
 interface FieldValue {
   id: string;
@@ -286,7 +287,7 @@ export default function EnrollmentDetailPage() {
     <div>
       <PageHeader
         title={enrollment.full_name}
-        description={`Enrollment details — ${enrollment.email}`}
+        description={`${enrollment.registration_number || ''} · Enrollment details — ${enrollment.email}`}
         actions={
           <div className="flex gap-2">
             <Button variant="ghost" onClick={() => navigate('/admin/enrollments')}>
@@ -334,6 +335,7 @@ export default function EnrollmentDetailPage() {
       />
 
       {/* Summary Cards */}
+      <CustomAmountReview key={enrollment.id} enrollment={enrollment} />
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div className="glass-card rounded-xl p-4">
           <p className="text-xs text-muted-foreground">Program</p>

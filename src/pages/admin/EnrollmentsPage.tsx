@@ -1,5 +1,5 @@
 // @ts-nocheck — pre-existing schema/typegen mismatch (LMS tables not in DB); unblocks build.
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { format, subMonths, startOfMonth } from 'date-fns';
@@ -13,6 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { CalendarIcon, ChevronLeft, ChevronRight, Download, Eye, LayoutGrid, List } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -32,6 +33,12 @@ export default function EnrollmentsPage() {
   const [page, setPage] = useState(0);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState('csv');
+  const [search, setSearch] = useState('');
+  const [serverSearch, setServerSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => { setServerSearch(search.replace(/[^\p{L}\p{N}@.+ _-]/gu, '').trim().slice(0,100)); setPage(0); }, 250);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const { data: staticData } = useQuery({
     queryKey: ['enrollments-static'],
@@ -71,7 +78,7 @@ export default function EnrollmentsPage() {
     : null;
 
   const { data: enrollmentsData, isLoading: loading } = useQuery({
-    queryKey: ['enrollments-list', statusFilter, programFilter, dbDateFrom, dbDateTo, dbPaymentFilter, page],
+    queryKey: ['enrollments-list', statusFilter, programFilter, dbDateFrom, dbDateTo, dbPaymentFilter, page, serverSearch],
     queryFn: async () => {
       let query = supabase.from('enrollments')
         .select('*, programs(program_name), cohorts(cohort_label), organizations(organization_name)', { count: 'exact' })
@@ -84,6 +91,7 @@ export default function EnrollmentsPage() {
       if (dbPaymentFilter) query = query.eq('payment_status', dbPaymentFilter);
       if (dbDateFrom) query = query.gte('created_at', dbDateFrom);
       if (dbDateTo) query = query.lte('created_at', dbDateTo);
+      if (serverSearch) query = query.or(`registration_number.ilike.%${serverSearch}%,full_name.ilike.%${serverSearch}%,email.ilike.%${serverSearch}%,phone.ilike.%${serverSearch}%`);
 
       const { data, count } = await query;
       const rows = data || [];
@@ -160,7 +168,7 @@ export default function EnrollmentsPage() {
 
     const exportCustomFields = customFields.filter(f => f.key !== 'profile_photo');
     const headers = [
-      'Full Name', 'Email', 'Primary Phone Number', 'Program', 'Training Partner', 'Cohort',
+      'Registration ID', 'Full Name', 'Email', 'Primary Phone Number', 'Program', 'Cohort',
       'Organization', 'Enrollment Status', 'Payment Status',
       'Total Amount (₦)', 'Amount Paid (₦)', 'Outstanding (₦)', 'Enrolled Date',
       ...exportCustomFields.map((f: any) => f.label),
@@ -168,7 +176,7 @@ export default function EnrollmentsPage() {
     const rows = exportRows.map(e => {
       const cv = valueMap.get(e.id) || {};
       return [
-        e.full_name, e.email, e.phone || '',
+        e.registration_number, e.full_name, e.email, e.phone || '',
         e.programs?.program_name || '', e.cohorts?.cohort_label || '',
         e.organizations?.organization_name || '',
         e.enrollment_status, getPaymentStatus(e),
@@ -200,6 +208,7 @@ export default function EnrollmentsPage() {
   const resetPage = () => setPage(0);
 
   const columns = useMemo(() => [
+    { key: 'registration_number', header: 'Registration ID' },
     { key: 'full_name', header: 'Student' },
     { key: 'email', header: 'Email' },
     { key: 'phone', header: 'Phone', render: (r: any) => r.phone || '—' },
@@ -238,8 +247,6 @@ export default function EnrollmentsPage() {
       data={data}
       onRowClick={(r) => navigate(`/admin/enrollments/${r.id}`)}
       emptyMessage="No enrollments found"
-      searchable
-      searchPlaceholder="Search by name or email..."
     />
   );
 
@@ -256,6 +263,7 @@ export default function EnrollmentsPage() {
       />
 
       <div className="flex flex-wrap gap-3 mb-6 items-end">
+        <div className="w-full"><Label htmlFor="enrollment-search">Search registrations</Label><Input id="enrollment-search" placeholder="Registration ID, name, email or phone" value={search} onChange={e => setSearch(e.target.value)} /></div>
         <div>
           <Label className="text-xs text-muted-foreground">Period</Label>
           <Select value={dateMode} onValueChange={v => { setDateMode(v); resetPage(); if (v !== 'custom') { setDateFrom(undefined); setDateTo(undefined); } }}>

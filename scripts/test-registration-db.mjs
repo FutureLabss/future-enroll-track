@@ -85,9 +85,28 @@ try {
   const path = `${user}/${invoice}/receipt.pdf`;
   await q(`INSERT INTO storage.objects(bucket_id,name) VALUES('registration-receipts',$1)`,[path]);
   const pending = (await asUser(user,'SELECT submit_registration_receipt($1,$2) AS id',[id,path]))[0].id;
-  await q(`INSERT INTO custom_fields(key,label,field_type,required,active,visible_to_student,hub_id) VALUES('first_name','First name','text',true,true,true,$1)`,[hub]);
+  await q(`INSERT INTO custom_fields(key,label,field_type,required,active,visible_to_student,hub_id) VALUES('first_name','Preferred first name','text',true,true,true,$1)`,[hub]);
+  const emptyCompleted=randomUUID();
+  await q(`INSERT INTO enrollments(id,user_id,full_name,email,program_id,total_amount,amount_paid,initial_payment_amount,
+    registration_flow_version,registration_payment_option,profile_completed_at)
+    VALUES($1,$2,'Empty completed profile','other@example.test',$3,2000,1000,1000,2,'installment',now())`,[emptyCompleted,outsider,course]);
+  assert.equal((await q('SELECT count(*)::int AS n FROM classroom_students WHERE enrollment_id=$1',[emptyCompleted]))[0].n,1);
+  await q(await readFile(new URL('../supabase/migrations/20261019000001_restore_registration_profile_fields.sql',import.meta.url),'utf8'));
+  await q(await readFile(new URL('../supabase/migrations/20261019000002_capture_registration_names.sql',import.meta.url),'utf8'));
+  assert.equal((await q('SELECT count(*)::int AS n FROM custom_fields'))[0].n,8);
+  assert.equal((await q(`SELECT label FROM custom_fields WHERE key='first_name'`))[0].label,'Preferred first name');
+  assert.equal((await q('SELECT profile_completed_at FROM enrollments WHERE id=$1',[emptyCompleted]))[0].profile_completed_at,null);
+  assert.equal((await q('SELECT amount_paid::int AS paid FROM enrollments WHERE id=$1',[emptyCompleted]))[0].paid,1000);
+  assert.equal((await q('SELECT count(*)::int AS n FROM classroom_students WHERE enrollment_id=$1',[emptyCompleted]))[0].n,0);
+  assert.equal((await q('SELECT registration_eligible($1) AS allowed',[legacyId]))[0].allowed,true);
+  await q(`UPDATE custom_fields SET active=false WHERE key='date_of_birth'`);
+  await assert.rejects(asUser(user,`SELECT submit_enrollment_fields($1,'{}')`,[id]), /not configured/);
+  await q(`UPDATE custom_fields SET active=true WHERE key='date_of_birth'`);
+  console.log('PASS: missing profile fields restored, customized definitions preserved, empty completions reopened and legacy access unchanged');
+  const profile=JSON.stringify({first_name:'Applicant',surname:'Test',date_of_birth:'2000-01-01',sex:'Female',pwd_status:'No',state_of_residence:'Delta',residential_address:'Test address',highest_educational_qualification:'BSc'});
   await assert.rejects(asUser(user,`SELECT submit_enrollment_fields($1,'{}')`,[id]), /Required fields/);
-  await asUser(user,`SELECT submit_enrollment_fields($1,'{"first_name":"Applicant"}')`,[id]);
+  await assert.rejects(asUser(user,`SELECT submit_enrollment_fields($1,'{"first_name":"Applicant"}')`,[id]), /Required fields/);
+  await asUser(user,`SELECT submit_enrollment_fields($1,$2)`,[id,profile]);
   assert.equal((await q('SELECT registration_eligible($1) AS allowed',[id]))[0].allowed,false);
   await assert.rejects(asUser(outsider,'SELECT review_registration_transfer($1,true)',[pending]),/Admin access/);
   await asUser(admin,'SELECT review_registration_transfer($1,true)',[pending]);
@@ -103,7 +122,7 @@ try {
   const customPart = (await q('SELECT id FROM installments WHERE invoice_id=$1',[customInvoice]))[0].id;
   await q(`INSERT INTO registration_payment_attempts(reference,invoice_id,installment_id,amount) VALUES('TEST-PAYSTACK',$1,$2,20000)`,[customInvoice,customPart]);
   await q(`SELECT complete_paystack_attempt('TEST-PAYSTACK',now()); SELECT complete_paystack_attempt('TEST-PAYSTACK',now())`);
-  await asUser(user,`SELECT submit_enrollment_fields($1,'{"first_name":"Applicant"}')`,[custom]);
+  await asUser(user,`SELECT submit_enrollment_fields($1,$2)`,[custom,profile]);
   assert.equal((await q('SELECT registration_eligible($1) AS allowed',[custom]))[0].allowed,false);
   await asUser(admin,`SELECT review_custom_registration($1,false,'Deposit too low')`,[custom]);
   assert.equal((await q('SELECT amount_paid::int AS paid FROM enrollments WHERE id=$1',[custom]))[0].paid,20000);
@@ -136,7 +155,7 @@ try {
   const beforePath=`${user}/${beforeInvoice}/receipt.pdf`;
   await q(`INSERT INTO storage.objects(bucket_id,name) VALUES('registration-receipts',$1)`,[beforePath]);
   const beforePending=(await asUser(user,'SELECT submit_registration_receipt($1,$2) AS id',[beforePayment,beforePath]))[0].id;
-  await asUser(user,`SELECT submit_enrollment_fields($1,'{"first_name":"Applicant"}')`,[beforePayment]);
+  await asUser(user,`SELECT submit_enrollment_fields($1,$2)`,[beforePayment,profile]);
   await asUser(admin,`SELECT review_custom_registration($1,true,'Approved before transfer review',$2)`,[beforePayment,JSON.stringify([{amount:40000,due_date:'2030-01-01'}])]);
   assert.equal((await q('SELECT registration_eligible($1) AS allowed',[beforePayment]))[0].allowed,false);
   await asUser(admin,`SELECT review_registration_transfer($1,false,now(),NULL,'Unreadable receipt')`,[beforePending]);
@@ -161,6 +180,38 @@ try {
     assert.equal(new Set(numbers.map(row=>row.registration_number)).size,2);
   } finally { await Promise.all(registrationConnections.map(({connection})=>connection.end())); }
   console.log('PASS: registration IDs remain unique under concurrent registration');
+  const namedCourse=randomUUID();
+  await q(`INSERT INTO programs(id,program_name,tuition_fee) VALUES($1,'Structured names course',60000)`,[namedCourse]);
+  await assert.rejects(asUser(user,`SELECT start_registration_with_names($1,'  ','Surname','+2348012345678')`,[namedCourse]),/First name and surname are required/);
+  await assert.rejects(asUser(user,`SELECT start_registration_with_names($1,$2,'Surname','+2348012345678')`,[namedCourse,'\t\n']),/First name and surname are required/);
+  await q(`UPDATE custom_fields SET active=false WHERE key='first_name'`);
+  await assert.rejects(asUser(user,`SELECT start_registration_with_names($1,'Mary Jane','Surname','+2348012345678')`,[namedCourse]),/name fields are not configured/);
+  assert.equal((await q('SELECT count(*)::int AS n FROM enrollments WHERE program_id=$1',[namedCourse]))[0].n,0);
+  await q(`UPDATE custom_fields SET active=true WHERE key='first_name'`);
+  const named=(await asUser(user,`SELECT start_registration_with_names($1,$2,$3,'+2348012345678') AS id`,[namedCourse,'  Mary   Jane  '," O'Connor-Smith "]))[0].id;
+  const namedRow=(await q('SELECT full_name,profile_completed_at FROM enrollments WHERE id=$1',[named]))[0];
+  assert.equal(namedRow.full_name,"Mary Jane O'Connor-Smith");
+  assert.equal(namedRow.profile_completed_at,null);
+  const nameValues=await asUser(user,'SELECT * FROM get_enrollment_field_values($1)',[named]);
+  assert.deepEqual(Object.fromEntries(nameValues.map(row=>[row.field_key,row.value])),{first_name:'Mary Jane',surname:"O'Connor-Smith"});
+  const resumed=(await asUser(user,`SELECT start_registration_with_names($1,'Different','Name','+2348012345678') AS id`,[namedCourse]))[0].id;
+  assert.equal(resumed,named);
+  assert.equal((await q('SELECT full_name FROM enrollments WHERE id=$1',[named]))[0].full_name,"Mary Jane O'Connor-Smith");
+  assert.equal((await q('SELECT count(*)::int AS n FROM invoices WHERE enrollment_id=$1',[named]))[0].n,1);
+  const namedInvoice=(await q('SELECT id FROM invoices WHERE enrollment_id=$1',[named]))[0].id;
+  const namedPath=`${user}/${namedInvoice}/receipt.pdf`;
+  await q(`INSERT INTO storage.objects(bucket_id,name) VALUES('registration-receipts',$1)`,[namedPath]);
+  await asUser(user,'SELECT submit_registration_receipt($1,$2)',[named,namedPath]);
+  await q(`INSERT INTO profiles(user_id,email,full_name) VALUES($1,'applicant@example.test','Before correction') ON CONFLICT(user_id) DO NOTHING`,[user]);
+  const corrected=JSON.stringify({...JSON.parse(profile),first_name:'Mary Jane',surname:"O'Connor-Jones"});
+  await asUser(user,'SELECT submit_enrollment_fields($1,$2)',[named,corrected]);
+  assert.equal((await q('SELECT full_name FROM enrollments WHERE id=$1',[named]))[0].full_name,"Mary Jane O'Connor-Jones");
+  assert.equal((await q('SELECT full_name FROM profiles WHERE user_id=$1',[user]))[0].full_name,"Mary Jane O'Connor-Jones");
+  await asUser(user,`SELECT start_registration_with_names($1,'Different','Name','+2348012345678')`,[namedCourse]);
+  assert.equal((await asUser(user,'SELECT * FROM get_enrollment_field_values($1)',[named])).find(row=>row.field_key==='surname').value,"O'Connor-Jones");
+  assert.equal((await asUser(legacyUser,`SELECT start_registration_with_names($1,'Different','Name','+2348012345678') AS id`,[legacyCourse]))[0].id,legacyId);
+  assert.equal((await q('SELECT full_name FROM enrollments WHERE id=$1',[legacyId]))[0].full_name,'Legacy student');
+  console.log('PASS: structured names are stored atomically, prefilled, preserved on resume, and corrected with profile completion');
 } finally {
   await db.end();
   await control.query(`DROP DATABASE ${config.database} WITH (FORCE)`);

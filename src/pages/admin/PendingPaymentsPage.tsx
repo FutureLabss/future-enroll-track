@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { CheckCircle, XCircle, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
-import { registrationDb } from '@/lib/registration';
+import { registrationDb, registrationError } from '@/lib/registration';
 import { ReceiptLink } from '@/components/enrollment/ReceiptLink';
 
 interface BankMatch {
@@ -86,7 +86,7 @@ export default function PendingPaymentsPage() {
     return () => { cancelled = true; };
   }, [approveTarget]);
 
-  const { data: items = [], isLoading: loading } = usePendingPayments();
+  const { data: items = [], isLoading: loading, error: loadError, isFetching, refetch } = usePendingPayments();
 
   const refetchItems = () => queryClient.invalidateQueries({ queryKey: ['pending-payments'] });
 
@@ -217,10 +217,20 @@ export default function PendingPaymentsPage() {
 
   return (
     <div>
-      <PageHeader title="Pending Payments" description="Verify student bank transfers and record them" />
+      <PageHeader title="Pending Payments" description="Verify student bank transfers and record them"
+        actions={<Button variant="outline" disabled={isFetching} onClick={() => void refetch()}>{isFetching ? 'Refreshing…' : 'Refresh'}</Button>} />
       <div className="bg-card border border-border rounded-xl divide-y divide-border">
-        {items.length === 0 ? (
-          <p className="p-8 text-center text-sm text-muted-foreground">No submissions yet</p>
+        {loadError ? (
+          <div role="alert" className="p-6 space-y-2">
+            <p className="font-semibold text-destructive">Unable to load payment submissions</p>
+            <p className="text-sm">{registrationError(loadError, 'The payment request failed. Please try again.')}</p>
+            <p className="text-sm text-muted-foreground">This does not mean there are no receipts. Click Refresh to retry.</p>
+          </div>
+        ) : items.length === 0 ? (
+          <div className="p-8 text-center space-y-2">
+            <p className="text-sm text-muted-foreground">No bank-transfer receipts found</p>
+            <p className="text-sm text-muted-foreground">Receipts appear here after a student submits them. Paystack payments are recorded automatically under Payments.</p>
+          </div>
         ) : items.map(p => (
           <div key={p.id} className="p-5 grid gap-3 md:grid-cols-[1fr_auto] items-start">
             <div>

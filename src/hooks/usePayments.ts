@@ -54,11 +54,26 @@ export async function fetchPendingPayments({ signal }: QueryFunctionContext) {
   const s = withTimeout(signal);
   const { data, error } = await supabase
     .from('pending_payments')
-    .select('*, invoices(invoice_number, enrollments(full_name, registration_number, registration_flow_version, programs(program_name)))')
+    .select('*')
     .order('created_at', { ascending: false })
     .abortSignal(s);
   if (error) throw error;
-  return data || [];
+  if (!data?.length) return [];
+
+  // Older installations have no pending_payments -> invoices foreign key.
+  // Resolve invoices explicitly rather than depending on a PostgREST embed.
+  const invoiceIds = [...new Set(data.map(payment => payment.invoice_id))];
+  const invoices = new Map();
+  for (let offset = 0; offset < invoiceIds.length; offset += 100) {
+    const { data: rows, error: invoiceError } = await supabase
+      .from('invoices')
+      .select('id, invoice_number, enrollments(full_name, registration_number, registration_flow_version, programs(program_name))')
+      .in('id', invoiceIds.slice(offset, offset + 100))
+      .abortSignal(s);
+    if (invoiceError) throw invoiceError;
+    for (const invoice of rows || []) invoices.set(invoice.id, invoice);
+  }
+  return data.map(payment => ({ ...payment, invoices: invoices.get(payment.invoice_id) || null }));
 }
 
 export function usePaymentsAll() {

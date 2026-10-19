@@ -32,7 +32,7 @@ export default function LoginPage() {
   useEffect(() => {
     if (!user || !rolesReady) return;
 
-    if (nextPath) {
+    if (nextPath?.startsWith('/') && !nextPath.startsWith('//')) {
       navigate(nextPath, { replace: true });
     } else if (isAdmin) {
       navigate('/admin', { replace: true });

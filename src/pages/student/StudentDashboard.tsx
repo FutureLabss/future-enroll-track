@@ -10,6 +10,7 @@ import { StatCard } from '@/components/shared/StatCard';
 import { DataTable } from '@/components/shared/DataTable';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { CompleteProfileBanner } from '@/components/enrollment/CompleteProfileBanner';
+import { StudentRegistrations } from '@/components/enrollment/StudentRegistrations';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -286,6 +287,7 @@ export default function StudentDashboard() {
     <div>
       <PageHeader title="My Dashboard" description="Your classes, assignments, progress, and payments" />
       <CompleteProfileBanner />
+      <StudentRegistrations />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
         <StatCard title="Outstanding" value={formatCurrency(totalOwed)} icon={AlertTriangle} />

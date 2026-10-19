@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation, useParams } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { RegistrationGuard } from "@/components/enrollment/RegistrationGuard";
 
 const LoginPage = lazy(() => import("@/pages/auth/LoginPage"));
 const ResetPasswordPage = lazy(() => import("@/pages/auth/ResetPasswordPage"));
@@ -219,15 +220,17 @@ const App = () => (
                 <Route path="/staff/invitations" element={<StaffInvitationsPage />} />
 
                 {/* Student routes */}
+                <Route element={<RegistrationGuard />}>
                 <Route path="/student" element={<StudentDashboard />} />
-                <Route path="/student/invoices" element={<StudentInvoicesPage />} />
-                <Route path="/student/invoices/:id" element={<StudentInvoiceDetailPage />} />
-                <Route path="/student/invoices/:id/payment-callback" element={<PaymentCallbackPage />} />
                 <Route path="/student/payments" element={<StudentPaymentsPage />} />
                 <Route path="/student/notifications" element={<StudentNotificationsPage />} />
                 <Route path="/student/classrooms" element={<StudentClassroomsPage />} />
                 <Route path="/student/classrooms/:id" element={<StudentClassroomPage />} />
                 <Route path="/student/feedback" element={<StudentFeedbackPage />} />
+                </Route>
+                <Route path="/student/invoices" element={<StudentInvoicesPage />} />
+                <Route path="/student/invoices/:id" element={<StudentInvoiceDetailPage />} />
+                <Route path="/student/invoices/:id/payment-callback" element={<PaymentCallbackPage />} />
 
                 {/* Org routes */}
                 <Route path="/org" element={<OrgDashboard />} />

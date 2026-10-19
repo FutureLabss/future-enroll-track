@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -96,6 +96,7 @@ function groupFields(fields: CustomField[]) {
 }
 
 export function CustomFieldsForm({ fields, values, onChange }: CustomFieldsFormProps) {
+  const formId = useId();
   const [uploadingKey, setUploadingKey] = useState<string | null>(null);
   const groups = useMemo(() => groupFields(fields), [fields]);
 
@@ -148,6 +149,7 @@ export function CustomFieldsForm({ fields, values, onChange }: CustomFieldsFormP
                     <><Upload className="h-4 w-4" /> {value ? 'Change Photo' : 'Upload Photo'}</>
                   )}
                   <input
+                    id={`${formId}-${field.key}`}
                     type="file"
                     accept="image/*"
                     className="hidden"
@@ -165,8 +167,8 @@ export function CustomFieldsForm({ fields, values, onChange }: CustomFieldsFormP
         );
       case 'select':
         return (
-          <Select value={value} onValueChange={v => onChange(field.key, v)}>
-            <SelectTrigger className="mt-1.5">
+          <Select required={field.required} value={value} onValueChange={v => onChange(field.key, v)}>
+            <SelectTrigger id={`${formId}-${field.key}`} className="mt-1.5">
               <SelectValue placeholder={`Select ${field.label.toLowerCase()}`} />
             </SelectTrigger>
             <SelectContent>
@@ -179,6 +181,7 @@ export function CustomFieldsForm({ fields, values, onChange }: CustomFieldsFormP
       case 'textarea':
         return (
           <Textarea
+            id={`${formId}-${field.key}`}
             required={field.required}
             value={value}
             onChange={e => onChange(field.key, e.target.value)}
@@ -192,6 +195,7 @@ export function CustomFieldsForm({ fields, values, onChange }: CustomFieldsFormP
         return (
           <>
             <Input
+              id={`${formId}-${field.key}`}
               required={field.required}
               type="date"
               value={value}
@@ -212,6 +216,7 @@ export function CustomFieldsForm({ fields, values, onChange }: CustomFieldsFormP
       case 'number':
         return (
           <Input
+            id={`${formId}-${field.key}`}
             required={field.required}
             type="number"
             value={value}
@@ -223,6 +228,8 @@ export function CustomFieldsForm({ fields, values, onChange }: CustomFieldsFormP
         return (
           <div className="flex items-center gap-2 mt-1.5">
             <Checkbox
+              id={`${formId}-${field.key}`}
+              required={field.required}
               checked={value === 'true'}
               onCheckedChange={checked => onChange(field.key, String(checked))}
             />
@@ -235,6 +242,7 @@ export function CustomFieldsForm({ fields, values, onChange }: CustomFieldsFormP
         return (
           <>
             <Input
+              id={`${formId}-${field.key}`}
               required={field.required}
               value={value}
               onChange={e => onChange(field.key, e.target.value)}
@@ -277,7 +285,7 @@ export function CustomFieldsForm({ fields, values, onChange }: CustomFieldsFormP
                   }
                 >
                   {field.field_type !== 'checkbox' && (
-                    <Label>{field.label} {field.required && '*'}</Label>
+                    <Label htmlFor={`${formId}-${field.key}`}>{field.label} {field.required && '*'}</Label>
                   )}
                   {renderField(field)}
                 </div>

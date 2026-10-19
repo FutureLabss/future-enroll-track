@@ -8,6 +8,8 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { CheckCircle, GraduationCap } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { getRegistrationProgress } from '@/lib/registration';
+import { useQueryClient } from '@tanstack/react-query';
 
 const V2_REQUIRED_PROFILE_FIELDS = [
   'surname',
@@ -23,18 +25,19 @@ const V2_REQUIRED_PROFILE_FIELDS = [
 export default function EnrollCompletePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user, signUp, signIn } = useAuth();
+  const queryClient = useQueryClient();
+  const { user, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [password, setPassword] = useState('');
   
   const [enrollment, setEnrollment] = useState<any>(null);
   const [customFields, setCustomFields] = useState<any[]>([]);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || authLoading) return;
+    if (!user) { navigate(`/login?next=/students/${id}`, { replace: true }); return; }
     
     async function loadData() {
       try {
@@ -53,6 +56,12 @@ export default function EnrollCompletePage() {
           ...enrollData,
           programs: { program_name: enrollData.program_name },
         });
+        const progress = await getRegistrationProgress();
+        const registration = progress.registrations.find(r => r.id === id);
+        if (registration?.registration_flow_version === 2 && !registration.profile_available) {
+          navigate(`/enroll?registration=${id}`, { replace: true }); return;
+        }
+        if (registration) setEnrollment((previous: Record<string, unknown>) => ({ ...previous, registration_number: registration.registration_number }));
 
         // Fetch custom fields visible to students
         const { data: fieldsData, error: fieldsErr } = await supabase
@@ -60,6 +69,7 @@ export default function EnrollCompletePage() {
           .select('*')
           .eq('active', true)
           .eq('visible_to_student', true)
+          .or(`hub_id.is.null,hub_id.eq.${enrollData.hub_id}`)
           .order('sort_order', { ascending: true });
 
         if (fieldsErr) throw fieldsErr;
@@ -85,7 +95,7 @@ export default function EnrollCompletePage() {
     }
 
     loadData();
-  }, [id]);
+  }, [id, user?.id, authLoading, navigate]);
 
   const handleFieldChange = (key: string, value: string) => {
     setFormValues(prev => ({ ...prev, [key]: value }));
@@ -132,36 +142,9 @@ export default function EnrollCompletePage() {
 
     setSubmitting(true);
     try {
-      let didSignUp = false;
-      if (!user) {
-        if (!password || password.length < 6) {
-          toast.error("Please provide a password of at least 6 characters.");
-          setSubmitting(false);
-          return;
-        }
-        const { error: signUpErr } = await signUp(enrollment.email, password, enrollment.full_name);
-        if (signUpErr) {
-          const msg = signUpErr.message.toLowerCase();
-          if (msg.includes("already registered") || msg.includes("already been registered") || msg.includes("user already")) {
-            // Try to sign in with provided password
-            const { error: signInErr } = await signIn(enrollment.email, password);
-            if (signInErr) {
-              toast.error("An account with this email already exists. Please log in to continue.");
-              navigate(`/login?next=/students/${id}`);
-              return;
-            }
-          } else {
-            throw signUpErr;
-          }
-        } else {
-          didSignUp = true;
-          // Ensure session is active (auto-confirm signup is enabled)
-          await signIn(enrollment.email, password).catch(() => {});
-        }
-      }
-
       // Link enrollment to current user (idempotent)
-      await supabase.rpc('link_enrollment_to_user' as any, { p_enrollment_id: id });
+      const { error: linkError } = await supabase.rpc('link_enrollment_to_user' as any, { p_enrollment_id: id });
+      if (linkError) throw linkError;
 
       const { error } = await supabase.rpc('submit_enrollment_fields' as any, {
         p_enrollment_id: id,
@@ -170,9 +153,11 @@ export default function EnrollCompletePage() {
 
       if (error) throw error;
       
-      toast.success("Profile completed successfully! Redirecting to your dashboard...");
+      const progress = await getRegistrationProgress();
+      queryClient.setQueryData(['registration-progress', user?.id], progress);
+      toast.success("Profile completed successfully!");
       setSubmitted(true);
-      setTimeout(() => navigate('/student'), 2000);
+      navigate(progress.dashboard_access ? '/student' : `/enroll?registration=${id}`);
     } catch (err: any) {
       toast.error("Failed to submit: " + err.message);
     } finally {
@@ -231,6 +216,7 @@ export default function EnrollCompletePage() {
             <p className="text-white/80 text-sm md:text-base mt-1">
               {enrollment.programs?.program_name} — Welcome, {enrollment.full_name}!
             </p>
+            {enrollment.registration_number && <p className="text-white/80 font-mono text-sm mt-2">{enrollment.registration_number} · Segment 2</p>}
           </div>
         </div>
       </div>
@@ -242,31 +228,6 @@ export default function EnrollCompletePage() {
               Please provide the additional information below to finalize your enrollment records. All fields marked with an asterisk (*) are required.
             </p>
           </div>
-
-          {!user && (
-            <div className="mb-6 pb-6 border-b border-border space-y-4">
-              <h2 className="font-heading font-semibold text-lg text-foreground">Create Your Account</h2>
-              <p className="text-sm text-muted-foreground">Setup a password to access your student dashboard.</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <Label>Email</Label>
-                  <Input value={enrollment.email} disabled className="mt-1.5" />
-                </div>
-                <div>
-                  <Label>Password *</Label>
-                  <Input 
-                    type="password" 
-                    required 
-                    minLength={6} 
-                    value={password} 
-                    onChange={e => setPassword(e.target.value)} 
-                    placeholder="••••••••" 
-                    className="mt-1.5" 
-                  />
-                </div>
-              </div>
-            </div>
-          )}
 
           {customFields.length > 0 ? (
             <CustomFieldsForm 
@@ -286,7 +247,7 @@ export default function EnrollCompletePage() {
           )}
 
           <div className="pt-6 border-t border-border flex justify-end gap-3">
-            <Button type="submit" disabled={submitting || customFields.length === 0} className="w-full sm:w-auto h-11 px-8">
+            <Button type="submit" disabled={submitting} className="w-full sm:w-auto h-11 px-8">
               {submitting ? 'Submitting...' : 'Save & Complete'}
             </Button>
           </div>

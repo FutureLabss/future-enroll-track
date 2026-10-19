@@ -8,19 +8,9 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { CheckCircle, GraduationCap } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { getRegistrationProgress } from '@/lib/registration';
+import { getRegistrationProgress, registrationError } from '@/lib/registration';
 import { useQueryClient } from '@tanstack/react-query';
-
-const V2_REQUIRED_PROFILE_FIELDS = [
-  'surname',
-  'first_name',
-  'date_of_birth',
-  'sex',
-  'pwd_status',
-  'state_of_residence',
-  'residential_address',
-  'highest_educational_qualification',
-];
+import { missingProfileDefinitions, V2_REQUIRED_PROFILE_FIELDS } from '@/lib/registrationProfile';
 
 export default function EnrollCompletePage() {
   const { id } = useParams<{ id: string }>();
@@ -30,6 +20,7 @@ export default function EnrollCompletePage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   
   const [enrollment, setEnrollment] = useState<any>(null);
   const [customFields, setCustomFields] = useState<any[]>([]);
@@ -40,6 +31,8 @@ export default function EnrollCompletePage() {
     if (!user) { navigate(`/login?next=/students/${id}`, { replace: true }); return; }
     
     async function loadData() {
+      setLoading(true);
+      setLoadError(null);
       try {
         // Fetch enrollment via security-definer RPC (works for both anon and auth users)
         const { data: enrollRows, error: enrollErr } = await supabase
@@ -61,7 +54,7 @@ export default function EnrollCompletePage() {
         if (registration?.registration_flow_version === 2 && !registration.profile_available) {
           navigate(`/enroll?registration=${id}`, { replace: true }); return;
         }
-        if (registration) setEnrollment((previous: Record<string, unknown>) => ({ ...previous, registration_number: registration.registration_number }));
+        if (registration) setEnrollment((previous: Record<string, unknown>) => ({ ...previous, registration_number: registration.registration_number, registration_flow_version: registration.registration_flow_version }));
 
         // Fetch custom fields visible to students
         const { data: fieldsData, error: fieldsErr } = await supabase
@@ -69,15 +62,19 @@ export default function EnrollCompletePage() {
           .select('*')
           .eq('active', true)
           .eq('visible_to_student', true)
-          .or(`hub_id.is.null,hub_id.eq.${enrollData.hub_id}`)
+          .or(enrollData.hub_id ? `hub_id.is.null,hub_id.eq.${enrollData.hub_id}` : 'hub_id.is.null')
           .order('sort_order', { ascending: true });
 
         if (fieldsErr) throw fieldsErr;
         setCustomFields(fieldsData || []);
+        if (missingProfileDefinitions(fieldsData || [], enrollData.profile_requirements_version, registration?.registration_flow_version || 1).length) {
+          throw new Error('The registration form is not ready yet. Please contact admissions to complete the form setup.');
+        }
 
         // Fetch any existing values via RPC (works for anon flow too)
-        const { data: existingValues } = await supabase
+        const { data: existingValues, error: valuesError } = await supabase
           .rpc('get_enrollment_field_values' as any, { p_enrollment_id: id });
+        if (valuesError) throw valuesError;
 
         if (existingValues && existingValues.length > 0) {
           const map: Record<string, string> = {};
@@ -88,6 +85,7 @@ export default function EnrollCompletePage() {
         }
 
       } catch (err: any) {
+        setLoadError(registrationError(err, 'Unable to load your registration form. Please try again.'));
         toast.error("Error loading data: " + err.message);
       } finally {
         setLoading(false);
@@ -103,7 +101,7 @@ export default function EnrollCompletePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!id) return;
+    if (!id || loadError) return;
 
     // New enrollments use the expanded profile requirements; existing completed records are grandfathered.
     const requiredKeys = new Set([
@@ -225,11 +223,17 @@ export default function EnrollCompletePage() {
         <form onSubmit={handleSubmit} className="bg-card border border-border rounded-xl shadow-lg p-6 md:p-8 space-y-6">
           <div className="mb-6 pb-6 border-b border-border">
             <p className="text-muted-foreground text-sm">
-              Please provide the additional information below to finalize your enrollment records. All fields marked with an asterisk (*) are required.
+              Review your name below and complete the remaining details to finalize your registration. You can correct your name if needed. All fields marked with an asterisk (*) are required.
             </p>
           </div>
 
-          {customFields.length > 0 ? (
+          {loadError ? (
+            <div role="alert" className="rounded-lg border border-destructive/30 p-5 space-y-3">
+              <p className="font-semibold">Registration form unavailable</p>
+              <p className="text-sm">{loadError}</p>
+              <Button type="button" variant="outline" onClick={() => window.location.reload()}>Reload form</Button>
+            </div>
+          ) : customFields.length > 0 ? (
             <CustomFieldsForm 
               fields={customFields.map(field => ({
                 ...field,
@@ -247,7 +251,7 @@ export default function EnrollCompletePage() {
           )}
 
           <div className="pt-6 border-t border-border flex justify-end gap-3">
-            <Button type="submit" disabled={submitting} className="w-full sm:w-auto h-11 px-8">
+            <Button type="submit" disabled={submitting || !!loadError} className="w-full sm:w-auto h-11 px-8">
               {submitting ? 'Submitting...' : 'Save & Complete'}
             </Button>
           </div>

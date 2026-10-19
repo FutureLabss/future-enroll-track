@@ -136,7 +136,7 @@ export default function EnrollPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [search, setSearch] = useSearchParams();
-  const [form, setForm] = useState({ full_name: '', phone: '', program_id: '', cohort_id: '', option: 'full', plan: '', custom: '' });
+  const [form, setForm] = useState({ first_name: '', surname: '', phone: '', program_id: '', cohort_id: '', option: 'full', plan: '', custom: '' });
   const [saving, setSaving] = useState(false);
   const queryClient = useQueryClient();
   const progress = useQuery({ queryKey: ['registration-progress', user?.id], queryFn: getRegistrationProgress, enabled: !!user, refetchInterval: 15000 });
@@ -158,8 +158,8 @@ export default function EnrollPage() {
   async function start(event: React.FormEvent) {
     event.preventDefault(); setSaving(true);
     try {
-      const { data, error } = await registrationDb.rpc('start_registration', { p_program_id: form.program_id,
-        p_full_name: form.full_name, p_phone: form.phone, p_cohort_id: form.cohort_id || null,
+      const { data, error } = await registrationDb.rpc('start_registration_with_names', { p_program_id: form.program_id,
+        p_first_name: form.first_name.trim(), p_surname: form.surname.trim(), p_phone: form.phone, p_cohort_id: form.cohort_id || null,
         p_option: form.option, p_plan_label: form.plan || null, p_custom_amount: form.option === 'custom' ? Number(form.custom) : null });
       if (error) throw error;
       await queryClient.invalidateQueries({ queryKey: ['registration-progress'] });
@@ -181,7 +181,8 @@ export default function EnrollPage() {
       {progress.isPending || catalog.isPending ? <p>Loading registration…</p> : selected ? <PaymentStep registration={selected} refresh={refresh} /> :
         <form onSubmit={start} className="border rounded-xl p-6 space-y-4">
           <h2 className="text-xl font-semibold">Segment 1: Course and payment</h2>
-          <Label htmlFor="full-name">Full name</Label><Input id="full-name" required value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })} />
+          <Label htmlFor="first-name">First name</Label><Input id="first-name" autoComplete="given-name" required value={form.first_name} onChange={e => setForm({ ...form, first_name: e.target.value })} />
+          <Label htmlFor="surname">Surname</Label><Input id="surname" autoComplete="family-name" required value={form.surname} onChange={e => setForm({ ...form, surname: e.target.value })} />
           <Label>Email</Label><Input aria-label="Email" value={user.email || ''} disabled />
           <Label htmlFor="whatsapp">WhatsApp number</Label><Input id="whatsapp" required type="tel" pattern="\+[1-9][0-9]{6,14}" placeholder="+234…" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
           <Label htmlFor="course">Course</Label><select id="course" className="w-full border rounded-md p-2 bg-background" required value={form.program_id} onChange={e => setForm({ ...form, program_id: e.target.value, cohort_id: '', option: 'full', plan: '' })}>

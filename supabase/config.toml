@@ -27,3 +27,6 @@ verify_jwt = false  # public unsubscribe links are protected by signed tokens
 
 [functions.resend-marketing-webhook]
 verify_jwt = false  # Resend webhook requests are verified with their signing secret
+
+[functions.paystack-webhook]
+verify_jwt = false  # Requests authenticated by their raw-body HMAC SHA512 signature

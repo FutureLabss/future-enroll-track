@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { useStaffClassrooms, useClassrooms } from '@/hooks/useClassroom';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { CalendarSyncButton } from '@/components/shared/CalendarSync';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { BookOpen, Users, ArrowRight, Loader2 } from 'lucide-react';
@@ -62,7 +63,7 @@ export default function StaffClassroomsPage() {
   const { classrooms } = staffResult;
   return (
     <div>
-      <PageHeader title="My Classrooms" description="Classrooms you have been assigned to" />
+      <PageHeader title="My Classrooms" description="Classrooms you have been assigned to" actions={<CalendarSyncButton />} />
       {classrooms.length === 0 ? (
         <div className="text-center py-20 border-2 border-dashed border-border rounded-2xl text-muted-foreground">
           <BookOpen className="h-10 w-10 mx-auto mb-3 opacity-40" />

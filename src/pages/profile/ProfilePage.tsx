@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { CalendarSyncButton } from '@/components/shared/CalendarSync';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { CustomFieldsForm } from '@/components/enrollment/CustomFieldsForm';
 import { Badge } from '@/components/ui/badge';
@@ -168,7 +169,7 @@ export default function ProfilePage() {
 
   return (
     <div>
-      <PageHeader title="My Profile" description="Manage your student profile and enrollment information" />
+      <PageHeader title="My Profile" description="Manage your student profile and enrollment information" actions={<CalendarSyncButton />} />
 
       <div className="mb-6 grid gap-4 md:grid-cols-3">
         <div className="glass-card rounded-xl border border-border p-4">

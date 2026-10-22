@@ -2,6 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { untypedRpc } from '@/lib/untypedRpc';
 import {
   LayoutDashboard,
   FileText,
@@ -31,11 +32,14 @@ import {
   Contact,
   Megaphone,
   CalendarClock,
+  Activity,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { ThemeToggle } from '@/components/shared/ThemeToggle';
+import { NotificationBell } from './NotificationBell';
+import { useQuery } from '@tanstack/react-query';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -92,6 +96,7 @@ const studentNav = [
 
 const staffNav = [
   { to: '/staff/classrooms', icon: School, label: 'My Classrooms' },
+  { to: '/notifications', icon: Bell, label: 'Notifications' },
   { to: '/staff/invitations', icon: Inbox, label: 'My Invitations' },
   { to: '/staff/invoices', icon: FileText, label: 'Invoice Company' },
 ];
@@ -180,11 +185,21 @@ export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps)
   const { isAdmin, isOrganization, isStaff, isMarketing, isSuperadmin: isSA, isDemo, signOut, user } = useAuth();
 
   const isSuperadmin = isSA || user?.email?.toLowerCase() === 'manassehudim@gmail.com';
+  const { data: canViewActivity = false } = useQuery({
+    queryKey: ['can-view-activity-report', user?.id],
+    queryFn: async () => {
+      const { data } = await untypedRpc('can_view_activity_report');
+      return Boolean(data);
+    },
+    enabled: Boolean(user) && isAdmin && !isDemo,
+    staleTime: 5 * 60_000,
+  });
   const nav = useMemo(() => {
     const rawBaseNav = isAdmin ? adminNav : isMarketing ? marketingNav : isOrganization ? orgNav : isStaff ? staffNav : studentNav;
     const baseNav = isDemo ? rawBaseNav.filter(item => !DEMO_HIDDEN_ROUTES.has(item.to)) : rawBaseNav;
     const adminExtras = isAdmin
       ? [
+          ...(isSuperadmin || canViewActivity ? [{ to: '/admin/activity', icon: Activity, label: 'Activity Report' }] : []),
           { to: '/admin/invoice-approvals', icon: ClipboardCheck, label: 'Invoice Approvals' },
           { to: '/admin/staff-invoices', icon: Inbox, label: isSuperadmin ? 'Staff Invoices' : 'My Invoices' },
           ...(isSuperadmin
@@ -197,7 +212,7 @@ export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps)
         ]
       : [];
     return [...baseNav, ...adminExtras];
-  }, [isAdmin, isOrganization, isStaff, isMarketing, isSuperadmin, isDemo]);
+  }, [isAdmin, isOrganization, isStaff, isMarketing, isSuperadmin, isDemo, canViewActivity]);
 
   const containerClass =
     variant === 'mobile'
@@ -209,9 +224,12 @@ export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps)
   return (
     <Wrapper className={containerClass}>
       <div className="px-6 py-6 border-b border-sidebar-border">
-        <h1 className="font-heading text-xl font-bold tracking-tight">
-          <span className="text-sidebar-primary">Future</span>Labs
-        </h1>
+        <div className="flex items-center justify-between gap-2">
+          <h1 className="font-heading text-xl font-bold tracking-tight">
+            <span className="text-sidebar-primary">Future</span>Labs
+          </h1>
+          {variant === 'desktop' && <NotificationBell className="-mr-2 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" />}
+        </div>
         <p className="text-xs text-sidebar-foreground/60 mt-1">
           {isAdmin ? 'Admin Portal' : isOrganization ? 'Sponsor Portal' : isStaff ? 'Staff Portal' : 'Student Portal'}
         </p>

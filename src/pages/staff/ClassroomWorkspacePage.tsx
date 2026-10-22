@@ -1,6 +1,6 @@
 // @ts-nocheck — pre-existing schema/typegen mismatch (LMS tables not in DB); unblocks build.
 import { useCallback, useMemo, useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -24,6 +24,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import { DataTable } from '@/components/shared/DataTable';
 import { CurriculumTreeV2 } from '@/components/classroom/CurriculumTreeV2';
+import { CohortScheduleSetupDialog, type ScheduleSetupCohort } from '@/components/cohort/CohortScheduleSetupDialog';
+import { CohortSetupGapsAlert } from '@/components/cohort/CohortSetupGapsAlert';
+import { PrimaryTutorSelect } from '@/components/cohort/PrimaryTutorSelect';
 import { toast } from 'sonner';
 import {
   Calendar, CalendarPlus, ClipboardList, Users, BookOpen, Plus, Radio, Clock, Loader2,
@@ -220,6 +223,9 @@ export default function ClassroomWorkspacePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'curriculum');
+  const [setupCohort, setSetupCohort] = useState<{ cohort: ScheduleSetupCohort; justCreated: boolean } | null>(null);
 
   const { data: pageData, isLoading: dataLoading } = useQuery({
     queryKey: ['workspace-local', id, user?.id],
@@ -295,9 +301,21 @@ export default function ClassroomWorkspacePage() {
   // Cohort state
   const [cohortOpen, setCohortOpen] = useState(false);
   const [cohortEditModal, setCohortEditModal] = useState<{ open: boolean; cohort?: any }>({ open: false });
-  const [cohortForm, setCohortForm] = useState({ cohort_label: '', start_date: '', end_date: '', status: 'upcoming', scope_type: '' as '' | 'curriculum' | 'track' | 'module', scope_id: '' });
+  const [cohortForm, setCohortForm] = useState({ cohort_label: '', start_date: '', end_date: '', status: 'upcoming', scope_type: '' as '' | 'curriculum' | 'track' | 'module', scope_id: '', primary_tutor_id: '' });
   const [scheduleOpts, setScheduleOpts] = useState({ enabled: false, days: [] as string[], start_time: '09:00', end_time: '11:00', instructor_id: '' });
   const [savingCohort, setSavingCohort] = useState(false);
+
+  // Notification links open the schedule prompt for a specific cohort.
+  const setupScheduleId = searchParams.get('setupSchedule');
+  useEffect(() => {
+    if (!setupScheduleId) return;
+    const target = cohorts.find(c => c.id === setupScheduleId);
+    if (!target) return;
+    setSetupCohort({ cohort: target, justCreated: false });
+    const next = new URLSearchParams(searchParams);
+    next.delete('setupSchedule');
+    setSearchParams(next, { replace: true });
+  }, [setupScheduleId, cohorts, searchParams, setSearchParams]);
 
   // Cohort student management
   const [cohortStudentsModal, setCohortStudentsModal] = useState<{ open: boolean; cohort?: any }>({ open: false });
@@ -518,6 +536,7 @@ export default function ClassroomWorkspacePage() {
 
   const handleCreateCohort = async () => {
     if (!cohortForm.cohort_label.trim()) { toast.error('Cohort label required'); return; }
+    if (!cohortForm.primary_tutor_id) { toast.error('Every cohort needs a primary tutor'); return; }
     if (scheduleOpts.enabled && scheduleOpts.days.length === 0) { toast.error('Select at least one day for scheduling'); return; }
     setSavingCohort(true);
     try {
@@ -527,6 +546,7 @@ export default function ClassroomWorkspacePage() {
         program_id: cls?.program_id,
         scope_type: cohortForm.scope_type || null,
         scope_id: cohortForm.scope_id || null,
+        primary_tutor_id: cohortForm.primary_tutor_id,
       });
       if (scheduleOpts.enabled && scheduleOpts.days.length > 0) {
         const { data: count } = await supabase.rpc('generate_cohort_schedule', {
@@ -534,14 +554,18 @@ export default function ClassroomWorkspacePage() {
           p_days: scheduleOpts.days,
           p_start_time: scheduleOpts.start_time,
           p_end_time: scheduleOpts.end_time,
-          p_instructor_id: scheduleOpts.instructor_id || null,
+          p_instructor_id: scheduleOpts.instructor_id || cohortForm.primary_tutor_id || null,
         });
         toast.success(`Cohort created · ${count} session${count !== 1 ? 's' : ''} scheduled`);
       } else {
         toast.success('Cohort created');
+        setSetupCohort({
+          cohort: { id: newId, cohort_label: cohortForm.cohort_label, start_date: cohortForm.start_date, end_date: cohortForm.end_date, classroom_id: id, primary_tutor_id: cohortForm.primary_tutor_id },
+          justCreated: true,
+        });
       }
       setCohortOpen(false);
-      setCohortForm({ cohort_label: '', start_date: '', end_date: '', status: 'upcoming', scope_type: '', scope_id: '' });
+      setCohortForm({ cohort_label: '', start_date: '', end_date: '', status: 'upcoming', scope_type: '', scope_id: '', primary_tutor_id: '' });
       setScheduleOpts({ enabled: false, days: [], start_time: '09:00', end_time: '11:00', instructor_id: '' });
     } catch (e: any) {
       toast.error(e.message);
@@ -554,6 +578,7 @@ export default function ClassroomWorkspacePage() {
     const c = cohortEditModal.cohort;
     setSavingCohort(true);
     try {
+      if (!cohortForm.primary_tutor_id) { toast.error('Every cohort needs a primary tutor'); return; }
       await updateCohort(c.id, cohortForm);
       toast.success('Cohort updated');
       setCohortEditModal({ open: false });
@@ -712,7 +737,15 @@ export default function ClassroomWorkspacePage() {
         </div>
       )}
 
-      <Tabs defaultValue="curriculum">
+      <CohortSetupGapsAlert classroomId={id} staffList={staffList} />
+      <CohortScheduleSetupDialog
+        cohort={setupCohort?.cohort ?? null}
+        justCreated={setupCohort?.justCreated}
+        staffList={staffList}
+        onOpenChange={open => !open && setSetupCohort(null)}
+      />
+
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="mb-6 flex-wrap h-auto gap-1">
           <TabsTrigger value="curriculum"><LayoutList className="h-4 w-4 mr-1.5" />Curriculum</TabsTrigger>
           {can.can_edit_cohorts && <TabsTrigger value="cohorts"><Layers className="h-4 w-4 mr-1.5" />Cohorts</TabsTrigger>}
@@ -738,6 +771,7 @@ export default function ClassroomWorkspacePage() {
                   <DialogHeader><DialogTitle>Create Cohort</DialogTitle></DialogHeader>
                   <div className="space-y-4 mt-2">
                     <div><Label>Label *</Label><Input value={cohortForm.cohort_label} onChange={e => setCohortForm({ ...cohortForm, cohort_label: e.target.value })} className="mt-1.5" placeholder="e.g. May 2026 Intake" /></div>
+                    <div><Label>Primary tutor *</Label><PrimaryTutorSelect value={cohortForm.primary_tutor_id} onChange={v => setCohortForm({ ...cohortForm, primary_tutor_id: v })} staffList={staffList} className="mt-1.5" /></div>
                     <div className="grid grid-cols-2 gap-3">
                       <div><Label>Start Date</Label><Input type="date" value={cohortForm.start_date} onChange={e => setCohortForm({ ...cohortForm, start_date: e.target.value })} className="mt-1.5" /></div>
                       <div><Label>End Date</Label><Input type="date" value={cohortForm.end_date} onChange={e => setCohortForm({ ...cohortForm, end_date: e.target.value })} className="mt-1.5" /></div>
@@ -846,6 +880,9 @@ export default function ClassroomWorkspacePage() {
                           <p className="text-xs text-muted-foreground">
                             {c.start_date ? new Date(c.start_date).toLocaleDateString('en-NG') : '—'} – {c.end_date ? new Date(c.end_date).toLocaleDateString('en-NG') : '—'}
                           </p>
+                          <p className={`text-xs mt-0.5 ${c.primary_tutor_id ? 'text-muted-foreground' : 'text-warning'}`}>
+                            Primary tutor: {staffList.find(st => st.id === c.primary_tutor_id)?.full_name || (c.primary_tutor_id ? '—' : 'not assigned')}
+                          </p>
                           {c.scope_type && (
                             <p className="text-xs text-primary/70 mt-0.5 capitalize">
                               Scope: {c.scope_type}
@@ -859,7 +896,7 @@ export default function ClassroomWorkspacePage() {
                           <Dialog
                             open={cohortEditModal.open && cohortEditModal.cohort?.id === c.id}
                             onOpenChange={o => {
-                              if (o) { setCohortForm({ cohort_label: c.cohort_label, start_date: c.start_date || '', end_date: c.end_date || '', status: c.status, scope_type: c.scope_type || '', scope_id: c.scope_id || '' }); }
+                              if (o) { setCohortForm({ cohort_label: c.cohort_label, start_date: c.start_date || '', end_date: c.end_date || '', status: c.status, scope_type: c.scope_type || '', scope_id: c.scope_id || '', primary_tutor_id: c.primary_tutor_id || '' }); }
                               setCohortEditModal(o ? { open: true, cohort: c } : { open: false });
                             }}
                           >
@@ -870,6 +907,7 @@ export default function ClassroomWorkspacePage() {
                               <DialogHeader><DialogTitle>Edit Cohort</DialogTitle></DialogHeader>
                               <div className="space-y-4 mt-2">
                                 <div><Label>Label *</Label><Input value={cohortForm.cohort_label} onChange={e => setCohortForm({ ...cohortForm, cohort_label: e.target.value })} className="mt-1.5" /></div>
+                                <div><Label>Primary tutor *</Label><PrimaryTutorSelect value={cohortForm.primary_tutor_id} onChange={v => setCohortForm({ ...cohortForm, primary_tutor_id: v })} staffList={staffList} className="mt-1.5" /></div>
                                 <div className="grid grid-cols-2 gap-3">
                                   <div><Label>Start Date</Label><Input type="date" value={cohortForm.start_date} onChange={e => setCohortForm({ ...cohortForm, start_date: e.target.value })} className="mt-1.5" /></div>
                                   <div><Label>End Date</Label><Input type="date" value={cohortForm.end_date} onChange={e => setCohortForm({ ...cohortForm, end_date: e.target.value })} className="mt-1.5" /></div>

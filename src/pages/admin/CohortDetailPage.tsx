@@ -42,6 +42,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CohortAnalyticsTab } from '@/components/cohort/CohortAnalyticsTab';
+import { PrimaryTutorSelect } from '@/components/cohort/PrimaryTutorSelect';
 import { CohortScheduleTab, CohortAnnouncementsTab, CohortChatTab } from '@/components/cohort/CohortCollaboration';
 import { Megaphone, MessageCircle } from 'lucide-react';
 
@@ -193,13 +194,16 @@ function CohortEditForm({ cohort, onSaved }: { cohort: any; onSaved: () => void 
     end_date: cohort.end_date || '',
     status: cohort.status || 'upcoming',
     capacity: cohort.capacity?.toString() || '',
+    primary_tutor_id: cohort.primary_tutor_id || '',
   });
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
     if (!form.cohort_label.trim()) { toast.error('Cohort label is required'); return; }
+    if (!form.primary_tutor_id) { toast.error('Every cohort needs a primary tutor'); return; }
     setSaving(true);
     const { error } = await supabase.from('cohorts').update({
+      primary_tutor_id: form.primary_tutor_id,
       cohort_label: form.cohort_label.trim(),
       start_date: form.start_date || null,
       end_date: form.end_date || null,
@@ -215,6 +219,7 @@ function CohortEditForm({ cohort, onSaved }: { cohort: any; onSaved: () => void 
   return (
     <div className="space-y-4 mt-2">
       <div><Label>Cohort Label *</Label><Input value={form.cohort_label} onChange={e => setForm({ ...form, cohort_label: e.target.value })} className="mt-1.5" /></div>
+      <div><Label>Primary tutor *</Label><PrimaryTutorSelect value={form.primary_tutor_id} onChange={v => setForm({ ...form, primary_tutor_id: v })} className="mt-1.5" /></div>
       <div className="grid grid-cols-2 gap-3">
         <div><Label>Start Date</Label><Input type="date" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} className="mt-1.5" /></div>
         <div><Label>End Date</Label><Input type="date" value={form.end_date} onChange={e => setForm({ ...form, end_date: e.target.value })} className="mt-1.5" /></div>

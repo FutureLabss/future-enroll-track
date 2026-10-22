@@ -25,6 +25,9 @@ import {
 import { DataTable } from '@/components/shared/DataTable';
 import { CurriculumTreeV2 } from '@/components/classroom/CurriculumTreeV2';
 import { AutoScheduleWizard } from '@/components/classroom/AutoScheduleWizard';
+import { CohortScheduleSetupDialog, type ScheduleSetupCohort } from '@/components/cohort/CohortScheduleSetupDialog';
+import { CohortSetupGapsAlert } from '@/components/cohort/CohortSetupGapsAlert';
+import { PrimaryTutorSelect } from '@/components/cohort/PrimaryTutorSelect';
 import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -57,7 +60,20 @@ const toDateTimeLocal = (value?: string | null) => {
   return localDate.toISOString().slice(0, 16);
 };
 
-function CohortModal({ classroomId, programId, existing, onClose, onSaved, staffList }: any) {
+interface CohortModalProps {
+  classroomId: string;
+  programId: string;
+  existing?: {
+    id: string; cohort_label?: string; start_date?: string | null; end_date?: string | null; status?: string;
+    capacity?: number | null; scope_type?: string | null; scope_id?: string | null; primary_tutor_id?: string | null;
+  };
+  onClose: () => void;
+  onSaved: () => void;
+  onNeedsSchedule?: (cohort: ScheduleSetupCohort) => void;
+  staffList?: { id: string; full_name: string }[];
+}
+
+function CohortModal({ classroomId, programId, existing, onClose, onSaved, onNeedsSchedule, staffList }: CohortModalProps) {
   const { createCohort, updateCohort } = useClassroomCohorts(classroomId);
   const [scopeOptions, setScopeOptions] = useState<{ curricula: any[]; tracks: any[]; modules: any[] }>({ curricula: [], tracks: [], modules: [] });
 
@@ -74,12 +90,14 @@ function CohortModal({ classroomId, programId, existing, onClose, onSaved, staff
     capacity: existing?.capacity?.toString() || '',
     scope_type: (existing?.scope_type || '') as '' | 'curriculum' | 'track' | 'module',
     scope_id: existing?.scope_id || '',
+    primary_tutor_id: existing?.primary_tutor_id || '',
   });
   const [scheduleOpts, setScheduleOpts] = useState({ enabled: false, days: [] as string[], start_time: '09:00', end_time: '11:00', instructor_id: '' });
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
     if (!form.cohort_label.trim()) { toast.error('Cohort label is required'); return; }
+    if (!form.primary_tutor_id) { toast.error('Every cohort needs a primary tutor'); return; }
     if (!existing && scheduleOpts.enabled && scheduleOpts.days.length === 0) { toast.error('Select at least one day for scheduling'); return; }
     setSaving(true);
     try {
@@ -100,11 +118,12 @@ function CohortModal({ classroomId, programId, existing, onClose, onSaved, staff
             p_days: scheduleOpts.days,
             p_start_time: scheduleOpts.start_time,
             p_end_time: scheduleOpts.end_time,
-            p_instructor_id: scheduleOpts.instructor_id || null,
+            p_instructor_id: scheduleOpts.instructor_id || form.primary_tutor_id || null,
           });
           toast.success(`Cohort created · ${count} session${count !== 1 ? 's' : ''} scheduled`);
         } else {
           toast.success('Cohort created');
+          onNeedsSchedule?.({ id: newId, cohort_label: form.cohort_label, start_date: form.start_date, end_date: form.end_date, classroom_id: classroomId, primary_tutor_id: form.primary_tutor_id });
         }
       }
       onSaved();
@@ -119,6 +138,10 @@ function CohortModal({ classroomId, programId, existing, onClose, onSaved, staff
   return (
     <div className="space-y-4 mt-2">
       <div><Label>Cohort Label *</Label><Input value={form.cohort_label} onChange={e => setForm({ ...form, cohort_label: e.target.value })} className="mt-1.5" placeholder="e.g. May 2026 Intake" /></div>
+      <div>
+        <Label>Primary tutor *</Label>
+        <PrimaryTutorSelect value={form.primary_tutor_id} onChange={v => setForm({ ...form, primary_tutor_id: v })} staffList={staffList?.length ? staffList : undefined} className="mt-1.5" />
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <div><Label>Start Date</Label><Input type="date" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} className="mt-1.5" /></div>
         <div><Label>End Date</Label><Input type="date" value={form.end_date} onChange={e => setForm({ ...form, end_date: e.target.value })} className="mt-1.5" /></div>
@@ -591,6 +614,7 @@ export default function ClassroomDetailPage() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [cohortModal, setCohortModal] = useState<{ open: boolean; cohort?: any }>({ open: false });
+  const [setupCohort, setSetupCohort] = useState<ScheduleSetupCohort | null>(null);
   const [cohortStudentsModal, setCohortStudentsModal] = useState<{ open: boolean; cohort?: any }>({ open: false });
   const [inviteForm, setInviteForm] = useState({ staff_id: '', staff_type: 'teaching' });
   const [inviting, setInviting] = useState(false);
@@ -1172,6 +1196,8 @@ export default function ClassroomDetailPage() {
     { key: 'status', header: 'Status', render: (r: any) => (
       <Badge variant="outline" className={`capitalize ${STATUS_COLOURS[r.status] || ''}`}>{r.status || '—'}</Badge>
     )},
+    { key: 'tutor', header: 'Primary tutor', render: (r: { primary_tutor_id?: string | null }) => staffRoster.find((s: { id: string; full_name: string }) => s.id === r.primary_tutor_id)?.full_name
+      || (r.primary_tutor_id ? '—' : <span className="text-warning text-xs">Not assigned</span>) },
     { key: 'students', header: 'Students', render: (r: any) => r.cohort_students?.[0]?.count ?? 0 },
     { key: 'capacity', header: 'Capacity', render: (r: any) => r.capacity || '—' },
     { key: 'scope', header: 'Scope', render: (r: any) => r.scope_type ? <span className="capitalize">{r.scope_type}</span> : 'Entire classroom' },
@@ -1187,7 +1213,7 @@ export default function ClassroomDetailPage() {
         </Button>
       </div>
     )},
-  ], []);
+  ], [staffRoster]);
 
   const assignmentColumns = useMemo(() => [
     { key: 'title', header: 'Assignment', render: (r: any) => <span className="font-medium">{r.title}</span> },
@@ -1382,6 +1408,7 @@ export default function ClassroomDetailPage() {
 
         {/* COHORTS */}
         <TabsContent value="cohorts">
+          <CohortSetupGapsAlert classroomId={id} staffList={staffRoster} />
           <div className="flex items-center justify-end mb-4">
             <Button size="sm" onClick={() => setCohortModal({ open: true })}>
               <Plus className="h-4 w-4 mr-1.5" /> New Cohort
@@ -1584,9 +1611,18 @@ export default function ClassroomDetailPage() {
             staffList={staffRoster}
             onClose={() => setCohortModal({ open: false })}
             onSaved={() => { refetchCohorts(); loadAll(); }}
+            onNeedsSchedule={setSetupCohort}
           />
         </DialogContent>
       </Dialog>
+
+      <CohortScheduleSetupDialog
+        cohort={setupCohort}
+        justCreated
+        staffList={staffRoster}
+        onOpenChange={open => !open && setSetupCohort(null)}
+        onScheduled={() => { refetchSchedules(); loadAll(); }}
+      />
 
       <Dialog open={cohortStudentsModal.open} onOpenChange={o => !o && setCohortStudentsModal({ open: false })}>
         <DialogContent className="max-w-lg">

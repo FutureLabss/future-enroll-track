@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { untypedRpc } from '@/lib/untypedRpc';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,9 +39,18 @@ const fmtWhen = (iso: string) => {
 // SCHEDULE TAB
 // --------------------------------------------------------------------------
 export function CohortScheduleTab({ cohortId }: { cohortId: string }) {
-  const { isAdmin, user } = useAuth();
+  const { user } = useAuth();
   const qc = useQueryClient();
   const qk = ['cohort-schedules', cohortId];
+
+  // Only the cohort's tutor, a training manager or the superadmin may change its schedule.
+  const { data: canEdit = false } = useQuery({
+    queryKey: ['can-set-schedule', null, cohortId],
+    queryFn: async () => {
+      const { data } = await untypedRpc('can_set_schedule', { _classroom_id: null, _cohort_id: cohortId });
+      return Boolean(data);
+    },
+  });
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
 
@@ -85,7 +95,7 @@ export function CohortScheduleTab({ cohortId }: { cohortId: string }) {
           <h3 className="font-heading font-semibold text-lg">Schedule</h3>
           <p className="text-sm text-muted-foreground">Class sessions and meetings for this cohort</p>
         </div>
-        {isAdmin && (
+        {canEdit && (
           <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setEditing(null); }}>
             <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-1.5" />Add Session</Button></DialogTrigger>
             <ScheduleForm
@@ -113,7 +123,7 @@ export function CohortScheduleTab({ cohortId }: { cohortId: string }) {
               <div className="space-y-2">
                 {upcoming.map((s: any) => (
                   <ScheduleCard
-                    key={s.id} row={s} isAdmin={isAdmin}
+                    key={s.id} row={s} isAdmin={canEdit}
                     onEdit={() => { setEditing(s); setOpen(true); }}
                     onDelete={() => remove(s.id)}
                   />
@@ -127,7 +137,7 @@ export function CohortScheduleTab({ cohortId }: { cohortId: string }) {
               <div className="space-y-2 opacity-70">
                 {past.map((s: any) => (
                   <ScheduleCard
-                    key={s.id} row={s} isAdmin={isAdmin}
+                    key={s.id} row={s} isAdmin={canEdit}
                     onEdit={() => { setEditing(s); setOpen(true); }}
                     onDelete={() => remove(s.id)}
                   />

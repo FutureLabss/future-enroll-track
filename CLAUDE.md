@@ -145,6 +145,20 @@ or all five dependent tables degrade at once. This shape already caused one recu
 ### Classroom ↔ student sync (key invariant)
 Students must exist in **`classroom_students`** to see a classroom. Adding to `cohort_students` alone is not enough — `trg_sync_cohort_student_to_classroom` handles the sync automatically. Never bypass it.
 
+### Activity events & notifications (2026-10-22)
+- `activity_events` is written **only** by `trg_activity_*` triggers (cohorts, schedules, attendance_sessions, assignments, assignment_submissions, cohort_students, classroom_staff, cohort_announcements, enrollments, payments). The same triggers send in-app `notifications` (with `link` + `entity_id`) to whoever the event concerns. Add a trigger there rather than inserting notifications from page code.
+- Every trigger body swallows its own errors (`RAISE WARNING`) so logging can never roll back the real write. Bulk writes (`generate_cohort_schedule`, intake into a cohort) use statement-level triggers so they produce one event and one notification per person, not one per row.
+- The Activity Report (`/admin/activity`) is superadmin-only by default. Other admins see it only via `activity_report_viewers` (granted by the superadmin, scoped to their hub).
+
+### Cohort invariants
+- Every open cohort has a `primary_tutor_id` (→ `staff`), and every running cohort has an upcoming `schedules` row. Creation flows require the tutor and open `CohortScheduleSetupDialog` when no schedule was generated. `list_cohort_setup_gaps()` is the standing check (UI alert), and `remind_cohort_setup_gaps()` runs daily via pg_cron.
+
+### Who may set schedules
+- Only the cohort's primary tutor (or, for a cohort without one and for classroom-wide sessions, the classroom's active **teaching** staff), a training manager (`hub_members.hub_role = 'manager'`) or the superadmin. `can_set_schedule(classroom_id, cohort_id)` is the single source of truth: it drives RLS on `schedules`/`cohort_schedules` and the check in `generate_cohort_schedule`. The UI reads it through `get_schedule_permissions` / `useSchedulePermissions` only to hide controls. Hub admins can read schedules but not change them.
+
+### Calendar sync
+- `/functions/v1/calendar-feed/<token>.ics` serves each user's classes, assignment due dates and cohort start/end dates (`calendar_feed_events`). Times are wall-clock `Africa/Lagos`. The token is the only credential calendar apps can send, so never log it and keep `verify_jwt = false` for this function only.
+
 ---
 
 ## Access Control

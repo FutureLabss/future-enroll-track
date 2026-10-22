@@ -26,6 +26,7 @@ const NotificationsPage = lazy(() => import("@/pages/admin/NotificationsPage"));
 const ReportsPage = lazy(() => import("@/pages/admin/ReportsPage"));
 const PartnerReportPage = lazy(() => import("@/pages/admin/PartnerReportPage"));
 const AuditLogPage = lazy(() => import("@/pages/admin/AuditLogPage"));
+const ActivityReportPage = lazy(() => import("@/pages/admin/ActivityReportPage"));
 const ManageAdminsPage = lazy(() => import("@/pages/admin/ManageAdminsPage"));
 const PayrollPage = lazy(() => import("@/pages/admin/PayrollPage"));
 const OtherIncomePage = lazy(() => import("@/pages/admin/OtherIncomePage"));
@@ -194,6 +195,7 @@ const App = () => (
                   <Route path="/admin/reports" element={<ReportsPage />} />
                   <Route path="/admin/reports/pind" element={<PartnerReportPage />} />
                   <Route path="/admin/audit-logs" element={<AuditLogPage />} />
+                  <Route path="/admin/activity" element={<ActivityReportPage />} />
                   <Route path="/admin/manage-admins" element={<ManageAdminsPage />} />
                   <Route path="/admin/payroll" element={<PayrollPage />} />
                   <Route path="/admin/other-income" element={<OtherIncomePage />} />
@@ -237,6 +239,7 @@ const App = () => (
 
                 {/* Shared routes */}
                 <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/notifications" element={<StudentNotificationsPage />} />
               </Route>
 
               <Route path="/:hubSlug" element={<HubPortalPage />} />

@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { AppSidebar } from './AppSidebar';
+import { NotificationBell } from './NotificationBell';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Menu, Clock, Sparkles } from 'lucide-react';
@@ -83,6 +84,7 @@ export function AppLayout() {
           <h1 className="font-heading text-lg font-bold tracking-tight">
             <span className="text-primary">Future</span>Labs
           </h1>
+          <NotificationBell className="ml-auto" />
         </header>
 
         <DemoBanner />

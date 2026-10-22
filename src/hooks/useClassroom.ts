@@ -138,7 +138,7 @@ export function useClassroomCohorts(classroomId: string) {
   const refetch = () => queryClient.invalidateQueries({ queryKey: ['classroom-cohorts', classroomId] });
 
   const createMutation = useMutation({
-    mutationFn: async (payload: { cohort_label: string; program_id?: string; start_date?: string; end_date?: string; status?: string; scope_type?: string | null; scope_id?: string | null; capacity?: number | null }): Promise<string> => {
+    mutationFn: async (payload: { cohort_label: string; program_id?: string; start_date?: string; end_date?: string; status?: string; scope_type?: string | null; scope_id?: string | null; capacity?: number | null; primary_tutor_id?: string | null }): Promise<string> => {
       const { data, error } = await supabase.from('cohorts').insert({ ...payload, classroom_id: classroomId }).select('id').single();
       if (error) throw error;
       return data.id;
@@ -147,7 +147,7 @@ export function useClassroomCohorts(classroomId: string) {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, payload }: { id: string; payload: Partial<{ cohort_label: string; start_date: string; end_date: string; status: string; scope_type: string | null; scope_id: string | null; capacity: number | null }> }) => {
+    mutationFn: async ({ id, payload }: { id: string; payload: Partial<{ cohort_label: string; start_date: string; end_date: string; status: string; scope_type: string | null; scope_id: string | null; capacity: number | null; primary_tutor_id: string | null }> }) => {
       const { error } = await supabase.from('cohorts').update(payload).eq('id', id);
       if (error) throw error;
     },

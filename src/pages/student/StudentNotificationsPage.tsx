@@ -1,18 +1,25 @@
-import { useEffect, useMemo, useState } from 'react';
-import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/hooks/useAuth';
+import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useMyNotifications } from '@/hooks/useMyNotifications';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Bell, CheckCheck, Clock, Mail, MailOpen, CalendarPlus } from 'lucide-react';
+import { Bell, CheckCheck, Clock, Mail, MailOpen, CalendarPlus, ArrowRight } from 'lucide-react';
 
 const TYPE_COLOURS: Record<string, string> = {
   payment: 'border-success/30 text-success bg-success/10',
   invoice: 'border-primary/30 text-primary bg-primary/10',
   reminder: 'border-warning/30 text-warning bg-warning/10',
   overdue: 'border-destructive/30 text-destructive bg-destructive/10',
+  schedule: 'border-primary/30 text-primary bg-primary/10',
+  schedule_changed: 'border-warning/30 text-warning bg-warning/10',
+  schedule_cancelled: 'border-destructive/30 text-destructive bg-destructive/10',
+  cohort_schedule_setup: 'border-warning/30 text-warning bg-warning/10',
+  cohort_schedule_missing: 'border-destructive/30 text-destructive bg-destructive/10',
+  assignment: 'border-primary/30 text-primary bg-primary/10',
+  assignment_graded: 'border-success/30 text-success bg-success/10',
 };
 
 function parseScheduleMessage(message: string): { display: string; gcalUrl: string | null } {
@@ -23,6 +30,7 @@ function parseScheduleMessage(message: string): { display: string; gcalUrl: stri
 }
 
 function NotificationCard({ notification, onMarkRead }: { notification: any; onMarkRead: (id: string) => void }) {
+  const navigate = useNavigate();
   const isSchedule = notification.type === 'schedule';
   const { display, gcalUrl } = isSchedule
     ? parseScheduleMessage(notification.message)
@@ -33,12 +41,23 @@ function NotificationCard({ notification, onMarkRead }: { notification: any; onM
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex flex-wrap items-center gap-2">
-            <Badge variant="outline" className={`capitalize ${TYPE_COLOURS[notification.type] || ''}`}>{notification.type}</Badge>
+            <Badge variant="outline" className={`capitalize ${TYPE_COLOURS[notification.type] || ''}`}>{notification.type.replace(/_/g, ' ')}</Badge>
             <Badge variant="secondary" className="capitalize">{notification.channel}</Badge>
             {!notification.read && <Badge>New</Badge>}
           </div>
           <h3 className="font-semibold">{notification.title}</h3>
           <p className="mt-1 text-sm text-muted-foreground">{display}</p>
+          {notification.link && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-2 mr-2"
+              type="button"
+              onClick={() => { if (!notification.read) onMarkRead(notification.id); navigate(notification.link); }}
+            >
+              Open <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
+            </Button>
+          )}
           {gcalUrl && (
             <a href={gcalUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex">
               <Button size="sm" variant="outline" className="text-primary border-primary/40 hover:bg-primary/10" type="button">
@@ -49,7 +68,7 @@ function NotificationCard({ notification, onMarkRead }: { notification: any; onM
           )}
           <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
             <Clock className="h-3.5 w-3.5" />
-            {new Date(notification.created_at).toLocaleString()}
+            {new Date(notification.created_at).toLocaleString('en-NG')}
           </p>
         </div>
         {!notification.read && (
@@ -64,57 +83,31 @@ function NotificationCard({ notification, onMarkRead }: { notification: any; onM
 }
 
 export default function StudentNotificationsPage() {
-  const { user } = useAuth();
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: notifications, loading, markRead: markReadMutation, markAllRead: markAllReadMutation } = useMyNotifications();
   const [busy, setBusy] = useState(false);
-
-  const loadNotifications = async () => {
-    if (!user) return;
-    setLoading(true);
-    const { data } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(100);
-    setNotifications(data || []);
-    setLoading(false);
-  };
-
-  // Depend on the id, not the user object — token auto-refresh mints a new
-  // object hourly and would silently re-fetch everything
-  useEffect(() => {
-    loadNotifications();
-  }, [user?.id]);
 
   const unread = useMemo(() => notifications.filter(notification => !notification.read), [notifications]);
   const read = useMemo(() => notifications.filter(notification => notification.read), [notifications]);
 
   const markRead = async (id: string) => {
-    const { error } = await supabase.from('notifications').update({ read: true }).eq('id', id);
-    if (error) {
-      toast.error(error.message);
-      return;
+    try {
+      await markReadMutation(id);
+    } catch (e) {
+      toast.error((e as Error).message);
     }
-    setNotifications(prev => prev.map(notification => notification.id === id ? { ...notification, read: true } : notification));
   };
 
   const markAllRead = async () => {
-    if (!user || unread.length === 0) return;
+    if (unread.length === 0) return;
     setBusy(true);
-    const { error } = await supabase
-      .from('notifications')
-      .update({ read: true })
-      .eq('user_id', user.id)
-      .eq('read', false);
-    setBusy(false);
-    if (error) {
-      toast.error(error.message);
-      return;
+    try {
+      await markAllReadMutation();
+      toast.success('All notifications marked as read');
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
     }
-    setNotifications(prev => prev.map(notification => ({ ...notification, read: true })));
-    toast.success('All notifications marked as read');
   };
 
   if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
@@ -123,7 +116,7 @@ export default function StudentNotificationsPage() {
     <div>
       <PageHeader
         title="Notifications"
-        description="Payment updates, reminders, and account messages"
+        description="Class schedules, assignments, cohort updates, payments and reminders"
         actions={
           <Button variant="outline" disabled={busy || unread.length === 0} onClick={markAllRead}>
             <CheckCheck className="mr-2 h-4 w-4" />

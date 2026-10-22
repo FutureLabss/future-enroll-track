@@ -11,6 +11,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CohortScheduleSetupDialog, type ScheduleSetupCohort } from '@/components/cohort/CohortScheduleSetupDialog';
+import { CohortSetupGapsAlert } from '@/components/cohort/CohortSetupGapsAlert';
+import { PrimaryTutorSelect } from '@/components/cohort/PrimaryTutorSelect';
+import { useStaffOptions } from '@/hooks/useStaffOptions';
 import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -33,9 +37,11 @@ function derivedStatus(cohort: any): string | null {
 export default function CohortsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const staffOptions = useStaffOptions();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ cohort_label: '', program_id: '', start_date: '', end_date: '', scope_type: '' });
+  const [setupCohort, setSetupCohort] = useState<ScheduleSetupCohort | null>(null);
+  const [form, setForm] = useState({ cohort_label: '', program_id: '', start_date: '', end_date: '', scope_type: '', primary_tutor_id: '' });
 
   const { data: cohorts = [], isLoading: loading } = useQuery({
     queryKey: ['cohorts'],
@@ -62,19 +68,22 @@ export default function CohortsPage() {
 
   const handleCreate = async () => {
     if (!form.cohort_label.trim() || !form.program_id) { toast.error('Fill required fields'); return; }
+    if (!form.primary_tutor_id) { toast.error('Every cohort needs a primary tutor'); return; }
     setSaving(true);
-    const { error } = await supabase.from('cohorts').insert({
+    const { data: created, error } = await supabase.from('cohorts').insert({
       cohort_label: form.cohort_label,
       program_id: form.program_id,
       start_date: form.start_date || null,
       end_date: form.end_date || null,
       scope_type: form.scope_type || null,
-    });
+      primary_tutor_id: form.primary_tutor_id,
+    }).select('id, cohort_label, start_date, end_date, classroom_id, program_id, primary_tutor_id').single();
     setSaving(false);
     if (error) { toast.error(error.message || 'Failed to create cohort'); return; }
     toast.success('Cohort created');
+    setSetupCohort(created);
     setOpen(false);
-    setForm({ cohort_label: '', program_id: '', start_date: '', end_date: '', scope_type: '' });
+    setForm({ cohort_label: '', program_id: '', start_date: '', end_date: '', scope_type: '', primary_tutor_id: '' });
     queryClient.invalidateQueries({ queryKey: ['cohorts'] });
   };
 
@@ -84,6 +93,11 @@ export default function CohortsPage() {
       render: (r: any) => <span className="font-medium">{r.cohort_label}</span>,
     },
     { key: 'program', header: 'Program', render: (r: any) => r.programs?.program_name || '—' },
+    {
+      key: 'tutor', header: 'Primary tutor',
+      render: (r: { primary_tutor_id?: string | null }) => staffOptions.find(s => s.id === r.primary_tutor_id)?.full_name
+        || (r.primary_tutor_id ? '—' : <span className="text-warning text-xs">Not assigned</span>),
+    },
     {
       key: 'status', header: 'Status',
       render: (r: any) => {
@@ -108,7 +122,7 @@ export default function CohortsPage() {
     },
     { key: 'start_date', header: 'Start', render: (r: any) => r.start_date ? new Date(r.start_date).toLocaleDateString('en-NG') : '—' },
     { key: 'end_date', header: 'End', render: (r: any) => r.end_date ? new Date(r.end_date).toLocaleDateString('en-NG') : '—' },
-  ], []);
+  ], [staffOptions]);
 
   return (
     <div>
@@ -129,6 +143,7 @@ export default function CohortsPage() {
                     <SelectContent>{programs.map(p => <SelectItem key={p.id} value={p.id}>{p.program_name}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
+                <div><Label>Primary tutor *</Label><PrimaryTutorSelect value={form.primary_tutor_id} onChange={v => setForm({ ...form, primary_tutor_id: v })} className="mt-1.5" /></div>
                 <div className="grid grid-cols-2 gap-3">
                   <div><Label>Start Date</Label><Input type="date" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} className="mt-1.5" /></div>
                   <div><Label>End Date</Label><Input type="date" value={form.end_date} onChange={e => setForm({ ...form, end_date: e.target.value })} className="mt-1.5" /></div>
@@ -150,6 +165,8 @@ export default function CohortsPage() {
           </Dialog>
         }
       />
+      <CohortSetupGapsAlert showClassroom />
+      <CohortScheduleSetupDialog cohort={setupCohort} justCreated onOpenChange={o => !o && setSetupCohort(null)} />
       {loading
         ? <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>
         : <DataTable columns={columns} data={cohorts} searchable searchPlaceholder="Search cohorts..." onRowClick={(r) => navigate(`/admin/cohorts/${r.id}`)} />

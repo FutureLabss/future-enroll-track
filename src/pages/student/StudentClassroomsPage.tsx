@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useStudentClassrooms } from '@/hooks/useClassroom';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { CalendarSyncButton } from '@/components/shared/CalendarSync';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
@@ -66,7 +67,7 @@ export default function StudentClassroomsPage() {
 
   return (
     <div>
-      <PageHeader title="My Classrooms" description="Access your learning spaces and upcoming sessions" />
+      <PageHeader title="My Classrooms" description="Access your learning spaces and upcoming sessions" actions={<CalendarSyncButton />} />
       {classrooms.length === 0 ? (
         <div className="text-center py-20 border-2 border-dashed border-border rounded-2xl text-muted-foreground">
           <BookOpen className="h-10 w-10 mx-auto mb-3 opacity-40" />

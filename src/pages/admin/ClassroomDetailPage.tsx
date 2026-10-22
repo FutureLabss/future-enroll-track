@@ -8,6 +8,7 @@ import { useAttendance, useAttendanceSession } from '@/hooks/useAttendance';
 import { useAssignments } from '@/hooks/useAssignments';
 import { usePresentations } from '@/hooks/usePresentations';
 import { useSchedules } from '@/hooks/useSchedules';
+import { useSchedulePermissions } from '@/hooks/useSchedulePermissions';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -25,6 +26,9 @@ import {
 import { DataTable } from '@/components/shared/DataTable';
 import { CurriculumTreeV2 } from '@/components/classroom/CurriculumTreeV2';
 import { AutoScheduleWizard } from '@/components/classroom/AutoScheduleWizard';
+import { CohortScheduleSetupDialog, type ScheduleSetupCohort } from '@/components/cohort/CohortScheduleSetupDialog';
+import { CohortSetupGapsAlert } from '@/components/cohort/CohortSetupGapsAlert';
+import { PrimaryTutorSelect } from '@/components/cohort/PrimaryTutorSelect';
 import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -57,7 +61,21 @@ const toDateTimeLocal = (value?: string | null) => {
   return localDate.toISOString().slice(0, 16);
 };
 
-function CohortModal({ classroomId, programId, existing, onClose, onSaved, staffList }: any) {
+interface CohortModalProps {
+  classroomId: string;
+  programId: string;
+  existing?: {
+    id: string; cohort_label?: string; start_date?: string | null; end_date?: string | null; status?: string;
+    capacity?: number | null; scope_type?: string | null; scope_id?: string | null; primary_tutor_id?: string | null;
+  };
+  onClose: () => void;
+  onSaved: () => void;
+  onNeedsSchedule?: (cohort: ScheduleSetupCohort) => void;
+  canAutoSchedule?: boolean;
+  staffList?: { id: string; full_name: string }[];
+}
+
+function CohortModal({ classroomId, programId, existing, onClose, onSaved, onNeedsSchedule, canAutoSchedule, staffList }: CohortModalProps) {
   const { createCohort, updateCohort } = useClassroomCohorts(classroomId);
   const [scopeOptions, setScopeOptions] = useState<{ curricula: any[]; tracks: any[]; modules: any[] }>({ curricula: [], tracks: [], modules: [] });
 
@@ -74,12 +92,14 @@ function CohortModal({ classroomId, programId, existing, onClose, onSaved, staff
     capacity: existing?.capacity?.toString() || '',
     scope_type: (existing?.scope_type || '') as '' | 'curriculum' | 'track' | 'module',
     scope_id: existing?.scope_id || '',
+    primary_tutor_id: existing?.primary_tutor_id || '',
   });
   const [scheduleOpts, setScheduleOpts] = useState({ enabled: false, days: [] as string[], start_time: '09:00', end_time: '11:00', instructor_id: '' });
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
     if (!form.cohort_label.trim()) { toast.error('Cohort label is required'); return; }
+    if (!form.primary_tutor_id) { toast.error('Every cohort needs a primary tutor'); return; }
     if (!existing && scheduleOpts.enabled && scheduleOpts.days.length === 0) { toast.error('Select at least one day for scheduling'); return; }
     setSaving(true);
     try {
@@ -95,16 +115,18 @@ function CohortModal({ classroomId, programId, existing, onClose, onSaved, staff
       } else {
         const newId = await createCohort({ ...payload, program_id: programId });
         if (scheduleOpts.enabled && scheduleOpts.days.length > 0) {
-          const { data: count } = await supabase.rpc('generate_cohort_schedule', {
+          const { data: count, error: scheduleError } = await supabase.rpc('generate_cohort_schedule', {
             p_cohort_id: newId,
             p_days: scheduleOpts.days,
             p_start_time: scheduleOpts.start_time,
             p_end_time: scheduleOpts.end_time,
-            p_instructor_id: scheduleOpts.instructor_id || null,
+            p_instructor_id: scheduleOpts.instructor_id || form.primary_tutor_id || null,
           });
+          if (scheduleError) throw new Error(`Cohort created, but the schedule was not: ${scheduleError.message}`);
           toast.success(`Cohort created · ${count} session${count !== 1 ? 's' : ''} scheduled`);
         } else {
           toast.success('Cohort created');
+          onNeedsSchedule?.({ id: newId, cohort_label: form.cohort_label, start_date: form.start_date, end_date: form.end_date, classroom_id: classroomId, primary_tutor_id: form.primary_tutor_id });
         }
       }
       onSaved();
@@ -119,6 +141,10 @@ function CohortModal({ classroomId, programId, existing, onClose, onSaved, staff
   return (
     <div className="space-y-4 mt-2">
       <div><Label>Cohort Label *</Label><Input value={form.cohort_label} onChange={e => setForm({ ...form, cohort_label: e.target.value })} className="mt-1.5" placeholder="e.g. May 2026 Intake" /></div>
+      <div>
+        <Label>Primary tutor *</Label>
+        <PrimaryTutorSelect value={form.primary_tutor_id} onChange={v => setForm({ ...form, primary_tutor_id: v })} staffList={staffList?.length ? staffList : undefined} className="mt-1.5" />
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <div><Label>Start Date</Label><Input type="date" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} className="mt-1.5" /></div>
         <div><Label>End Date</Label><Input type="date" value={form.end_date} onChange={e => setForm({ ...form, end_date: e.target.value })} className="mt-1.5" /></div>
@@ -174,8 +200,8 @@ function CohortModal({ classroomId, programId, existing, onClose, onSaved, staff
           </Select>
         </div>
       )}
-      {/* Auto-schedule (create only) */}
-      {!existing && (
+      {/* Auto-schedule (create only; tutor, training manager or superadmin) */}
+      {!existing && canAutoSchedule && (
         <div className="border border-border rounded-xl p-3 space-y-3">
           <div className="flex items-center justify-between">
             <Label className="text-sm font-medium">Auto-generate schedule</Label>
@@ -584,6 +610,7 @@ export default function ClassroomDetailPage() {
   const { assignments, publishAssignment, createAssignment, updateAssignment, deleteAssignment } = useAssignments(id!);
   const { presentations, createPresentation, deletePresentation } = usePresentations(id!);
   const { schedules, refetch: refetchSchedules, updateSchedule, deleteSchedule, notifySchedule } = useSchedules(id!);
+  const schedulePerms = useSchedulePermissions(id);
 
   const queryClient = useQueryClient();
 
@@ -591,6 +618,7 @@ export default function ClassroomDetailPage() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [cohortModal, setCohortModal] = useState<{ open: boolean; cohort?: any }>({ open: false });
+  const [setupCohort, setSetupCohort] = useState<ScheduleSetupCohort | null>(null);
   const [cohortStudentsModal, setCohortStudentsModal] = useState<{ open: boolean; cohort?: any }>({ open: false });
   const [inviteForm, setInviteForm] = useState({ staff_id: '', staff_type: 'teaching' });
   const [inviting, setInviting] = useState(false);
@@ -1161,17 +1189,24 @@ export default function ClassroomDetailPage() {
         >
           <Bell className="h-4 w-4" />
         </Button>
-        <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => openScheduleEdit(r)} title="Edit"><Pencil className="h-4 w-4" /></Button>
-        <Button size="sm" variant="ghost" className="text-destructive h-7 px-2" onClick={() => handleDeleteSchedule(r.id)} title="Delete"><Trash2 className="h-4 w-4" /></Button>
+        {schedulePerms.canSchedule(r.cohort_id) && (
+          <>
+            <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => openScheduleEdit(r)} title="Edit"><Pencil className="h-4 w-4" /></Button>
+            <Button size="sm" variant="ghost" className="text-destructive h-7 px-2" onClick={() => handleDeleteSchedule(r.id)} title="Delete"><Trash2 className="h-4 w-4" /></Button>
+          </>
+        )}
       </div>
     )},
-  ], [handleDeleteSchedule, openScheduleEdit]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- schedulePerms.data drives canSchedule
+  ], [handleDeleteSchedule, openScheduleEdit, schedulePerms.data]);
 
   const cohortColumns = useMemo(() => [
     { key: 'cohort_label', header: 'Cohort', render: (r: any) => <span className="font-medium">{r.cohort_label}</span> },
     { key: 'status', header: 'Status', render: (r: any) => (
       <Badge variant="outline" className={`capitalize ${STATUS_COLOURS[r.status] || ''}`}>{r.status || '—'}</Badge>
     )},
+    { key: 'tutor', header: 'Primary tutor', render: (r: { primary_tutor_id?: string | null }) => staffRoster.find((s: { id: string; full_name: string }) => s.id === r.primary_tutor_id)?.full_name
+      || (r.primary_tutor_id ? '—' : <span className="text-warning text-xs">Not assigned</span>) },
     { key: 'students', header: 'Students', render: (r: any) => r.cohort_students?.[0]?.count ?? 0 },
     { key: 'capacity', header: 'Capacity', render: (r: any) => r.capacity || '—' },
     { key: 'scope', header: 'Scope', render: (r: any) => r.scope_type ? <span className="capitalize">{r.scope_type}</span> : 'Entire classroom' },
@@ -1187,7 +1222,7 @@ export default function ClassroomDetailPage() {
         </Button>
       </div>
     )},
-  ], []);
+  ], [staffRoster]);
 
   const assignmentColumns = useMemo(() => [
     { key: 'title', header: 'Assignment', render: (r: any) => <span className="font-medium">{r.title}</span> },
@@ -1382,6 +1417,7 @@ export default function ClassroomDetailPage() {
 
         {/* COHORTS */}
         <TabsContent value="cohorts">
+          <CohortSetupGapsAlert classroomId={id} staffList={staffRoster} />
           <div className="flex items-center justify-end mb-4">
             <Button size="sm" onClick={() => setCohortModal({ open: true })}>
               <Plus className="h-4 w-4 mr-1.5" /> New Cohort
@@ -1445,9 +1481,13 @@ export default function ClassroomDetailPage() {
         <TabsContent value="schedule">
           <div className="space-y-4">
             <div className="flex justify-end">
-              <Button onClick={() => setAutoScheduleOpen(true)}>
-                <CalendarDays className="h-4 w-4 mr-1.5" />Auto Schedule
-              </Button>
+              {schedulePerms.canScheduleAny ? (
+                <Button onClick={() => setAutoScheduleOpen(true)}>
+                  <CalendarDays className="h-4 w-4 mr-1.5" />Auto Schedule
+                </Button>
+              ) : (
+                <p className="text-sm text-muted-foreground">Only the cohort's tutor, a training manager or the superadmin can set schedules.</p>
+              )}
             </div>
             <DataTable
               columns={scheduleColumns}
@@ -1462,7 +1502,7 @@ export default function ClassroomDetailPage() {
             onClose={() => setAutoScheduleOpen(false)}
             classroomId={id!}
             classroomName={classroom.name}
-            cohorts={cohorts}
+            cohorts={cohorts.filter((c: { id: string }) => schedulePerms.canSchedule(c.id))}
             onGenerated={refetchSchedules}
           />
         </TabsContent>
@@ -1487,7 +1527,7 @@ export default function ClassroomDetailPage() {
         {/* PRESENTATIONS */}
         <TabsContent value="presentations">
           <div className="flex justify-end mb-4">
-            <Button onClick={openCreatePresentation} disabled={cohorts.length === 0}>
+            <Button onClick={openCreatePresentation} disabled={!cohorts.some((c: { id: string }) => schedulePerms.canSchedule(c.id))}>
               <Presentation className="h-4 w-4 mr-1.5" />Schedule Presentation
             </Button>
           </div>
@@ -1584,9 +1624,19 @@ export default function ClassroomDetailPage() {
             staffList={staffRoster}
             onClose={() => setCohortModal({ open: false })}
             onSaved={() => { refetchCohorts(); loadAll(); }}
+            onNeedsSchedule={setSetupCohort}
+            canAutoSchedule={schedulePerms.canSchedule(null)}
           />
         </DialogContent>
       </Dialog>
+
+      <CohortScheduleSetupDialog
+        cohort={setupCohort}
+        justCreated
+        staffList={staffRoster}
+        onOpenChange={open => !open && setSetupCohort(null)}
+        onScheduled={() => { refetchSchedules(); loadAll(); }}
+      />
 
       <Dialog open={cohortStudentsModal.open} onOpenChange={o => !o && setCohortStudentsModal({ open: false })}>
         <DialogContent className="max-w-lg">
@@ -1691,7 +1741,7 @@ export default function ClassroomDetailPage() {
               <Select value={presentationForm.cohort_id} onValueChange={v => setPresentationForm(f => ({ ...f, cohort_id: v }))}>
                 <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select cohort..." /></SelectTrigger>
                 <SelectContent>
-                  {cohorts.map((c: any) => (
+                  {cohorts.filter((c: { id: string }) => schedulePerms.canSchedule(c.id)).map((c: { id: string; cohort_label: string }) => (
                     <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>
                   ))}
                 </SelectContent>

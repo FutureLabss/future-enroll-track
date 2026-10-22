@@ -8,6 +8,7 @@ import { useAttendance, useAttendanceSession } from '@/hooks/useAttendance';
 import { useAssignments, useSubmissions } from '@/hooks/useAssignments';
 import { useClassroomCohorts } from '@/hooks/useClassroom';
 import { useSchedules } from '@/hooks/useSchedules';
+import { useSchedulePermissions } from '@/hooks/useSchedulePermissions';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -274,6 +275,7 @@ export default function ClassroomWorkspacePage() {
   const { assignments, createAssignment, updateAssignment, publishAssignment, deleteAssignment } = useAssignments(id!);
   const { cohorts, refetch: refetchCohorts, createCohort, updateCohort } = useClassroomCohorts(id!);
   const { schedules, createSchedule, updateSchedule, deleteSchedule, notifySchedule } = useSchedules(id!);
+  const schedulePerms = useSchedulePermissions(id);
 
   // Attendance state
   const [sessionForm, setSessionForm] = useState({ schedule_id: '', cohort_id: '', duration: '30', late_after: '10' });
@@ -549,13 +551,14 @@ export default function ClassroomWorkspacePage() {
         primary_tutor_id: cohortForm.primary_tutor_id,
       });
       if (scheduleOpts.enabled && scheduleOpts.days.length > 0) {
-        const { data: count } = await supabase.rpc('generate_cohort_schedule', {
+        const { data: count, error: scheduleError } = await supabase.rpc('generate_cohort_schedule', {
           p_cohort_id: newId,
           p_days: scheduleOpts.days,
           p_start_time: scheduleOpts.start_time,
           p_end_time: scheduleOpts.end_time,
           p_instructor_id: scheduleOpts.instructor_id || cohortForm.primary_tutor_id || null,
         });
+        if (scheduleError) throw new Error(`Cohort created, but the schedule was not: ${scheduleError.message}`);
         toast.success(`Cohort created · ${count} session${count !== 1 ? 's' : ''} scheduled`);
       } else {
         toast.success('Cohort created');
@@ -685,22 +688,27 @@ export default function ClassroomWorkspacePage() {
         >
           <Bell className="h-4 w-4" />
         </Button>
-        <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => handleOpenScheduleEdit(r)} title="Edit">
-          <Pencil className="h-4 w-4" />
-        </Button>
-        {r.status === 'scheduled' && (
-          <Button size="sm" variant="ghost" className="text-success h-7 px-2" onClick={() => handleScheduleStatus(r.id, 'completed')} title="Mark completed">
-            <CheckCircle className="h-4 w-4" />
-          </Button>
-        )}
-        {r.status === 'scheduled' && (
-          <Button size="sm" variant="ghost" className="text-destructive h-7 px-2" onClick={() => handleScheduleStatus(r.id, 'cancelled')} title="Cancel">
-            <XCircle className="h-4 w-4" />
-          </Button>
+        {schedulePerms.canSchedule(r.cohort_id) && (
+          <>
+            <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => handleOpenScheduleEdit(r)} title="Edit">
+              <Pencil className="h-4 w-4" />
+            </Button>
+            {r.status === 'scheduled' && (
+              <Button size="sm" variant="ghost" className="text-success h-7 px-2" onClick={() => handleScheduleStatus(r.id, 'completed')} title="Mark completed">
+                <CheckCircle className="h-4 w-4" />
+              </Button>
+            )}
+            {r.status === 'scheduled' && (
+              <Button size="sm" variant="ghost" className="text-destructive h-7 px-2" onClick={() => handleScheduleStatus(r.id, 'cancelled')} title="Cancel">
+                <XCircle className="h-4 w-4" />
+              </Button>
+            )}
+          </>
         )}
       </div>
     )},
-  ], [handleOpenScheduleEdit, handleScheduleStatus]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- schedulePerms.data drives canSchedule
+  ], [handleOpenScheduleEdit, handleScheduleStatus, schedulePerms.data]);
 
   // Early returns must stay below every hook — returning during loading with
   // scheduleColumns memoized above changes the hook count between renders
@@ -823,7 +831,8 @@ export default function ClassroomWorkspacePage() {
                         </Select>
                       </div>
                     )}
-                    {/* Auto-schedule */}
+                    {/* Auto-schedule (tutor, training manager or superadmin) */}
+                    {schedulePerms.canSchedule(null) && (
                     <div className="border border-border rounded-xl p-3 space-y-3">
                       <div className="flex items-center justify-between">
                         <Label className="text-sm font-medium">Auto-generate schedule</Label>
@@ -860,6 +869,7 @@ export default function ClassroomWorkspacePage() {
                         </>
                       )}
                     </div>
+                    )}
                     <Button onClick={handleCreateCohort} disabled={savingCohort} className="w-full">{savingCohort ? 'Creating...' : 'Create Cohort'}</Button>
                   </div>
                 </DialogContent>
@@ -986,7 +996,7 @@ export default function ClassroomWorkspacePage() {
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-semibold">Schedule</h3>
             <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
-              <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-1" />Add Session</Button></DialogTrigger>
+              {schedulePerms.canScheduleAny && <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-1" />Add Session</Button></DialogTrigger>}
               <DialogContent className="max-w-lg">
                 <DialogHeader><DialogTitle>Schedule a Session</DialogTitle></DialogHeader>
                 <div className="space-y-3 mt-2">
@@ -1031,7 +1041,7 @@ export default function ClassroomWorkspacePage() {
                       <Label>Cohort</Label>
                       <Select value={scheduleForm.cohort_id} onValueChange={v => setScheduleForm({ ...scheduleForm, cohort_id: v })}>
                         <SelectTrigger className="mt-1.5"><SelectValue placeholder="All cohorts" /></SelectTrigger>
-                        <SelectContent>{cohorts.map(c => <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>)}</SelectContent>
+                        <SelectContent>{cohorts.filter(c => schedulePerms.canSchedule(c.id)).map(c => <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <div>
@@ -1098,7 +1108,7 @@ export default function ClassroomWorkspacePage() {
                     <Label>Cohort</Label>
                     <Select value={scheduleForm.cohort_id} onValueChange={v => setScheduleForm({ ...scheduleForm, cohort_id: v })}>
                       <SelectTrigger className="mt-1.5"><SelectValue placeholder="All cohorts" /></SelectTrigger>
-                      <SelectContent>{cohorts.map(c => <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>)}</SelectContent>
+                      <SelectContent>{cohorts.filter(c => schedulePerms.canSchedule(c.id)).map(c => <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div>

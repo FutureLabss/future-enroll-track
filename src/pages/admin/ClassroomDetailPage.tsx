@@ -8,6 +8,7 @@ import { useAttendance, useAttendanceSession } from '@/hooks/useAttendance';
 import { useAssignments } from '@/hooks/useAssignments';
 import { usePresentations } from '@/hooks/usePresentations';
 import { useSchedules } from '@/hooks/useSchedules';
+import { useSchedulePermissions } from '@/hooks/useSchedulePermissions';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -70,10 +71,11 @@ interface CohortModalProps {
   onClose: () => void;
   onSaved: () => void;
   onNeedsSchedule?: (cohort: ScheduleSetupCohort) => void;
+  canAutoSchedule?: boolean;
   staffList?: { id: string; full_name: string }[];
 }
 
-function CohortModal({ classroomId, programId, existing, onClose, onSaved, onNeedsSchedule, staffList }: CohortModalProps) {
+function CohortModal({ classroomId, programId, existing, onClose, onSaved, onNeedsSchedule, canAutoSchedule, staffList }: CohortModalProps) {
   const { createCohort, updateCohort } = useClassroomCohorts(classroomId);
   const [scopeOptions, setScopeOptions] = useState<{ curricula: any[]; tracks: any[]; modules: any[] }>({ curricula: [], tracks: [], modules: [] });
 
@@ -113,13 +115,14 @@ function CohortModal({ classroomId, programId, existing, onClose, onSaved, onNee
       } else {
         const newId = await createCohort({ ...payload, program_id: programId });
         if (scheduleOpts.enabled && scheduleOpts.days.length > 0) {
-          const { data: count } = await supabase.rpc('generate_cohort_schedule', {
+          const { data: count, error: scheduleError } = await supabase.rpc('generate_cohort_schedule', {
             p_cohort_id: newId,
             p_days: scheduleOpts.days,
             p_start_time: scheduleOpts.start_time,
             p_end_time: scheduleOpts.end_time,
             p_instructor_id: scheduleOpts.instructor_id || form.primary_tutor_id || null,
           });
+          if (scheduleError) throw new Error(`Cohort created, but the schedule was not: ${scheduleError.message}`);
           toast.success(`Cohort created · ${count} session${count !== 1 ? 's' : ''} scheduled`);
         } else {
           toast.success('Cohort created');
@@ -197,8 +200,8 @@ function CohortModal({ classroomId, programId, existing, onClose, onSaved, onNee
           </Select>
         </div>
       )}
-      {/* Auto-schedule (create only) */}
-      {!existing && (
+      {/* Auto-schedule (create only; tutor, training manager or superadmin) */}
+      {!existing && canAutoSchedule && (
         <div className="border border-border rounded-xl p-3 space-y-3">
           <div className="flex items-center justify-between">
             <Label className="text-sm font-medium">Auto-generate schedule</Label>
@@ -607,6 +610,7 @@ export default function ClassroomDetailPage() {
   const { assignments, publishAssignment, createAssignment, updateAssignment, deleteAssignment } = useAssignments(id!);
   const { presentations, createPresentation, deletePresentation } = usePresentations(id!);
   const { schedules, refetch: refetchSchedules, updateSchedule, deleteSchedule, notifySchedule } = useSchedules(id!);
+  const schedulePerms = useSchedulePermissions(id);
 
   const queryClient = useQueryClient();
 
@@ -1185,11 +1189,16 @@ export default function ClassroomDetailPage() {
         >
           <Bell className="h-4 w-4" />
         </Button>
-        <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => openScheduleEdit(r)} title="Edit"><Pencil className="h-4 w-4" /></Button>
-        <Button size="sm" variant="ghost" className="text-destructive h-7 px-2" onClick={() => handleDeleteSchedule(r.id)} title="Delete"><Trash2 className="h-4 w-4" /></Button>
+        {schedulePerms.canSchedule(r.cohort_id) && (
+          <>
+            <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => openScheduleEdit(r)} title="Edit"><Pencil className="h-4 w-4" /></Button>
+            <Button size="sm" variant="ghost" className="text-destructive h-7 px-2" onClick={() => handleDeleteSchedule(r.id)} title="Delete"><Trash2 className="h-4 w-4" /></Button>
+          </>
+        )}
       </div>
     )},
-  ], [handleDeleteSchedule, openScheduleEdit]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- schedulePerms.data drives canSchedule
+  ], [handleDeleteSchedule, openScheduleEdit, schedulePerms.data]);
 
   const cohortColumns = useMemo(() => [
     { key: 'cohort_label', header: 'Cohort', render: (r: any) => <span className="font-medium">{r.cohort_label}</span> },
@@ -1472,9 +1481,13 @@ export default function ClassroomDetailPage() {
         <TabsContent value="schedule">
           <div className="space-y-4">
             <div className="flex justify-end">
-              <Button onClick={() => setAutoScheduleOpen(true)}>
-                <CalendarDays className="h-4 w-4 mr-1.5" />Auto Schedule
-              </Button>
+              {schedulePerms.canScheduleAny ? (
+                <Button onClick={() => setAutoScheduleOpen(true)}>
+                  <CalendarDays className="h-4 w-4 mr-1.5" />Auto Schedule
+                </Button>
+              ) : (
+                <p className="text-sm text-muted-foreground">Only the cohort's tutor, a training manager or the superadmin can set schedules.</p>
+              )}
             </div>
             <DataTable
               columns={scheduleColumns}
@@ -1489,7 +1502,7 @@ export default function ClassroomDetailPage() {
             onClose={() => setAutoScheduleOpen(false)}
             classroomId={id!}
             classroomName={classroom.name}
-            cohorts={cohorts}
+            cohorts={cohorts.filter((c: { id: string }) => schedulePerms.canSchedule(c.id))}
             onGenerated={refetchSchedules}
           />
         </TabsContent>
@@ -1514,7 +1527,7 @@ export default function ClassroomDetailPage() {
         {/* PRESENTATIONS */}
         <TabsContent value="presentations">
           <div className="flex justify-end mb-4">
-            <Button onClick={openCreatePresentation} disabled={cohorts.length === 0}>
+            <Button onClick={openCreatePresentation} disabled={!cohorts.some((c: { id: string }) => schedulePerms.canSchedule(c.id))}>
               <Presentation className="h-4 w-4 mr-1.5" />Schedule Presentation
             </Button>
           </div>
@@ -1612,6 +1625,7 @@ export default function ClassroomDetailPage() {
             onClose={() => setCohortModal({ open: false })}
             onSaved={() => { refetchCohorts(); loadAll(); }}
             onNeedsSchedule={setSetupCohort}
+            canAutoSchedule={schedulePerms.canSchedule(null)}
           />
         </DialogContent>
       </Dialog>
@@ -1727,7 +1741,7 @@ export default function ClassroomDetailPage() {
               <Select value={presentationForm.cohort_id} onValueChange={v => setPresentationForm(f => ({ ...f, cohort_id: v }))}>
                 <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select cohort..." /></SelectTrigger>
                 <SelectContent>
-                  {cohorts.map((c: any) => (
+                  {cohorts.filter((c: { id: string }) => schedulePerms.canSchedule(c.id)).map((c: { id: string; cohort_label: string }) => (
                     <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>
                   ))}
                 </SelectContent>

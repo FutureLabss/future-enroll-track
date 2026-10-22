@@ -63,6 +63,24 @@ export function CohortScheduleSetupDialog({ cohort, onOpenChange, onScheduled, s
 
   const classroomId = cohort?.classroom_id || fallbackClassroom?.id || null;
 
+  // Only the cohort's tutor, a training manager or the superadmin may schedule it.
+  const { data: allowed, isLoading: checkingPermission } = useQuery({
+    queryKey: ['can-set-schedule', classroomId, cohort?.id],
+    queryFn: async () => {
+      const { data, error } = await untypedRpc('can_set_schedule', { _classroom_id: classroomId, _cohort_id: cohort!.id });
+      if (error) throw error;
+      return Boolean(data);
+    },
+    enabled: Boolean(cohort),
+  });
+
+  useEffect(() => {
+    if (cohort && justCreated && allowed === false) {
+      toast.success(`${cohort.cohort_label} created. Its primary tutor has been asked to set up the schedule.`);
+      onOpenChange(false);
+    }
+  }, [cohort, justCreated, allowed, onOpenChange]);
+
   const toggleDay = (day: string) =>
     setForm(f => ({ ...f, days: f.days.includes(day) ? f.days.filter(d => d !== day) : [...f.days, day] }));
 
@@ -128,6 +146,16 @@ export function CohortScheduleSetupDialog({ cohort, onOpenChange, onScheduled, s
           </DialogDescription>
         </DialogHeader>
 
+        {checkingPermission ? (
+          <div className="flex justify-center py-6"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" /></div>
+        ) : !allowed ? (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Only the cohort's primary tutor, a training manager or the superadmin can set this schedule. The tutor gets a reminder each day until it is done.
+            </p>
+            <div className="flex justify-end"><Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button></div>
+          </div>
+        ) : (
         <div className="space-y-4">
           {!cohort?.classroom_id && (
             <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
@@ -175,6 +203,7 @@ export function CohortScheduleSetupDialog({ cohort, onOpenChange, onScheduled, s
             <Button onClick={handleSave} disabled={saving || !classroomId}>{saving ? 'Scheduling…' : 'Create schedule'}</Button>
           </div>
         </div>
+        )}
       </DialogContent>
     </Dialog>
   );

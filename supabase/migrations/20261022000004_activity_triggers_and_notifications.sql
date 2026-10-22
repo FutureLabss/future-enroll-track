@@ -612,10 +612,16 @@ BEGIN
 END;
 $$;
 
-DROP TRIGGER IF EXISTS trg_activity_cohort_announcements ON public.cohort_announcements;
-CREATE TRIGGER trg_activity_cohort_announcements
-  AFTER INSERT ON public.cohort_announcements
-  FOR EACH ROW EXECUTE FUNCTION public.trg_activity_cohort_announcements();
+-- cohort_announcements comes from 20260716113004, which not every environment has applied.
+DO $$
+BEGIN
+  IF to_regclass('public.cohort_announcements') IS NOT NULL THEN
+    DROP TRIGGER IF EXISTS trg_activity_cohort_announcements ON public.cohort_announcements;
+    CREATE TRIGGER trg_activity_cohort_announcements
+      AFTER INSERT ON public.cohort_announcements
+      FOR EACH ROW EXECUTE FUNCTION public.trg_activity_cohort_announcements();
+  END IF;
+END $$;
 
 -- ── Enrollments & payments (report only; existing flows already notify) ────
 

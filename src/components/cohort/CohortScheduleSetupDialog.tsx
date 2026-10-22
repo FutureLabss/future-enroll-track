@@ -114,7 +114,7 @@ export function CohortScheduleSetupDialog({ cohort, onOpenChange, onScheduled, s
 
       const n = Number(count) || 0;
       if (n === 0) {
-        toast.error('No class days fall between those dates — adjust the dates or days');
+        toast.error('No sessions were created. Check the dates and class days, and that the classroom has curriculum modules.');
         return;
       }
       toast.success(`${n} session${n === 1 ? '' : 's'} scheduled for ${cohort.cohort_label}`);

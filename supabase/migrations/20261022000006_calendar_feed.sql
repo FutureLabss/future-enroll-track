@@ -1,6 +1,6 @@
 -- Calendar sync: each user gets a private subscription URL (the calendar-feed edge
 -- function) that Google Calendar / Apple Calendar / Outlook poll. The feed holds
--- the user's class sessions, cohort sessions, assignment due dates and cohort
+-- the user's class sessions, legacy cohort sessions, assignment due dates and cohort
 -- start/end dates, so schedule changes reach their calendar without re-adding.
 -- The token is the only credential calendar apps can send, so it is long, random,
 -- and rotatable.
@@ -158,31 +158,6 @@ BEGIN
   UNION ALL
 
   SELECT
-    'cohort-schedule-' || cs.id || '@futurelabs',
-    'class',
-    cs.title || ' · ' || co.cohort_label,
-    concat_ws(E'\n', cs.description,
-      CASE WHEN cs.meeting_link IS NOT NULL AND cs.meeting_link <> '' THEN 'Join online: ' || cs.meeting_link END),
-    NULLIF(cs.location, ''),
-    NULLIF(cs.meeting_link, ''),
-    (cs.scheduled_date + cs.start_time) AT TIME ZONE 'Africa/Lagos',
-    (cs.scheduled_date + cs.end_time) AT TIME ZONE 'Africa/Lagos',
-    false,
-    'CONFIRMED',
-    cs.updated_at
-  FROM public.cohort_schedules cs
-  JOIN public.cohorts co ON co.id = cs.cohort_id
-  WHERE cs.scheduled_date BETWEEN _from AND _to
-    AND (
-      cs.cohort_id IN (SELECT cohort_id FROM my_cohorts)
-      OR cs.cohort_id IN (SELECT id FROM tutor_cohorts)
-      OR co.classroom_id IN (SELECT classroom_id FROM staff_classrooms)
-      OR (_admin AND _hub IS NOT NULL AND co.hub_id = _hub)
-    )
-
-  UNION ALL
-
-  SELECT
     'assignment-' || a.id || '@futurelabs',
     'assignment',
     'Due: ' || a.title || ' · ' || COALESCE(co.cohort_label, cl.name),
@@ -231,6 +206,37 @@ BEGIN
       OR co.id IN (SELECT id FROM tutor_cohorts)
       OR co.classroom_id IN (SELECT classroom_id FROM staff_classrooms)
     );
+
+  -- Legacy per-cohort sessions; the table (20260716113004) is not in every environment.
+  IF to_regclass('public.cohort_schedules') IS NOT NULL THEN
+    RETURN QUERY EXECUTE $q$
+      SELECT
+        'cohort-schedule-' || cs.id || '@futurelabs',
+        'class'::text,
+        cs.title || ' · ' || co.cohort_label,
+        concat_ws(E'\n', cs.description,
+          CASE WHEN cs.meeting_link IS NOT NULL AND cs.meeting_link <> '' THEN 'Join online: ' || cs.meeting_link END),
+        NULLIF(cs.location, ''),
+        NULLIF(cs.meeting_link, ''),
+        (cs.scheduled_date + cs.start_time) AT TIME ZONE 'Africa/Lagos',
+        (cs.scheduled_date + cs.end_time) AT TIME ZONE 'Africa/Lagos',
+        false,
+        'CONFIRMED'::text,
+        cs.updated_at
+      FROM public.cohort_schedules cs
+      JOIN public.cohorts co ON co.id = cs.cohort_id
+      WHERE cs.scheduled_date BETWEEN $4 AND $5
+        AND (
+          cs.cohort_id IN (SELECT x.cohort_id FROM public.cohort_students x WHERE x.student_id = $1 AND x.status = 'active')
+          OR cs.cohort_id IN (SELECT e.cohort_id FROM public.enrollments e WHERE e.user_id = $1)
+          OR co.primary_tutor_id IN (
+            SELECT st.id FROM public.staff st
+            WHERE $1 = ANY (public.staff_user_ids(st.id)))
+          OR co.classroom_id IN (SELECT x.classroom_id FROM public.classroom_staff x WHERE x.user_id = $1 AND x.status = 'active')
+          OR ($3 AND $2 IS NOT NULL AND co.hub_id = $2)
+        )
+    $q$ USING _user, _hub, _admin, _from, _to;
+  END IF;
 END;
 $$;
 

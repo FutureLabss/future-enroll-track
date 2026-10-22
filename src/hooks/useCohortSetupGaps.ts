@@ -16,10 +16,11 @@ export interface CohortSetupGap {
   past_sessions: number;
   needs_schedule: boolean;
   needs_tutor: boolean;
+  ended: boolean;
 }
 
-// Open cohorts missing a primary tutor, and running cohorts with no upcoming
-// classes (see list_cohort_setup_gaps).
+// Cohorts (past ones included) missing a primary tutor, and running cohorts with
+// no upcoming classes (see list_cohort_setup_gaps).
 export function useCohortSetupGaps(classroomId?: string) {
   const queryClient = useQueryClient();
 

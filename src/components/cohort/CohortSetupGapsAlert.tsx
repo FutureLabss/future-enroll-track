@@ -11,6 +11,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { AlertTriangle, CalendarPlus, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 
+const COLLAPSED_COUNT = 5;
+
 interface Props {
   classroomId?: string;
   staffList?: StaffOption[];
@@ -57,6 +59,7 @@ export function CohortSetupGapsAlert({ classroomId, staffList, showClassroom }: 
   const { data: gaps } = useCohortSetupGaps(classroomId);
   const [scheduleTarget, setScheduleTarget] = useState<CohortSetupGap | null>(null);
   const [tutorTarget, setTutorTarget] = useState<CohortSetupGap | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   if (!gaps.length) return null;
 
@@ -73,9 +76,9 @@ export function CohortSetupGapsAlert({ classroomId, staffList, showClassroom }: 
         <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-warning" />
         <div className="min-w-0 flex-1">
           <p className="font-semibold">{headline}</p>
-          <p className="text-sm text-muted-foreground">Every cohort needs a primary tutor, and every running cohort needs a schedule.</p>
+          <p className="text-sm text-muted-foreground">Every cohort needs a primary tutor, past ones included, and every running cohort needs a schedule.</p>
           <ul className="mt-3 space-y-2">
-            {gaps.map(g => (
+            {(expanded ? gaps : gaps.slice(0, COLLAPSED_COUNT)).map(g => (
               <li key={g.cohort_id} className="flex flex-col gap-2 rounded-lg border border-border bg-card px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">
@@ -83,7 +86,12 @@ export function CohortSetupGapsAlert({ classroomId, staffList, showClassroom }: 
                     {showClassroom && g.classroom_name && <span className="text-muted-foreground"> · {g.classroom_name}</span>}
                   </p>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                    {g.needs_schedule && <Badge variant="outline" className="border-destructive/30 bg-destructive/10 text-destructive">No schedule</Badge>}
+                    {g.needs_schedule && (
+                      <Badge variant="outline" className="border-destructive/30 bg-destructive/10 text-destructive">
+                        {g.ended ? 'Ended, still marked active' : 'No schedule'}
+                      </Badge>
+                    )}
+                    {!g.needs_schedule && g.status === 'completed' && <Badge variant="outline">Completed</Badge>}
                     {g.needs_tutor && <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning">No primary tutor</Badge>}
                     <span>
                       {g.start_date ? new Date(g.start_date).toLocaleDateString('en-NG') : '—'} – {g.end_date ? new Date(g.end_date).toLocaleDateString('en-NG') : '—'}
@@ -106,6 +114,11 @@ export function CohortSetupGapsAlert({ classroomId, staffList, showClassroom }: 
               </li>
             ))}
           </ul>
+          {gaps.length > COLLAPSED_COUNT && (
+            <Button variant="ghost" size="sm" className="mt-2" onClick={() => setExpanded(e => !e)}>
+              {expanded ? 'Show fewer' : `Show all ${gaps.length}`}
+            </Button>
+          )}
         </div>
       </div>
       <CohortScheduleSetupDialog

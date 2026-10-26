@@ -28,7 +28,8 @@ function stepTiming(days: number) {
   return `Day ${days} · 09:00 WAT`;
 }
 
-const EMPTY_STEP: StepDraft = { delay_days: 0, subject: '', body: '', active: true };
+const EMPTY_STEP: StepDraft = { delay_days: 0, subject: '', body: '', active: true, from_name: null, reply_to: null };
+const EMAIL_RE = /^[^@\s<>]+@[^@\s<>]+\.[^@\s<>]+$/;
 
 export function OnboardingPanel() {
   const { data, loading, setEnabled, saveStep, removeStep, stopJourney, sendTest } = useOnboarding();
@@ -108,6 +109,7 @@ export function OnboardingPanel() {
                 <div className="min-w-0">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{stepTiming(s.delay_days)}</p>
                   <p className="truncate font-medium">{s.subject}</p>
+                  {s.from_name && <p className="text-xs text-muted-foreground">From {s.from_name}{s.reply_to ? ` · replies to ${s.reply_to}` : ''}</p>}
                   <p className="text-xs text-muted-foreground">
                     {st ? `${st.sent} sent${st.queued ? ` · ${st.queued} queued` : ''}${st.failed ? ` · ${st.failed} failed` : ''}${st.skipped ? ` · ${st.skipped} skipped` : ''}` : 'Not sent yet'}
                   </p>
@@ -140,7 +142,7 @@ export function OnboardingPanel() {
           busy={busy}
           onClose={() => setEditing(null)}
           onSave={draft => run('save', async () => { await saveStep(draft); toast.success('Saved'); setEditing(null); })}
-          onTest={(subject, body) => run('test', async () => { const r = await sendTest(subject, body); toast.success(`Test sent to ${r.sent_to}`); })}
+          onTest={step => run('test', async () => { const r = await sendTest(step); toast.success(`Test sent to ${r.sent_to}`); })}
         />
       )}
 
@@ -167,11 +169,14 @@ function StepDialog({ step, busy, onClose, onSave, onTest }: {
   busy: string | null;
   onClose: () => void;
   onSave: (draft: StepDraft) => void;
-  onTest: (subject: string, body: string) => void;
+  onTest: (step: Pick<StepDraft, 'subject' | 'body' | 'from_name' | 'reply_to'>) => void;
 }) {
   const [draft, setDraft] = useState<StepDraft>(step);
   const days = Number.isFinite(draft.delay_days) ? draft.delay_days : 0;
-  const valid = draft.subject.trim() && draft.body.trim() && days >= 0 && days <= 365;
+  const fromName = draft.from_name?.trim() || null;
+  const replyTo = draft.reply_to?.trim() || null;
+  const replyOk = !replyTo || EMAIL_RE.test(replyTo);
+  const valid = draft.subject.trim() && draft.body.trim() && days >= 0 && days <= 365 && replyOk && !/[<>"]/.test(fromName ?? '');
 
   return (
     <Dialog open onOpenChange={o => !o && onClose()}>
@@ -192,6 +197,19 @@ function StepDialog({ step, busy, onClose, onSave, onTest }: {
             </div>
           </div>
           <p className="-mt-2 text-xs text-muted-foreground">{stepTiming(days)}</p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="step-from">From name <span className="font-normal text-muted-foreground">(optional)</span></Label>
+              <Input id="step-from" value={draft.from_name ?? ''} className="mt-1.5" placeholder="FutureLabs"
+                onChange={e => setDraft({ ...draft, from_name: e.target.value })} />
+            </div>
+            <div>
+              <Label htmlFor="step-reply">Replies go to <span className="font-normal text-muted-foreground">(optional)</span></Label>
+              <Input id="step-reply" type="email" value={draft.reply_to ?? ''} className="mt-1.5" placeholder="Hub contact email"
+                onChange={e => setDraft({ ...draft, reply_to: e.target.value })} />
+              {!replyOk && <p className="mt-1 text-xs text-destructive">Enter a valid email address</p>}
+            </div>
+          </div>
           <div>
             <Label htmlFor="step-body">Message</Label>
             <Textarea id="step-body" value={draft.body} rows={14} className="mt-1.5" onChange={e => setDraft({ ...draft, body: e.target.value })} />
@@ -202,10 +220,10 @@ function StepDialog({ step, busy, onClose, onSave, onTest }: {
           </div>
         </div>
         <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" disabled={!draft.subject.trim() || busy !== null} onClick={() => onTest(draft.subject, draft.body)}>
+          <Button variant="outline" disabled={!draft.subject.trim() || busy !== null} onClick={() => onTest({ subject: draft.subject, body: draft.body, from_name: fromName, reply_to: replyTo })}>
             <FlaskConical className="mr-1.5 h-4 w-4" />{busy === 'test' ? 'Sending…' : 'Send test to me'}
           </Button>
-          <Button disabled={!valid || busy !== null} onClick={() => onSave({ ...draft, delay_days: days, subject: draft.subject.trim() })}>
+          <Button disabled={!valid || busy !== null} onClick={() => onSave({ ...draft, delay_days: days, subject: draft.subject.trim(), from_name: fromName, reply_to: replyTo })}>
             {busy === 'save' ? 'Saving…' : 'Save'}
           </Button>
         </DialogFooter>

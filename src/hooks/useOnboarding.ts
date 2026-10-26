@@ -9,6 +9,8 @@ export interface OnboardingStep {
   subject: string;
   body: string;
   active: boolean;
+  from_name: string | null;
+  reply_to: string | null;
 }
 
 export interface StepStats {
@@ -49,7 +51,7 @@ export function useOnboarding() {
     queryFn: async () => {
       const [settings, steps, overview] = await Promise.all([
         table('onboarding_settings').select('enabled').eq('hub_id', hubId!).maybeSingle(),
-        table('onboarding_steps').select('id, delay_days, subject, body, active').eq('hub_id', hubId!)
+        table('onboarding_steps').select('id, delay_days, subject, body, active, from_name, reply_to').eq('hub_id', hubId!)
           .order('delay_days').order('created_at'),
         untypedRpc('get_onboarding_overview'),
       ]);
@@ -95,8 +97,8 @@ export function useOnboarding() {
     refetch();
   };
 
-  const sendTest = async (subject: string, body: string) => {
-    const res = await supabase.functions.invoke('send-onboarding-emails', { body: { action: 'test', subject, body } });
+  const sendTest = async (step: Pick<OnboardingStep, 'subject' | 'body' | 'from_name' | 'reply_to'>) => {
+    const res = await supabase.functions.invoke('send-onboarding-emails', { body: { action: 'test', ...step } });
     if (res.error) throw res.error;
     if (res.data?.error) throw new Error(res.data.error);
     return res.data as { sent_to: string };

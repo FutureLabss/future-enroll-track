@@ -3,7 +3,7 @@ import { renderDigestEmail, signUnsubscribeToken } from "../_shared/digestEmail.
 
 // Runs on a 10-minute cron (x-cron-secret) and sends every onboarding step that
 // has come due. Admins can also call it with their JWT:
-//   { action: "test", subject, body }  → sends one preview to the admin only
+//   { action: "test", subject, body, from_name?, reply_to? }  → sends one preview to the admin only
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,6 +21,7 @@ interface ClaimedEmail {
   subject: string;
   body: string;
   hub_name: string | null;
+  from_name: string | null;
   reply_to: string | null;
   program_name: string | null;
   cohort_label: string | null;
@@ -47,12 +48,21 @@ function templateVars(hub: string | null, program: string | null, cohort: string
 const footerFor = (hub: string | null) =>
   `You're receiving this because you recently enrolled with ${hub || "FutureLabs"}.`;
 
-async function sendViaResend(to: string, subject: string, html: string, text: string, unsubscribeUrl: string, replyTo: string | null) {
+const DEFAULT_FROM = Deno.env.get("MARKETING_FROM") || "FutureLabs <notifications@futurelabs.ng>";
+
+// A step can go out under a person's name; the address stays the verified one.
+function fromHeader(name: string | null) {
+  if (!name?.trim()) return DEFAULT_FROM;
+  const address = DEFAULT_FROM.match(/<([^>]+)>/)?.[1] ?? DEFAULT_FROM;
+  return `${name.replace(/[<>"\r\n]/g, "").trim()} <${address}>`;
+}
+
+async function sendViaResend(to: string, subject: string, html: string, text: string, unsubscribeUrl: string, replyTo: string | null, fromName: string | null = null) {
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${Deno.env.get("RESEND_API_KEY")}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      from: Deno.env.get("MARKETING_FROM") || "FutureLabs <notifications@futurelabs.ng>",
+      from: fromHeader(fromName),
       to: [to],
       ...(replyTo ? { reply_to: replyTo } : {}),
       subject,
@@ -94,7 +104,7 @@ async function processQueue(db: ReturnType<typeof createClient>) {
             vars: templateVars(r.hub_name, r.program_name, r.cohort_label, r.cohort_start),
             footer: footerFor(r.hub_name),
           });
-          const provider = await sendViaResend(r.normalized_email, email.subject, email.html, email.text, url, r.reply_to);
+          const provider = await sendViaResend(r.normalized_email, email.subject, email.html, email.text, url, r.reply_to, r.from_name);
           await db.from("onboarding_deliveries")
             .update({ status: "sent", sent_at: new Date().toISOString(), subject: email.subject, provider_message_id: provider.id, error_message: null })
             .eq("id", r.delivery_id);
@@ -150,7 +160,8 @@ Deno.serve(async (req) => {
       vars: templateVars(hubName, program?.program_name || null, "Sample cohort", new Date().toISOString().slice(0, 10)),
       footer: footerFor(hubName),
     });
-    await sendViaResend(user.email, `[Test] ${email.subject}`, email.html, email.text, url, member?.hubs?.contact_email || null);
+    const replyTo = String(body.reply_to || "").trim() || member?.hubs?.contact_email || null;
+    await sendViaResend(user.email, `[Test] ${email.subject}`, email.html, email.text, url, replyTo, String(body.from_name || "") || null);
     return json({ sent_to: user.email });
   } catch (e) {
     return json({ error: (e as Error).message }, 500);

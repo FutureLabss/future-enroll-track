@@ -73,30 +73,41 @@ Deno.serve(async (req) => {
     const admin = createClient(supabaseUrl, serviceKey);
     const { data: roleRow } = await admin.from("user_roles").select("role")
       .eq("user_id", userRes.user.id).eq("role", "admin").maybeSingle();
-    const { data: saRow } = !roleRow
-      ? await admin.from("superadmins").select("user_id").eq("user_id", userRes.user.id).maybeSingle()
-      : { data: null };
+    const { data: saRow } = await admin.from("superadmins").select("user_id").eq("user_id", userRes.user.id).maybeSingle();
     if (!roleRow && !saRow) {
       return new Response(JSON.stringify({ error: "Admin only" }), {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const { program_id } = await req.json();
-    if (!program_id) {
-      return new Response(JSON.stringify({ error: "program_id is required" }), {
+    const { classroom_id } = await req.json();
+    if (!classroom_id) {
+      return new Response(JSON.stringify({ error: "classroom_id is required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Fetch all active/pending enrollments for this program
-    const { data: enrollments, error: enrollErr } = await admin
-      .from("enrollments")
-      .select("id, full_name, email, user_id")
-      .eq("program_id", program_id)
-      .in("enrollment_status", ["active", "pending"])
-      .not("email", "is", null);
-    if (enrollErr) throw enrollErr;
+    // The service role bypasses RLS, so the hub boundary has to be enforced here
+    const { data: classroom } = await admin.from("classrooms").select("hub_id").eq("id", classroom_id).maybeSingle();
+    if (!classroom) {
+      return new Response(JSON.stringify({ error: "Classroom not found" }), {
+        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (!saRow) {
+      const { data: member } = await admin.from("hub_members").select("hub_id")
+        .eq("user_id", userRes.user.id).eq("hub_id", classroom.hub_id).maybeSingle();
+      if (!member) {
+        return new Response(JSON.stringify({ error: "Classroom belongs to another hub" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // Same roster the Students tab shows, so what the tab flags is what gets emailed
+    const { data: roster, error: rosterErr } = await userClient.rpc("get_classroom_students", { p_classroom_id: classroom_id });
+    if (rosterErr) throw rosterErr;
+    const enrollments = (roster || []).filter((e: any) => e.email && e.enrollment_status !== "cancelled");
 
     // Split into: no account vs account but incomplete profile
     const noAccount = (enrollments || []).filter((e: any) => !e.user_id);
@@ -170,7 +181,7 @@ Deno.serve(async (req) => {
 
     await admin.from("audit_logs").insert({
       user_id: userRes.user.id, action: "account_reminders", entity_type: "notification", entity_id: null,
-      details: { program_id, signup_sent: signupSent, profile_sent: profileSent, failed },
+      details: { classroom_id, signup_sent: signupSent, profile_sent: profileSent, failed },
     });
 
     return new Response(JSON.stringify({ signup_sent: signupSent, profile_sent: profileSent, failed, errors: errors.slice(0, 10) }), {

@@ -701,6 +701,8 @@ export default function ClassroomDetailPage() {
     staleTime: 30_000,
   });
   const students = studentsData ?? [];
+  // Mirrors the filter in send-account-reminders
+  const remindable = students.filter(s => s.email && s.enrollment_status !== 'cancelled');
 
   useEffect(() => {
     const open = sessions.find((s: any) => s.status === 'open');
@@ -884,8 +886,7 @@ export default function ClassroomDetailPage() {
   }, []);
 
   const handleSendReminders = () => {
-    if (!classroom?.program_id) return;
-    const needsReminder = students.filter(s => !s.user_id || !s.full_name?.trim());
+    const needsReminder = remindable.filter(s => !s.user_id || !s.full_name?.trim());
     if (needsReminder.length === 0) { toast.info('All students have accounts and complete profiles.'); return; }
     setRemindersDialogOpen(true);
   };
@@ -895,10 +896,14 @@ export default function ClassroomDetailPage() {
     setRemindersDialogOpen(false);
     try {
       const { data, error } = await supabase.functions.invoke('send-account-reminders', {
-        body: { program_id: classroom!.program_id },
+        body: { classroom_id: id },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
+      if (data.signup_sent + data.profile_sent + data.failed === 0) {
+        toast.info('No students with an email address needed a reminder.');
+        return;
+      }
       toast.success(`Sent ${data.signup_sent} account setup + ${data.profile_sent} profile reminders${data.failed ? ` (${data.failed} failed)` : ''}`);
     } catch (e: any) {
       toast.error(e.message);
@@ -1448,8 +1453,8 @@ export default function ClassroomDetailPage() {
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <div className="text-sm text-muted-foreground">
               {(() => {
-                const noAccount = students.filter(s => !s.user_id).length;
-                const noProfile = students.filter(s => s.user_id && !s.full_name?.trim()).length;
+                const noAccount = remindable.filter(s => !s.user_id).length;
+                const noProfile = remindable.filter(s => s.user_id && !s.full_name?.trim()).length;
                 const total = noAccount + noProfile;
                 if (total === 0) return null;
                 return <span className="text-warning">{noAccount > 0 && `${noAccount} no account`}{noAccount > 0 && noProfile > 0 && ' · '}{noProfile > 0 && `${noProfile} incomplete profile`}</span>;

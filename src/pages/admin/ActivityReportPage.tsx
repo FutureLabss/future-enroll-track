@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useActivityReport, useActivityReportViewers, useCanViewActivityReport } from '@/hooks/useActivityReport';
-import { activityByClassroom, countOf, filterActivity, groupActivityByDay, type ActivityEvent, type ClassroomActivity } from '@/lib/activity';
+import { filterActivity, groupActivityByDay, type ActivityEvent, type ClassroomActivity } from '@/lib/activity';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatCard } from '@/components/shared/StatCard';
 import { DataTable } from '@/components/shared/DataTable';
@@ -162,18 +162,19 @@ export default function ActivityReportPage() {
 
   const visible = useMemo(() => filterActivity(data.events, search), [data.events, search]);
   const days = useMemo(() => groupActivityByDay(visible), [visible]);
-  const byClassroom = useMemo(() => activityByClassroom(data.events), [data.events]);
   const showHub = isSuperadmin && new Set(data.events.map(e => e.hub_id)).size > 1;
+  const stats = data.stats;
+  const n = (v: number | undefined) => (loading && !stats ? '…' : Number(v ?? 0).toLocaleString('en-NG'));
 
   const classroomColumns = useMemo(() => [
     { key: 'classroom_name', header: 'Classroom', render: (r: ClassroomActivity) => <span className="font-medium">{r.classroom_name}</span> },
-    { key: 'held', header: 'Classes held' },
-    { key: 'cancelled', header: 'Cancelled', render: (r: ClassroomActivity) => r.cancelled ? <span className="text-destructive">{r.cancelled}</span> : 0 },
-    { key: 'attendance', header: 'Attendance taken' },
+    ...(showHub ? [{ key: 'hub_name', header: 'Hub', render: (r: ClassroomActivity) => r.hub_name || '—' }] : []),
+    { key: 'classes_held', header: 'Classes held' },
+    { key: 'classes_cancelled', header: 'Cancelled', render: (r: ClassroomActivity) => r.classes_cancelled ? <span className="text-destructive">{r.classes_cancelled}</span> : 0 },
+    { key: 'check_ins', header: 'Check-ins' },
     { key: 'submissions', header: 'Submissions' },
-    { key: 'total', header: 'All activity' },
-    { key: 'last_at', header: 'Last activity', render: (r: ClassroomActivity) => new Date(r.last_at).toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' }) },
-  ], []);
+    { key: 'last_activity_at', header: 'Last activity', render: (r: ClassroomActivity) => r.last_activity_at ? new Date(r.last_activity_at).toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' }) : '—' },
+  ], [showHub]);
 
   if (checking) return <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
   if (!canView) {
@@ -204,22 +205,28 @@ export default function ActivityReportPage() {
       />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="Classes held" value={countOf(data.counts, 'session_completed')} icon={CalendarCheck} />
-        <StatCard title="Classes cancelled" value={countOf(data.counts, 'session_cancelled')} icon={CalendarX} />
-        <StatCard title="Attendance sessions" value={countOf(data.counts, 'attendance_closed')} icon={ClipboardList} />
-        <StatCard title="Submissions" value={countOf(data.counts, 'assignment_submitted')} icon={ClipboardCheck} />
-        <StatCard title="Assignments published" value={countOf(data.counts, 'assignment_published')} icon={BookOpen} />
-        <StatCard title="Schedule changes" value={countOf(data.counts, 'sessions_scheduled', 'session_rescheduled', 'sessions_removed')} icon={CalendarClock} />
-        <StatCard title="New enrollments" value={countOf(data.counts, 'enrollment_created')} icon={UserPlus} />
-        <StatCard title="Payments recorded" value={countOf(data.counts, 'payment_recorded')} icon={CreditCard} />
+        <StatCard title="Classes held" value={n(stats?.classes_held)} icon={CalendarCheck} />
+        <StatCard title="Classes cancelled" value={n(stats?.classes_cancelled)} icon={CalendarX} />
+        <StatCard title="Attendance check-ins" value={n(stats?.check_ins)} icon={ClipboardList} trend={stats ? `across ${n(stats.attendance_sessions)} attendance sessions` : undefined} trendUp />
+        <StatCard title="Submissions" value={n(stats?.submissions)} icon={ClipboardCheck} />
+        <StatCard title="Assignments published" value={n(stats?.assignments_published)} icon={BookOpen} />
+        <StatCard title="Sessions scheduled" value={n(stats?.sessions_scheduled)} icon={CalendarClock} />
+        <StatCard title="New enrollments" value={n(stats?.enrollments)} icon={UserPlus} />
+        <StatCard
+          title="Payments received"
+          value={loading && !stats ? '…' : `₦${Number(stats?.payments_amount ?? 0).toLocaleString('en-NG', { maximumFractionDigits: 0 })}`}
+          icon={CreditCard}
+          trend={stats ? `${n(stats.payments_count)} payment${stats.payments_count === 1 ? '' : 's'} · same basis as Finance` : undefined}
+          trendUp
+        />
       </div>
 
       <CohortSetupGapsAlert showClassroom />
 
-      {byClassroom.length > 0 && (
+      {data.classrooms.length > 0 && (
         <section className="mb-8">
           <h2 className="mb-3 font-heading text-lg font-semibold">By classroom <span className="text-sm font-normal text-muted-foreground">· {rangeLabel}</span></h2>
-          <DataTable columns={classroomColumns} data={byClassroom} onRowClick={(r: ClassroomActivity) => navigate(`/admin/classrooms/${r.classroom_id}`)} />
+          <DataTable columns={classroomColumns} data={data.classrooms} onRowClick={(r: ClassroomActivity) => navigate(`/admin/classrooms/${r.classroom_id}`)} />
         </section>
       )}
 

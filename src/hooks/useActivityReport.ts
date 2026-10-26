@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { untypedRpc } from '@/lib/untypedRpc';
-import type { ActivityEvent } from '@/lib/activity';
+import type { ActivityEvent, ActivityStats, ClassroomActivity } from '@/lib/activity';
 
 export interface ActivityViewer {
   id: string;
@@ -42,15 +42,18 @@ export function useActivityReport(sinceDays: number, category: string | null, en
     queryFn: async () => {
       const since = new Date(Date.now() - sinceDays * 86_400_000).toISOString();
       const until = new Date().toISOString();
-      const [events, counts] = await Promise.all([
+      const [events, stats, classrooms] = await Promise.all([
         untypedRpc('get_activity_report', { p_since: since, p_until: until, p_category: category, p_limit: 2000 }),
-        untypedRpc('get_activity_counts', { p_since: since, p_until: until }),
+        untypedRpc('get_activity_stats', { p_since: since, p_until: until }),
+        untypedRpc('get_activity_classroom_stats', { p_since: since, p_until: until }),
       ]);
       if (events.error) throw events.error;
-      if (counts.error) throw counts.error;
+      if (stats.error) throw stats.error;
+      if (classrooms.error) throw classrooms.error;
       return {
         events: (events.data as ActivityEvent[]) || [],
-        counts: (counts.data as { event_type: string; category: string; total: number }[]) || [],
+        stats: (stats.data as ActivityStats | null) ?? null,
+        classrooms: (classrooms.data as ClassroomActivity[]) || [],
       };
     },
     enabled,
@@ -60,7 +63,7 @@ export function useActivityReport(sinceDays: number, category: string | null, en
 
   const refetch = () => queryClient.invalidateQueries({ queryKey: ['activity-report'] });
 
-  return { data: data ?? { events: [], counts: [] }, loading, error, refetch };
+  return { data: data ?? { events: [], stats: null, classrooms: [] }, loading, error, refetch };
 }
 
 export function useActivityReportViewers(enabled: boolean) {

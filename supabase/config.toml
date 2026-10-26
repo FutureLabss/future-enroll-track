@@ -33,5 +33,8 @@ verify_jwt = false  # polled by Google/Apple/Outlook calendar apps; authenticate
 [functions.send-weekly-digest]
 verify_jwt = false  # 10-minute cron authenticates with the CRM cron secret; admin calls are checked in the function
 
+[functions.send-onboarding-emails]
+verify_jwt = false  # same as send-weekly-digest: cron secret or an admin JWT checked in the function
+
 [functions.email-unsubscribe]
 verify_jwt = false  # public unsubscribe links are protected by signed tokens

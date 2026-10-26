@@ -159,6 +159,11 @@ Students must exist in **`classroom_students`** to see a classroom. Adding to `c
 ### Calendar sync
 - `/functions/v1/calendar-feed/<token>.ics` serves each user's classes, assignment due dates and cohort start/end dates (`calendar_feed_events`). Times are wall-clock `Africa/Lagos`. The token is the only credential calendar apps can send, so never log it and keep `verify_jwt = false` for this function only.
 
+### Marketing email (weekly digest, onboarding)
+- One suppression list per hub, `email_suppressions`, shared by the digest, onboarding and CRM leads. Every marketing email carries the signed `email-unsubscribe` link (`_shared/digestEmail.ts`); a new sender must check suppressions and use the same token.
+- Onboarding (`onboarding_*`, `send-onboarding-emails`, 10-minute cron): `trg_start_onboarding` opens one journey per person per hub on their **first** enrollment, only while the hub has it switched on, never back-filled. Steps are due N days after joining at 09:00 WAT; anything more than 3 days late is skipped, not sent.
+- `send-weekly-digest` and `send-onboarding-emails` run with `verify_jwt = false`: the cron authenticates with the `crm_cron_secret` vault secret, and admin calls are checked inside the function.
+
 ---
 
 ## Access Control

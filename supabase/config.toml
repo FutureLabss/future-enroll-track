@@ -29,3 +29,9 @@ verify_jwt = false  # Resend webhook requests are verified with their signing se
 
 [functions.calendar-feed]
 verify_jwt = false  # polled by Google/Apple/Outlook calendar apps; authenticated by the per-user feed token
+
+[functions.send-weekly-digest]
+verify_jwt = false  # 10-minute cron authenticates with the CRM cron secret; admin calls are checked in the function
+
+[functions.email-unsubscribe]
+verify_jwt = false  # public unsubscribe links are protected by signed tokens

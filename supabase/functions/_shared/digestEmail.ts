@@ -4,6 +4,10 @@ export interface DigestEmail {
   name: string | null;
   hubName: string | null;
   unsubscribeUrl: string;
+  // Extra {{tags}} (e.g. program, cohort); an empty value renders as nothing.
+  vars?: Record<string, string>;
+  // Why the reader gets this email; defaults to the weekly-digest wording.
+  footer?: string;
 }
 
 export function escapeHtml(value: string): string {
@@ -19,10 +23,14 @@ export function firstName(name: string | null): string {
   return first || 'there';
 }
 
-export function personalize(text: string, name: string | null): string {
+export function personalize(text: string, name: string | null, vars: Record<string, string> = {}): string {
   return text
     .replace(/{{\s*first_name\s*}}/gi, firstName(name))
-    .replace(/{{\s*name\s*}}/gi, (name || '').trim() || 'there');
+    .replace(/{{\s*name\s*}}/gi, (name || '').trim() || 'there')
+    .replace(/{{\s*([a-z_]+)\s*}}/gi, (tag, key: string) => {
+      const k = key.toLowerCase();
+      return k in vars ? vars[k] : tag;
+    });
 }
 
 // Plain text in, safe HTML out: blank lines make paragraphs, single newlines
@@ -43,15 +51,18 @@ export function bodyToHtml(body: string): string {
 }
 
 export function renderDigestEmail(e: DigestEmail): { subject: string; html: string; text: string } {
-  const subject = personalize(e.subject, e.name);
-  const body = personalize(e.body, e.name);
+  const subject = personalize(e.subject, e.name, e.vars);
+  const body = personalize(e.body, e.name, e.vars);
   const hub = escapeHtml(e.hubName || 'FutureLabs');
+  const footer = e.footer
+    ? escapeHtml(e.footer)
+    : `You're receiving the ${hub} weekly digest because you've studied with, worked with or enquired at ${hub}.`;
   const html = `<!DOCTYPE html><html><body style="font-family:Inter,Arial,sans-serif;background:#f7f7fb;padding:24px;color:#0f172a;">
 <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:14px;padding:28px;box-shadow:0 4px 16px rgba(15,23,42,0.06);">
 <h1 style="font-size:18px;margin:0 0 16px;color:#1e1b4b;">${escapeHtml(subject)}</h1>
 <div style="font-size:15px;line-height:1.6;">${bodyToHtml(body)}</div>
 <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;"/>
-<p style="font-size:12px;color:#64748b;margin:0;">You're receiving the ${hub} weekly digest because you've studied with, worked with or enquired at ${hub}.
+<p style="font-size:12px;color:#64748b;margin:0;">${footer}
 <a href="${escapeHtml(e.unsubscribeUrl)}" style="color:#64748b;">Unsubscribe</a></p>
 </div></body></html>`;
   const text = `${body}\n\n—\nUnsubscribe: ${e.unsubscribeUrl}`;

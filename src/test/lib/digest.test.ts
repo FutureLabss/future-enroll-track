@@ -49,6 +49,23 @@ describe('digest rendering', () => {
     expect(out.html).toContain('FutureLabs weekly digest');
     expect(out.text).toContain('Unsubscribe: https://x.supabase.co');
   });
+
+  it('fills extra tags, blanks empty ones and leaves unknown ones alone', () => {
+    const vars = { program: 'Data Analysis', cohort: '' };
+    expect(personalize('{{first_name}} joins {{ Program }}{{cohort}} {{unknown}}', 'Ada', vars))
+      .toBe('Ada joins Data Analysis {{unknown}}');
+  });
+
+  it('uses a custom footer for onboarding emails, escaped', () => {
+    const out = renderDigestEmail({
+      subject: 'Welcome to {{hub}}', body: 'Hi', name: 'Ada', hubName: 'FutureLabs',
+      unsubscribeUrl: 'https://x/u', vars: { hub: 'FutureLabs' },
+      footer: "You're receiving this because you recently enrolled with <FutureLabs>.",
+    });
+    expect(out.subject).toBe('Welcome to FutureLabs');
+    expect(out.html).toContain('enrolled with &lt;FutureLabs&gt;.');
+    expect(out.html).not.toContain('weekly digest');
+  });
 });
 
 describe('unsubscribe tokens', () => {

@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StaffPicker } from '@/components/email/StaffPicker';
 import { WeeklyDigestPanel } from '@/components/email/WeeklyDigestPanel';
 import { EmailContactsPanel } from '@/components/email/EmailContactsPanel';
+import { OnboardingPanel } from '@/components/email/OnboardingPanel';
 import { useStaffDirectory } from '@/hooks/useStaffDirectory';
 
 type AudienceType = 'students' | 'staff' | 'students_and_staff';
@@ -165,10 +166,12 @@ export default function BulkEmailPage() {
         <TabsList className="mb-6 flex-wrap h-auto gap-1">
           <TabsTrigger value="send">Send now</TabsTrigger>
           <TabsTrigger value="digest">Weekly digest</TabsTrigger>
+          <TabsTrigger value="onboarding">Onboarding</TabsTrigger>
           <TabsTrigger value="contacts">Contacts</TabsTrigger>
         </TabsList>
 
         <TabsContent value="digest"><WeeklyDigestPanel /></TabsContent>
+        <TabsContent value="onboarding"><OnboardingPanel /></TabsContent>
         <TabsContent value="contacts"><EmailContactsPanel /></TabsContent>
 
         <TabsContent value="send">

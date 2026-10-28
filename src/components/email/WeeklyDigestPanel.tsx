@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useEmailDigest, type Digest } from '@/hooks/useEmailDigest';
+import { useEmailEngagement } from '@/hooks/useEmailEngagement';
+import { engagementSummary } from '@/lib/engagement';
 import { useEmailContacts } from '@/hooks/useEmailContacts';
 import { useStaffDirectory } from '@/hooks/useStaffDirectory';
 import { formatDigestSlot, nextDigestSlot } from '@/lib/digest';
@@ -33,6 +35,7 @@ export function WeeklyDigestPanel() {
   const { data, loading, saveSettings, saveDraft, schedule, unschedule, sendNow, sendTest } = useEmailDigest();
   const { data: contactData } = useEmailContacts();
   const { data: staff } = useStaffDirectory();
+  const { data: engagement } = useEmailEngagement();
   const { settings, digests, current, audience } = data;
 
   const [subject, setSubject] = useState('');
@@ -84,7 +87,8 @@ export function WeeklyDigestPanel() {
     { key: 'recipients', header: 'Delivered', render: (r: Digest) => r.status === 'sent' || r.status === 'sending'
       ? <span>{r.sent_count || (r.status === 'sending' ? '…' : 0)} / {r.recipient_count}{r.failed_count ? <span className="text-destructive"> · {r.failed_count} failed</span> : null}</span>
       : '—' },
-  ], []);
+    { key: 'engagement', header: 'Opens & clicks', render: (r: Digest) => engagementSummary(engagement.digests[r.id]) ?? '—' },
+  ], [engagement]);
 
   if (loading) return <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
 

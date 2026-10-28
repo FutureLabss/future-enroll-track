@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { useEmailEngagement } from '@/hooks/useEmailEngagement';
+import { engagementSummary } from '@/lib/engagement';
 import { useOnboarding, type OnboardingJourney, type OnboardingStep, type StepDraft } from '@/hooks/useOnboarding';
 import { DataTable } from '@/components/shared/DataTable';
 import { Badge } from '@/components/ui/badge';
@@ -34,6 +36,7 @@ const EMAIL_RE = /^[^@\s<>]+@[^@\s<>]+\.[^@\s<>]+$/;
 export function OnboardingPanel() {
   const { data, loading, setEnabled, saveStep, removeStep, stopJourney, sendTest } = useOnboarding();
   const { enabled, steps, stepStats, journeys } = data;
+  const { data: engagement } = useEmailEngagement();
   const [editing, setEditing] = useState<StepDraft | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<OnboardingStep | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -103,6 +106,7 @@ export function OnboardingPanel() {
         {steps.length === 0 && <p className="text-sm text-muted-foreground">No emails yet.</p>}
         {steps.map(s => {
           const st = stepStats[s.id];
+          const opens = engagementSummary(engagement.steps[s.id]);
           return (
             <Card key={s.id} className={s.active ? '' : 'opacity-60'}>
               <CardContent className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between">
@@ -113,6 +117,7 @@ export function OnboardingPanel() {
                   <p className="text-xs text-muted-foreground">
                     {st ? `${st.sent} sent${st.queued ? ` · ${st.queued} queued` : ''}${st.failed ? ` · ${st.failed} failed` : ''}${st.skipped ? ` · ${st.skipped} skipped` : ''}` : 'Not sent yet'}
                   </p>
+                  {opens && <p className="text-xs text-muted-foreground">{opens}</p>}
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <Switch aria-label={`Include “${s.subject}”`} checked={s.active}

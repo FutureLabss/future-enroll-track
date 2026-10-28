@@ -20,6 +20,13 @@ vi.mock('@/hooks/useEmailDigest', () => ({
   }),
 }));
 
+vi.mock('@/hooks/useEmailEngagement', () => ({
+  useEmailEngagement: () => ({ data: {
+    digests: { d1: { sent: 39, delivered: 38, opened: 20, clicked: 6, bounced: 1, complained: 0 } },
+    steps: { w: { sent: 12, delivered: 12, opened: 9, clicked: 3, bounced: 0, complained: 1 } },
+  }, loading: false }),
+}));
+
 vi.mock('@/hooks/useEmailContacts', () => ({
   useEmailContacts: () => ({
     data: {
@@ -75,6 +82,7 @@ describe('WeeklyDigestPanel', () => {
     expect(screen.getByText(/30 imported · 11 leads · 1 staff · 2 unsubscribed/)).toBeInTheDocument();
     expect(screen.getByText('Week 1 news')).toBeInTheDocument();
     expect(screen.getByText(/1 failed/)).toBeInTheDocument();
+    expect(screen.getByText('20 opened (51%) · 6 clicked · 1 bounced')).toBeInTheDocument();
   });
 
   it('turning the only list off stops emailing imported contacts', async () => {

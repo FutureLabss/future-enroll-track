@@ -31,6 +31,7 @@ import { CohortSetupGapsAlert } from '@/components/cohort/CohortSetupGapsAlert';
 import { PrimaryTutorSelect } from '@/components/cohort/PrimaryTutorSelect';
 import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
+import { StudentRiskPanel } from '@/components/classroom/StudentRiskPanel';
 import {
   Users, BookOpen, Calendar, ClipboardList, BarChart2, UserPlus, Loader2,
   GraduationCap, LayoutList, Layers, Plus, Pencil, Ban, CheckCircle, PlayCircle,
@@ -1450,6 +1451,7 @@ export default function ClassroomDetailPage() {
 
         {/* STUDENTS */}
         <TabsContent value="students">
+          <StudentRiskPanel classroomId={id!} />
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <div className="text-sm text-muted-foreground">
               {(() => {

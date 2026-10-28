@@ -163,6 +163,12 @@ Students must exist in **`classroom_students`** to see a classroom. Adding to `c
 - One suppression list per hub, `email_suppressions`, shared by the digest, onboarding and CRM leads. Every marketing email carries the signed `email-unsubscribe` link (`_shared/digestEmail.ts`); a new sender must check suppressions and use the same token.
 - Onboarding (`onboarding_*`, `send-onboarding-emails`, 10-minute cron): `trg_start_onboarding` opens one journey per person per hub on their **first** enrollment, only while the hub has it switched on, never back-filled. Steps are due N days after joining at 09:00 WAT; anything more than 3 days late is skipped, not sent.
 - `send-weekly-digest` and `send-onboarding-emails` run with `verify_jwt = false`: the cron authenticates with the `crm_cron_secret` vault secret, and admin calls are checked inside the function.
+- Opens, clicks, bounces and complaints arrive through the one Resend webhook, `resend-marketing-webhook`, which calls `record_email_event` for digest/onboarding deliveries and handles CRM deliveries itself. A permanent bounce or complaint suppresses the address via `suppress_email`. Store Resend's message id as `provider_message_id` on any new delivery table and add it to `record_email_event`.
+
+### Students who need attention
+- `student_risk_flags`, refreshed daily at 08:30 WAT by `refresh_student_risk_flags()` (pg_cron): absent from the cohort's last 2 countable sessions, or a published assignment 12h+ past due with no submission. Absence means **no** `attendance_records` row, since only present/late/excused are stored.
+- A session where under half the cohort marked in is not counted against anyone (in Oct 2026 several cohorts had 2-3 of 12 marking in, so attendance capture, not truancy). `get_student_risk_flags` reports those sessions to the tutor instead.
+- New flags notify the cohort's primary tutor (else its teaching staff) once per cohort per run; flags resolve on their own, and tutors can dismiss one.
 
 ---
 

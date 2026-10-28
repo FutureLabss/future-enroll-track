@@ -26,6 +26,13 @@ vi.mock('@/hooks/useOnboarding', () => ({
   }),
 }));
 
+vi.mock('@/hooks/useEmailEngagement', () => ({
+  useEmailEngagement: () => ({ data: {
+    digests: { d1: { sent: 39, delivered: 38, opened: 20, clicked: 6, bounced: 1, complained: 0 } },
+    steps: { w: { sent: 12, delivered: 12, opened: 9, clicked: 3, bounced: 0, complained: 1 } },
+  }, loading: false }),
+}));
+
 describe('OnboardingPanel', () => {
   beforeEach(() => { vi.clearAllMocks(); enabled = false; });
 
@@ -35,6 +42,7 @@ describe('OnboardingPanel', () => {
     expect(screen.getByText('Day 7 · 09:00 WAT')).toBeInTheDocument();
     expect(screen.getByText('12 sent · 2 queued · 1 failed')).toBeInTheDocument();
     expect(screen.getByText('Not sent yet')).toBeInTheDocument();
+    expect(screen.getByText('9 opened (75%) · 3 clicked · 1 marked as spam')).toBeInTheDocument();
     expect(screen.getByText('ada@example.com')).toBeInTheDocument();
     expect(screen.getAllByText('1 of 1')).toHaveLength(2);
     expect(screen.getByText('unsubscribed')).toBeInTheDocument();

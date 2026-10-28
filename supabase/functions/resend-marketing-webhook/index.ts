@@ -8,6 +8,13 @@ Deno.serve(async (req) => {
   try { event = new Webhook(secret).verify(raw, { "svix-id": req.headers.get("svix-id") || "", "svix-timestamp": req.headers.get("svix-timestamp") || "", "svix-signature": req.headers.get("svix-signature") || "" }); }
   catch { return new Response("Invalid signature", { status: 401 }); }
   const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  // Digest and onboarding emails, plus suppression on a permanent bounce or complaint for every kind.
+  const { error: recordError } = await db.rpc("record_email_event", {
+    p_message_id: event.data?.email_id ?? "",
+    p_type: event.type,
+    p_permanent: event.data?.bounce?.type !== "Transient",
+  });
+  if (recordError) return new Response(recordError.message, { status: 500 });
   const { data: delivery } = await db.from("marketing_email_deliveries").select("*").eq("provider_message_id", event.data?.email_id).maybeSingle();
   if (!delivery) return new Response("ok");
   const at = new Date().toISOString(); const changes: Record<string, unknown> = { status: event.type };

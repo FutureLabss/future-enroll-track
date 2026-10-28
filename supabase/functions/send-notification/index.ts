@@ -44,7 +44,7 @@ async function sendEmail(to: string, subject: string, html: string) {
 
 // Overdue messages escalate (check-due-reminders sends one per step): each says what
 // happens next and when, instead of repeating the same reminder.
-function overdueStage(data: Record<string, any>): { subject: string; heading: string; message: string } {
+function overdueStage(data: Record<string, unknown>): { subject: string; heading: string; message: string } {
   const step = Number(data.stage_day ?? 0);
   const days = Number(data.days_overdue ?? step);
   const pause = data.pause_date

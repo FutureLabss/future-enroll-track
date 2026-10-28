@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { untypedRpc } from '@/lib/untypedRpc';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatCard } from '@/components/shared/StatCard';
 import { Card, CardContent } from '@/components/ui/card';
@@ -71,7 +72,7 @@ export default function OutstandingInvoicesPage() {
   const { data: collection = new Map<string, Collection>() } = useQuery({
     queryKey: ['collection-details'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_collection_details' as any);
+      const { data, error } = await untypedRpc('get_collection_details');
       if (error) throw error;
       return new Map(((data as Collection[]) || []).map(c => [c.enrollment_id, c]));
     },

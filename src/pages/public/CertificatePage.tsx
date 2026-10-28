@@ -34,7 +34,7 @@ export default function CertificatePage() {
 
   return (
     <div className="min-h-screen bg-muted/40 px-4 py-6 print:bg-white print:p-0">
-      <style>{'@page { size: A4 landscape; margin: 0; } @media print { .certificate-sheet { width: 297mm; height: 210mm; } }'}</style>
+      <style>{"@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;800&display=swap'); @page { size: A4 landscape; margin: 0; } @media print { .certificate-frame { width: 297mm; } .certificate-sheet { transform: none !important; } }"}</style>
       <div className="mx-auto mb-4 flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between print:hidden">
         {cert.revoked ? (
           <p className="flex items-center gap-2 font-medium text-destructive">

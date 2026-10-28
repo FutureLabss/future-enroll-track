@@ -1,3 +1,5 @@
+import { useLayoutEffect, useRef, useState } from 'react';
+
 export interface CertificateData {
   code: string;
   student_name: string;
@@ -12,53 +14,93 @@ export interface CertificateData {
   revoked_at: string | null;
 }
 
-const longDate = (iso: string) =>
-  new Date(iso.length === 10 ? `${iso}T12:00:00Z` : iso).toLocaleDateString('en-NG', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Africa/Lagos' });
+// The official FutureLabs layout (sample supplied Oct 2026). Drawn on a fixed
+// 1123×794 px A4-landscape sheet and scaled to fit, so screen and PDF match.
+const PAGE_W = 1123;
+const SIGNATORY = { name: 'Udim Manasseh', title: 'Founder FutureLabs' };
+// Drop the signature scan here (transparent PNG); the line stays blank until it exists.
+const SIGNATURE_SRC = '/certificates/udim-manasseh-signature.png';
 
-// Placeholder layout until the final design arrives: A4 landscape, prints as one page.
-export function CertificateView({ cert, verifyUrl }: { cert: CertificateData; verifyUrl: string }) {
-  const hub = cert.hub_name || 'FutureLabs';
+const shortDate = (iso: string) =>
+  new Date(iso.length === 10 ? `${iso}T12:00:00Z` : iso).toLocaleDateString('en-NG', { timeZone: 'Africa/Lagos' });
+
+function Wordmark({ logoUrl, hub }: { logoUrl: string | null; hub: string }) {
+  if (logoUrl) return <img src={logoUrl} alt={hub} className="h-[52px] object-contain" />;
   return (
-    <div className="certificate-sheet relative mx-auto aspect-[297/210] w-full max-w-5xl bg-white text-slate-900 shadow-lg print:max-w-none print:shadow-none">
-      <div className="absolute inset-3 border-[3px] border-indigo-900 sm:inset-5" />
-      <div className="absolute inset-5 border border-indigo-900/40 sm:inset-8" />
-      <div className="relative flex h-full flex-col items-center justify-between px-[8%] py-[6%] text-center">
-        <div className="flex flex-col items-center gap-2">
-          {cert.hub_logo_url
-            ? <img src={cert.hub_logo_url} alt={hub} className="h-[clamp(28px,6vw,56px)] object-contain" />
-            : <p className="text-[clamp(14px,2.2vw,22px)] font-bold tracking-wide text-indigo-900">{hub}</p>}
-          <p className="text-[clamp(18px,4vw,42px)] font-semibold uppercase tracking-[0.2em] text-indigo-950">Certificate of Completion</p>
+    <p className="text-[50px] leading-none tracking-[1px] text-[#F47920]">
+      <span className="font-extrabold">FUTURE</span><span className="font-light">LABS</span>
+    </p>
+  );
+}
+
+export function CertificateView({ cert, verifyUrl }: { cert: CertificateData; verifyUrl: string }) {
+  const frame = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  const [signature, setSignature] = useState(true);
+  const hub = cert.hub_name || 'FutureLabs';
+
+  useLayoutEffect(() => {
+    const el = frame.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const fit = () => setScale(el.clientWidth / PAGE_W || 1);
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <div ref={frame} className="certificate-frame relative mx-auto aspect-[1123/794] w-full max-w-5xl overflow-hidden shadow-lg print:max-w-none print:shadow-none">
+      <div className="certificate-sheet absolute left-0 top-0 h-[794px] w-[1123px] origin-top-left overflow-hidden bg-white font-['Poppins',_'Inter',_sans-serif] text-[#111]"
+        style={{ transform: `scale(${scale})` }}>
+        <div aria-hidden className="absolute inset-0 bg-[linear-gradient(115deg,transparent_58%,rgba(15,23,42,0.02)_58%,rgba(15,23,42,0.02)_70%,transparent_70%),linear-gradient(160deg,transparent_20%,rgba(15,23,42,0.018)_20%,rgba(15,23,42,0.018)_34%,transparent_34%)]" />
+        <div aria-hidden className="absolute left-[360px] top-[200px] h-[470px] w-[300px] select-none opacity-[0.13]">
+          <div className="absolute left-[40px] top-[70px] h-[400px] w-[110px] rounded-[36px] bg-[#F47920]" />
+          <div className="absolute left-[40px] top-[70px] h-[105px] w-[260px] rounded-[36px] bg-[#F47920]" />
+          <div className="absolute left-[175px] top-0 h-[62px] w-[62px] rounded-full bg-[#F47920]" />
         </div>
 
-        <div className="flex flex-col items-center gap-[clamp(4px,1vw,12px)]">
-          <p className="text-[clamp(10px,1.5vw,16px)] text-slate-600">This is to certify that</p>
-          <p className="font-serif text-[clamp(22px,5vw,54px)] italic leading-tight text-indigo-950">{cert.student_name}</p>
-          <p className="text-[clamp(10px,1.5vw,16px)] text-slate-600">has successfully completed</p>
-          <p className="text-[clamp(14px,2.6vw,28px)] font-semibold">{cert.program_name}</p>
-          {cert.cohort_label && <p className="text-[clamp(9px,1.2vw,13px)] text-slate-500">{cert.cohort_label}</p>}
+        <div className="absolute inset-[26px] border-[5px] border-[#F47920]" />
+        <div className="absolute inset-[38px] border-2 border-[#F47920]" />
+
+        <div className="absolute inset-0 flex flex-col items-center pt-[108px]">
+          <Wordmark logoUrl={cert.hub_logo_url} hub={hub} />
+          <div className="mt-[30px] h-[3px] w-[580px] bg-[#F47920]" />
+          <p className="mt-[14px] text-[30px]">Verified Certificate of Completion</p>
+          <p className="mt-[34px] max-w-[900px] text-center text-[44px] font-medium leading-[1.1]">{cert.program_name}</p>
+          <p className="mt-[6px] text-[24px]">Digital Certificate</p>
+          <p className="mt-[44px] text-[14px] font-medium tracking-[7px]">CERTIFICATE OF COMPLETION</p>
+          <p className="mt-[20px] text-[20px] font-medium">Awarded to</p>
+          <p className="mt-[14px] max-w-[880px] text-center text-[32px] font-medium leading-[1.15]">{cert.student_name}</p>
+          <div className="mt-[12px] h-[3px] w-[735px] bg-[#F47920]" />
         </div>
 
-        <div className="flex w-full items-end justify-between gap-4 text-[clamp(8px,1.1vw,12px)] text-slate-600">
-          <div className="text-left">
-            <p className="font-medium text-slate-900">{longDate(cert.completed_on || cert.issued_at)}</p>
-            <p>Date</p>
-          </div>
-          <div className="text-center">
-            <div className="mb-1 h-px w-[clamp(90px,18vw,200px)] bg-slate-400" />
-            <p className="font-medium text-slate-900">{cert.issued_by_name || hub}</p>
-            <p>for {hub}</p>
-          </div>
-          <div className="text-right">
-            <p className="font-mono font-medium text-slate-900">{cert.code}</p>
-            <p className="break-all">Verify at {verifyUrl.replace(/^https?:\/\//, '')}</p>
-          </div>
+        <div className="absolute left-[66px] top-[594px] w-[205px]">
+          <p className="w-[170px] text-center text-[14px] font-semibold">{shortDate(cert.completed_on || cert.issued_at)}</p>
+          <div className="mb-[6px] mt-[2px] h-[3px] w-[170px] bg-[#F47920]" />
+          <p className="text-[12.5px] leading-[1.3]">{hub} has confirmed the participation of the individual in the program</p>
         </div>
+
+        <div className="absolute left-[790px] top-[548px] flex w-[170px] flex-col items-center">
+          <div className="flex h-[62px] items-end justify-center">
+            {signature && <img src={SIGNATURE_SRC} alt="" className="h-[62px] object-contain" onError={() => setSignature(false)} />}
+          </div>
+          <div className="mb-[6px] h-[3px] w-[170px] bg-[#F47920]" />
+          <p className="text-[13.5px] font-semibold">{SIGNATORY.name}</p>
+          <p className="text-[13.5px]">{SIGNATORY.title}</p>
+        </div>
+
+        {/* Not on the sample: a printed copy needs its ID to be checkable. */}
+        <p className="absolute top-[722px] w-full text-center text-[10px] text-slate-500">
+          Certificate ID {cert.code} · Verify at {verifyUrl.replace(/^https?:\/\//, '')}
+        </p>
+
+        {cert.revoked && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <p className="-rotate-12 rounded border-[6px] border-red-600 px-10 py-3 text-[72px] font-bold uppercase tracking-widest text-red-600/80">Revoked</p>
+          </div>
+        )}
       </div>
-      {cert.revoked && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <p className="-rotate-12 rounded border-4 border-red-600 px-6 py-2 text-[clamp(24px,6vw,64px)] font-bold uppercase tracking-widest text-red-600/80">Revoked</p>
-        </div>
-      )}
     </div>
   );
 }

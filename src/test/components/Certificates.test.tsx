@@ -44,9 +44,11 @@ describe('CertificateView', () => {
     render(<CertificateView cert={cert} verifyUrl="https://admin.futurelabs.ng/certificate/AB12C-9F00D" />);
     expect(screen.getByText('Ada Obi')).toBeInTheDocument();
     expect(screen.getByText('Web Development')).toBeInTheDocument();
-    expect(screen.getByText('25 October 2026')).toBeInTheDocument();
-    expect(screen.getByText('AB12C-9F00D')).toBeInTheDocument();
-    expect(screen.getByText('Verify at admin.futurelabs.ng/certificate/AB12C-9F00D')).toBeInTheDocument();
+    expect(screen.getByText('25/10/2026')).toBeInTheDocument();
+    expect(screen.getByText('Verified Certificate of Completion')).toBeInTheDocument();
+    expect(screen.getByText('Udim Manasseh')).toBeInTheDocument();
+    expect(screen.getByText('FutureLabs has confirmed the participation of the individual in the program')).toBeInTheDocument();
+    expect(screen.getByText('Certificate ID AB12C-9F00D · Verify at admin.futurelabs.ng/certificate/AB12C-9F00D')).toBeInTheDocument();
     expect(screen.queryByText('Revoked')).not.toBeInTheDocument();
   });
 

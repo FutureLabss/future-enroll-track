@@ -176,7 +176,7 @@ Students must exist in **`classroom_students`** to see a classroom. Adding to `c
 
 ### Certificates
 - Issued **one student at a time**, never automatically, and only by the CEO (superadmin), a training manager of the hub, or a tutor of the student's cohort (primary tutor or the classroom's teaching staff). `can_issue_certificate` is the single check; plain hub admins can view but not issue.
-- Names are snapshotted at issue; to correct one, revoke (with a reason) and reissue. `/certificate/<code>` is public and verifies via `verify_certificate` (granted to anon). `CertificateView` is a placeholder layout until the official design is supplied.
+- Names are snapshotted at issue; to correct one, revoke (with a reason) and reissue. `/certificate/<code>` is public and verifies via `verify_certificate` (granted to anon). `CertificateView` follows the official FutureLabs sample (Oct 2026): a fixed 1123×794 px sheet scaled to fit, signed by Udim Manasseh, Founder. The signature scan lives at `public/certificates/udim-manasseh-signature.png`; the line stays blank if it's missing. The certificate ID line at the bottom isn't on the sample but keeps printed copies verifiable.
 
 ---
 

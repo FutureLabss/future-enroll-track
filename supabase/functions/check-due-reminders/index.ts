@@ -6,8 +6,9 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Overdue installments older than this stop generating daily emails; they
-// remain visible on the outstanding-invoices dashboard for manual follow-up.
+// Reminders before the due date (7, 3, 1 days and the day itself) are chosen here.
+// Overdue ones escalate step by step instead of daily: overdue_escalations_due (DB)
+// picks the next step per student, and each send is recorded so it isn't repeated.
 const OVERDUE_LOOKBACK_DAYS = 90;
 // External sends run in parallel batches of this size.
 const SEND_CONCURRENCY = 10;
@@ -72,7 +73,7 @@ Deno.serve(async (req) => {
       let notifType = "";
 
       if (dueDate < todayStr) {
-        notifType = "overdue";
+        continue;
       } else if (dueDate === todayStr) {
         notifType = "payment_reminder";
       } else if (reminderDates.includes(dueDate)) {
@@ -121,6 +122,23 @@ Deno.serve(async (req) => {
       toSend.push(c);
     }
 
+    type Escalation = {
+      enrollment_id: string; invoice_id: string; installment_id: string; due_date: string; amount: number;
+      days_overdue: number; stage_day: number; pause_date: string; access_paused: boolean;
+      guardian_name: string | null; guardian_phone: string | null;
+    };
+    const { data: escalations, error: escError } = await supabase.rpc("overdue_escalations_due");
+    if (escError) throw escError;
+    const escalationByEnrollment = new Map<string, Escalation>();
+    for (const e of (escalations as Escalation[]) || []) {
+      escalationByEnrollment.set(e.enrollment_id, e);
+      toSend.push({ enrollmentId: e.enrollment_id, invoiceId: e.invoice_id, notifType: "overdue", dueDate: e.due_date, amount: Number(e.amount) });
+    }
+    const stageExtra = (c: Candidate) => {
+      const e = c.notifType === "overdue" ? escalationByEnrollment.get(c.enrollmentId) : undefined;
+      return e ? { stage_day: e.stage_day, days_overdue: e.days_overdue, pause_date: e.pause_date, access_paused: e.access_paused } : {};
+    };
+
     // Send concurrently in bounded batches via the send-notification function
     const fnUrl = `${supabaseUrl}/functions/v1/send-notification`;
     let sentCount = 0;
@@ -139,10 +157,28 @@ Deno.serve(async (req) => {
               channel: "both" as const,
               enrollment_id: c.enrollmentId,
               invoice_id: c.invoiceId,
-              extra: { due_date: c.dueDate, installment_amount: c.amount },
+              extra: { due_date: c.dueDate, installment_amount: c.amount, ...stageExtra(c) },
             }),
           })
-            .then((r) => r.ok)
+            .then(async (r) => {
+              const esc = c.notifType === "overdue" ? escalationByEnrollment.get(c.enrollmentId) : undefined;
+              if (!r.ok || !esc) return r.ok;
+              await supabase.rpc("record_payment_escalation", {
+                p_enrollment_id: esc.enrollment_id, p_installment_id: esc.installment_id, p_stage_day: esc.stage_day,
+              });
+              // From day 30 the guardian on the enrollment hears too (WhatsApp only: no guardian email).
+              if (esc.stage_day >= 30 && esc.guardian_phone) {
+                await fetch(fnUrl, {
+                  method: "POST",
+                  headers: { Authorization: `Bearer ${serviceRoleKey}`, "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    type: "overdue_guardian", channel: "whatsapp", enrollment_id: c.enrollmentId, invoice_id: c.invoiceId,
+                    extra: { ...stageExtra(c), guardian_name: esc.guardian_name },
+                  }),
+                }).catch(() => undefined);
+              }
+              return true;
+            })
             .catch(() => false)
         )
       );
@@ -150,7 +186,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, reminders_sent: sentCount }),
+      JSON.stringify({ success: true, reminders_sent: sentCount, overdue_steps_due: escalationByEnrollment.size }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: unknown) {

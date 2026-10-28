@@ -6,6 +6,8 @@ import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { AppLayout } from "@/components/layout/AppLayout";
 
 const LoginPage = lazy(() => import("@/pages/auth/LoginPage"));
+const ReconnectPage = lazy(() => import("@/pages/public/ReconnectPage"));
+const DropoutsPage = lazy(() => import("@/pages/admin/DropoutsPage"));
 const CertificatesPage = lazy(() => import("@/pages/admin/CertificatesPage"));
 const CertificatePage = lazy(() => import("@/pages/public/CertificatePage"));
 const ResetPasswordPage = lazy(() => import("@/pages/auth/ResetPasswordPage"));
@@ -169,6 +171,7 @@ const App = () => (
               <Route path="/set-password" element={<SetPasswordPage />} />
               <Route path="/demo" element={<DemoPage />} />
               <Route path="/certificate/:code" element={<CertificatePage />} />
+              <Route path="/reconnect/:token" element={<ReconnectPage />} />
               <Route path="/enroll/complete/:id" element={<LegacyEnrollRedirect />} />
               <Route path="/" element={<ProtectedRoute><RoleRedirect /></ProtectedRoute>} />
 
@@ -215,6 +218,7 @@ const App = () => (
                   <Route path="/admin/cohorts" element={<CohortsPage />} />
                   <Route path="/admin/cohorts/:id" element={<CohortDetailPage />} />
                   <Route path="/admin/certificates" element={<CertificatesPage />} />
+                  <Route path="/admin/dropouts" element={<DropoutsPage />} />
                   <Route path="/admin/staff-invitations" element={<StaffInvitationsAdminPage />} />
                 </Route>
 

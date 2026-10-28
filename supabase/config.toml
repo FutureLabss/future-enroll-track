@@ -41,3 +41,6 @@ verify_jwt = false  # public unsubscribe links are protected by signed tokens
 
 [functions.send-certificate-email]
 verify_jwt = true
+
+[functions.send-dropout-outreach]
+verify_jwt = false  # daily cron, authenticated with the CRM cron secret

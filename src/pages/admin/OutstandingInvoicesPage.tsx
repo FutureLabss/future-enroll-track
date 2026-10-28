@@ -40,6 +40,16 @@ type Row = {
   invoice_status: string;
 };
 
+type Collection = {
+  enrollment_id: string;
+  access_paused: boolean;
+  pause_date: string | null;
+  on_hold: boolean;
+  guardian_name: string | null;
+  guardian_phone: string | null;
+  messages_sent: number;
+};
+
 const fmt = (n: number) => `₦${Number(n || 0).toLocaleString('en-NG')}`;
 
 export default function OutstandingInvoicesPage() {
@@ -54,6 +64,16 @@ export default function OutstandingInvoicesPage() {
       const { data, error } = await supabase.rpc('list_outstanding_invoices' as any, { p_only_overdue: false });
       if (error) throw error;
       return (data as Row[]) || [];
+    },
+    staleTime: 30_000,
+  });
+
+  const { data: collection = new Map<string, Collection>() } = useQuery({
+    queryKey: ['collection-details'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_collection_details' as any);
+      if (error) throw error;
+      return new Map(((data as Collection[]) || []).map(c => [c.enrollment_id, c]));
     },
     staleTime: 30_000,
   });
@@ -150,7 +170,16 @@ export default function OutstandingInvoicesPage() {
                       <TableCell>{r.next_due_date ? new Date(r.next_due_date).toLocaleDateString('en-NG') : '—'}</TableCell>
                       <TableCell>
                         {r.is_overdue ? (
-                          <Badge variant="destructive">Overdue {r.days_overdue}d</Badge>
+                          <div className="space-y-1">
+                            <Badge variant="destructive">Overdue {r.days_overdue}d</Badge>
+                            {(() => {
+                              const c = collection.get(r.enrollment_id);
+                              if (!c || c.on_hold) return null;
+                              if (c.access_paused) return <div className="text-xs font-medium text-destructive">Access paused</div>;
+                              if (c.pause_date && r.days_overdue >= 7) return <div className="text-xs text-muted-foreground">Access pauses {new Date(`${c.pause_date}T00:00:00`).toLocaleDateString('en-NG')}</div>;
+                              return null;
+                            })()}
+                          </div>
                         ) : (
                           <Badge variant="secondary">Outstanding</Badge>
                         )}
@@ -175,6 +204,8 @@ export default function OutstandingInvoicesPage() {
                           <Button size="sm" onClick={() => setFollowup({
                             enrollment_id: r.enrollment_id, full_name: r.full_name, email: r.email, phone: r.phone,
                             outstanding: Number(r.outstanding), days_overdue: r.days_overdue,
+                            guardian_name: collection.get(r.enrollment_id)?.guardian_name,
+                            guardian_phone: collection.get(r.enrollment_id)?.guardian_phone,
                           })}>Follow up</Button>
                           <Button asChild size="sm" variant="outline">
                             <Link to={`/admin/invoices/${r.invoice_id}`}>View</Link>

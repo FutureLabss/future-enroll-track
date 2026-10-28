@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { ArrowLeft, CheckCircle, XCircle, ExternalLink, Trash2, Pencil, ArrowLeftRight, Eye, ClipboardList, LockKeyhole, Loader2, Save } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, ExternalLink, Trash2, Pencil, ArrowLeftRight, Eye, ClipboardList, LockKeyhole, Loader2, Save, FilePlus, Send, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface FieldValue {
@@ -30,6 +30,7 @@ export default function EnrollmentDetailPage() {
   const [showEvidence, setShowEvidence] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [previewing, setPreviewing] = useState(false);
+  const [sendingSetup, setSendingSetup] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState({ full_name: '', email: '', phone: '', address: '', guardian_name: '', guardian_phone: '' });
   const [saving, setSaving] = useState(false);
@@ -106,10 +107,38 @@ export default function EnrollmentDetailPage() {
     }
   };
 
+  const setupLink = `https://admin.futurelabs.ng/students/${id}`;
+
+  const handleSendSetupLink = async () => {
+    setSendingSetup(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-notification', {
+        body: { type: 'account_setup', channel: 'both', enrollment_id: id },
+      });
+      if (error || data?.error) throw new Error(data?.error || error?.message);
+      const emailResult = (data?.results || []).find((r: string) => r.startsWith('email_'));
+      if (emailResult !== 'email_sent') throw new Error(emailResult || 'Email was not sent');
+      toast.success(`Account setup link sent to ${enrollment.email}`);
+    } catch (err: any) {
+      toast.error('Could not send setup link: ' + err.message);
+    } finally {
+      setSendingSetup(false);
+    }
+  };
+
+  const handleCopySetupLink = async () => {
+    try {
+      await navigator.clipboard.writeText(setupLink);
+      toast.success('Setup link copied');
+    } catch {
+      toast.error(`Could not copy — the link is ${setupLink}`);
+    }
+  };
+
   const { data: pageData, isLoading: loading } = useQuery({
     queryKey: ['enrollment-detail', id],
     queryFn: async () => {
-      const [eRes, fRes, rRes] = await Promise.all([
+      const [eRes, fRes, rRes, iRes] = await Promise.all([
         supabase.from('enrollments')
           .select('*, programs(program_name, hub_id, hubs(name)), cohorts(cohort_label), organizations(organization_name)')
           .eq('id', id!).single(),
@@ -123,6 +152,10 @@ export default function EnrollmentDetailPage() {
           .eq('visible_to_student', false)
           .gte('sort_order', 100)
           .order('sort_order'),
+        supabase.from('invoices')
+          .select('id', { count: 'exact', head: true })
+          .eq('enrollment_id', id!)
+          .neq('status', 'cancelled'),
       ]);
       if (eRes.error) throw eRes.error;
       let switchHistory: any[] = [];
@@ -141,7 +174,7 @@ export default function EnrollmentDetailPage() {
         }
       }
       const reportingFields = (rRes.data || []).filter((field: any) => !field.hub_id || field.hub_id === eRes.data.programs?.hub_id);
-      return { enrollment: eRes.data, fieldValues: (fRes.data as FieldValue[]) || [], reportingFields, switchHistory };
+      return { enrollment: eRes.data, fieldValues: (fRes.data as FieldValue[]) || [], reportingFields, switchHistory, activeInvoiceCount: iRes.count ?? 0 };
     },
     enabled: !!id,
     staleTime: 30_000,
@@ -150,6 +183,7 @@ export default function EnrollmentDetailPage() {
   const fieldValues = pageData?.fieldValues ?? [];
   const reportingFields = pageData?.reportingFields ?? [];
   const switchHistory = pageData?.switchHistory ?? [];
+  const activeInvoiceCount = pageData?.activeInvoiceCount ?? 0;
 
   const openReporting = () => {
     const values: Record<string, string> = {};
@@ -288,10 +322,25 @@ export default function EnrollmentDetailPage() {
         title={enrollment.full_name}
         description={`Enrollment details — ${enrollment.email}`}
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="ghost" onClick={() => navigate('/admin/enrollments')}>
               <ArrowLeft className="h-4 w-4 mr-2" /> Back
             </Button>
+            {activeInvoiceCount === 0 && enrollment.enrollment_status !== 'cancelled' && (
+              <Button onClick={() => navigate(`/admin/invoices/new?enrollment=${enrollment.id}`)}>
+                <FilePlus className="h-4 w-4 mr-2" /> Create Invoice
+              </Button>
+            )}
+            {!enrollment.user_id && (
+              <>
+                <Button variant="outline" onClick={handleSendSetupLink} disabled={sendingSetup}>
+                  <Send className="h-4 w-4 mr-2" /> {sendingSetup ? 'Sending...' : 'Send Setup Link'}
+                </Button>
+                <Button variant="outline" onClick={handleCopySetupLink}>
+                  <Link2 className="h-4 w-4 mr-2" /> Copy Link
+                </Button>
+              </>
+            )}
             {reportingFields.length > 0 && (
               <Button variant="outline" onClick={openReporting}>
                 <Pencil className="h-4 w-4 mr-2" /> Program Reporting

@@ -18,7 +18,8 @@ export default function CertificatePage() {
       return data as CertificateData | null;
     },
   });
-  const url = typeof window !== 'undefined' ? window.location.href.split('?')[0] : '';
+  // Printed and shared links always use the live site, even from a preview or local copy.
+  const url = `https://admin.futurelabs.ng/certificate/${code.toUpperCase()}`;
 
   if (isLoading) return <div className="flex min-h-screen items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
 

@@ -9,11 +9,17 @@ export interface CertificateState {
   issued_at: string | null;
   issued_by_name: string | null;
   emailed_at: string | null;
-  can_issue: boolean;
+  request_id: string | null;
+  requested_at: string | null;
+  requested_by_name: string | null;
+  outstanding: number;
+  can_request: boolean;
+  can_approve: boolean;
+  is_ceo: boolean;
 }
 
-// Certificate state for a list of enrollments, and whether the signed-in user may
-// issue (CEO, training manager, or the class tutor).
+// Certificate state for a list of enrollments. Tutors, training managers and hub
+// admins request; the CEO or a training manager approves (and may issue directly).
 export function useCertificates(enrollmentIds: string[]) {
   const queryClient = useQueryClient();
   const key = [...enrollmentIds].sort().join(',');
@@ -27,7 +33,10 @@ export function useCertificates(enrollmentIds: string[]) {
     enabled: enrollmentIds.length > 0,
   });
 
-  const refetch = () => queryClient.invalidateQueries({ queryKey: ['certificates'] });
+  const refetch = () => {
+    queryClient.invalidateQueries({ queryKey: ['certificates'] });
+    queryClient.invalidateQueries({ queryKey: ['certificate-requests'] });
+  };
 
   const sendEmail = async (certificateId: string) => {
     const res = await supabase.functions.invoke('send-certificate-email', { body: { certificate_id: certificateId } });
@@ -37,11 +46,25 @@ export function useCertificates(enrollmentIds: string[]) {
     return res.data as { sent_to: string };
   };
 
-  const issue = async (enrollmentId: string, studentName: string, email: boolean) => {
-    const { data, error } = await untypedRpc('issue_certificate', { p_enrollment_id: enrollmentId, p_student_name: studentName });
+  const issue = async (enrollmentId: string, studentName: string, email: boolean, feeOverride?: string) => {
+    const { data, error } = await untypedRpc('issue_certificate', {
+      p_enrollment_id: enrollmentId, p_student_name: studentName, p_fee_override: feeOverride || null,
+    });
     if (error) throw error;
     refetch();
     return email ? sendEmail(data as string) : null;
+  };
+
+  const request = async (enrollmentId: string, studentName: string, note: string) => {
+    const { error } = await untypedRpc('request_certificate', { p_enrollment_id: enrollmentId, p_student_name: studentName, p_note: note || null });
+    if (error) throw error;
+    refetch();
+  };
+
+  const cancelRequest = async (requestId: string) => {
+    const { error } = await untypedRpc('cancel_certificate_request', { p_request_id: requestId });
+    if (error) throw error;
+    refetch();
   };
 
   const revoke = async (certificateId: string, reason: string) => {
@@ -50,5 +73,8 @@ export function useCertificates(enrollmentIds: string[]) {
     refetch();
   };
 
-  return { data: new Map(data.map(c => [c.enrollment_id, c])), loading, error, refetch, issue, revoke, sendEmail };
+  return {
+    data: new Map(data.map(c => [c.enrollment_id, c])),
+    loading, error, refetch, issue, request, cancelRequest, revoke, sendEmail,
+  };
 }

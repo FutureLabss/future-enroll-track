@@ -296,8 +296,7 @@ export default function EnrollmentDetailPage() {
               <ArrowLeft className="h-4 w-4 mr-2" /> Back
             </Button>
             <CertificateAction enrollmentId={enrollment.id} studentName={enrollment.full_name}
-              programName={enrollment.programs?.program_name} state={certificates.data.get(enrollment.id)}
-              onIssue={certificates.issue} onRevoke={certificates.revoke} onResend={certificates.sendEmail} />
+              programName={enrollment.programs?.program_name} certs={certificates} />
             {reportingFields.length > 0 && (
               <Button variant="outline" onClick={openReporting}>
                 <Pencil className="h-4 w-4 mr-2" /> Program Reporting

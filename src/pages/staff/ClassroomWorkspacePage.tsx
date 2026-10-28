@@ -1227,8 +1227,7 @@ export default function ClassroomWorkspacePage() {
                   : <Badge variant="outline" className="bg-muted text-muted-foreground">No account</Badge>
                 },
                 { key: 'certificate', header: 'Certificate', exportable: false, render: (r: { id: string; full_name: string | null; email: string | null }) => (
-                  <CertificateAction enrollmentId={r.id} studentName={r.full_name || r.email || ''} state={certificates.data.get(r.id)}
-                    onIssue={certificates.issue} onRevoke={certificates.revoke} onResend={certificates.sendEmail} />
+                  <CertificateAction enrollmentId={r.id} studentName={r.full_name || r.email || ''} certs={certificates} />
                 )},
               ]}
               data={students}

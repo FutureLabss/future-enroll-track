@@ -1143,8 +1143,7 @@ export default function ClassroomDetailPage() {
       : <Badge variant="outline" className="text-muted-foreground">No account</Badge>
     },
     { key: 'certificate', header: 'Certificate', exportable: false, render: (r: { id: string; full_name: string | null; email: string | null }) => (
-      <CertificateAction enrollmentId={r.id} studentName={r.full_name || r.email || ''} state={certificates.data.get(r.id)}
-        onIssue={certificates.issue} onRevoke={certificates.revoke} onResend={certificates.sendEmail} />
+      <CertificateAction enrollmentId={r.id} studentName={r.full_name || r.email || ''} certs={certificates} />
     )},
     { key: 'actions', header: '', render: (r: any) => r.user_id ? (
       <Button size="sm" variant="ghost" className="h-7 px-2 text-muted-foreground hover:text-foreground" onClick={() => setSwitchModal({ open: true, student: r })} title="Switch classroom">

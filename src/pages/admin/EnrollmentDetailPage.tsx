@@ -16,6 +16,7 @@ import { ArrowLeft, CheckCircle, XCircle, ExternalLink, Trash2, Pencil, ArrowLef
 import { toast } from 'sonner';
 import { useCertificates } from '@/hooks/useCertificates';
 import { CertificateAction } from '@/components/certificates/CertificateAction';
+import { SwitchProgramDialog } from '@/components/enrollment/SwitchProgramDialog';
 
 interface FieldValue {
   id: string;
@@ -34,6 +35,7 @@ export default function EnrollmentDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [sendingSetup, setSendingSetup] = useState(false);
+  const [switchProgramOpen, setSwitchProgramOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState({ full_name: '', email: '', phone: '', address: '', guardian_name: '', guardian_phone: '' });
   const [saving, setSaving] = useState(false);
@@ -162,19 +164,25 @@ export default function EnrollmentDetailPage() {
       ]);
       if (eRes.error) throw eRes.error;
       let switchHistory: any[] = [];
-      if (eRes.data?.user_id) {
-        const { data: history } = await supabase
-          .from('audit_logs')
-          .select('id, details, created_at, user_id')
-          .eq('action', 'switch_classroom')
-          .filter('details->>student_id', 'eq', eRes.data.user_id)
-          .order('created_at', { ascending: false });
-        if (history && history.length > 0) {
-          const adminIds = [...new Set(history.map((h: any) => h.user_id).filter(Boolean))];
-          const { data: admins } = await supabase.from('profiles').select('user_id, full_name, email').in('user_id', adminIds);
-          const adminMap = new Map((admins || []).map((a: any) => [a.user_id, a]));
-          switchHistory = history.map((h: any) => ({ ...h, admin: adminMap.get(h.user_id) }));
-        }
+      const [classroomSwitches, programSwitches] = await Promise.all([
+        eRes.data?.user_id
+          ? supabase.from('audit_logs')
+            .select('id, action, details, created_at, user_id')
+            .eq('action', 'switch_classroom')
+            .filter('details->>student_id', 'eq', eRes.data.user_id)
+          : Promise.resolve({ data: [] }),
+        supabase.from('audit_logs')
+          .select('id, action, details, created_at, user_id')
+          .eq('action', 'switch_program')
+          .eq('entity_id', id!),
+      ]);
+      const history = [...(classroomSwitches.data || []), ...(programSwitches.data || [])]
+        .sort((a: { created_at: string }, b: { created_at: string }) => b.created_at.localeCompare(a.created_at));
+      if (history.length > 0) {
+        const adminIds = [...new Set(history.map((h: any) => h.user_id).filter(Boolean))];
+        const { data: admins } = await supabase.from('profiles').select('user_id, full_name, email').in('user_id', adminIds);
+        const adminMap = new Map((admins || []).map((a: any) => [a.user_id, a]));
+        switchHistory = history.map((h: any) => ({ ...h, admin: adminMap.get(h.user_id) }));
       }
       const reportingFields = (rRes.data || []).filter((field: any) => !field.hub_id || field.hub_id === eRes.data.programs?.hub_id);
       return { enrollment: eRes.data, fieldValues: (fRes.data as FieldValue[]) || [], reportingFields, switchHistory, activeInvoiceCount: iRes.count ?? 0 };
@@ -347,6 +355,11 @@ export default function EnrollmentDetailPage() {
             <CertificateAction enrollmentId={enrollment.id} studentName={enrollment.full_name}
               programName={enrollment.programs?.program_name} state={certificates.data.get(enrollment.id)}
               onIssue={certificates.issue} onRevoke={certificates.revoke} onResend={certificates.sendEmail} />
+            {!['cancelled', 'withdrawn'].includes(enrollment.enrollment_status) && (
+              <Button variant="outline" onClick={() => setSwitchProgramOpen(true)}>
+                <ArrowLeftRight className="h-4 w-4 mr-2" /> Switch Programme
+              </Button>
+            )}
             {reportingFields.length > 0 && (
               <Button variant="outline" onClick={openReporting}>
                 <Pencil className="h-4 w-4 mr-2" /> Program Reporting
@@ -483,12 +496,18 @@ export default function EnrollmentDetailPage() {
         </div>
       ))}
 
-      {/* Classroom Switch History */}
+      <SwitchProgramDialog
+        enrollment={switchProgramOpen ? { id: enrollment.id, full_name: enrollment.full_name, program_id: enrollment.program_id } : null}
+        onOpenChange={setSwitchProgramOpen}
+        onSwitched={() => queryClient.invalidateQueries({ queryKey: ['enrollment-detail', id] })}
+      />
+
+      {/* Programme / Classroom Switch History */}
       {switchHistory.length > 0 && (
         <div className="glass-card rounded-xl p-6 mb-6">
           <div className="flex items-center gap-2 mb-4">
             <ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
-            <h3 className="font-heading font-semibold text-lg">Classroom Switch History</h3>
+            <h3 className="font-heading font-semibold text-lg">Switch History</h3>
           </div>
           <div className="space-y-3">
             {switchHistory.map((h: any) => (
@@ -498,16 +517,17 @@ export default function EnrollmentDetailPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium">
-                    <span className="text-muted-foreground">{h.details.from_classroom_name || 'Unknown'}</span>
+                    <span className="text-muted-foreground">{(h.action === 'switch_program' ? h.details.from_program_name : h.details.from_classroom_name) || 'Unknown'}</span>
                     {' → '}
-                    <span>{h.details.to_classroom_name || 'Unknown'}</span>
+                    <span>{(h.action === 'switch_program' ? h.details.to_program_name : h.details.to_classroom_name) || 'Unknown'}</span>
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">{h.action === 'switch_program' ? 'Programme' : 'Classroom'}</span>
                   </p>
                   {h.details.reason && (
                     <p className="text-muted-foreground mt-0.5 italic">"{h.details.reason}"</p>
                   )}
                   <p className="text-xs text-muted-foreground mt-1">
                     By <span className="font-medium text-foreground">{h.admin?.full_name || h.admin?.email || 'Admin'}</span>
-                    {' · '}{new Date(h.created_at).toLocaleString()}
+                    {' · '}{new Date(h.created_at).toLocaleString('en-NG')}
                   </p>
                 </div>
               </div>

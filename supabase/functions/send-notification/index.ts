@@ -8,7 +8,7 @@ const corsHeaders = {
 };
 
 interface NotificationPayload {
-  type: string; // invoice_created, payment_received, payment_reminder, overdue, invoice_settled
+  type: string; // invoice_created, payment_received, payment_reminder, overdue, invoice_settled, account_setup
   channel: "email" | "whatsapp" | "both";
   enrollment_id: string;
   invoice_id?: string;
@@ -222,6 +222,18 @@ function buildEmailContent(type: string, data: Record<string, any>): { subject: 
         `),
       };
 
+    case "account_setup":
+      return {
+        subject: "Set up your FutureLabs student account",
+        html: wrapper(`
+          <h2 style="color: #1a1a2e;">Set Up Your Student Account</h2>
+          <p>Hello ${full_name},</p>
+          <p>You're enrolled${program_name ? ` in <strong>${program_name}</strong>` : ""} at FutureLabs. Create your student account to complete your profile, view your invoices, and access your classroom.</p>
+          <a href="${FRONTEND_URL}/students/${enrollment_id}" style="display: inline-block; padding: 12px 24px; background: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 16px 0;">Create My Account</a>
+          <p style="font-size: 13px; color: #6b7280; word-break: break-all;">${FRONTEND_URL}/students/${enrollment_id}</p>
+        `),
+      };
+
     default:
       return { subject: "Notification", html: wrapper(`<p>${JSON.stringify(data)}</p>`) };
   }
@@ -250,6 +262,8 @@ function buildWhatsAppMessage(type: string, data: Record<string, any>): string {
       return `🎉 *Invoice Fully Paid*\n\nHi ${full_name},\nInvoice: ${invoice_number}\nTotal: ${amt}\n\nThank you for completing payment!`;
     case "overdue_guardian":
       return `Hello${data.guardian_name ? ` ${data.guardian_name}` : ""}, this is FutureLabs.\n\n${full_name}'s fees for ${program_name || "their programme"} are ${data.days_overdue} days overdue (balance ${balance}), and their classroom access ${data.access_paused ? "is now paused" : "will pause soon"}.\n\nPlease help ensure payment, or call us to agree a plan.\nPay online: ${FRONTEND_URL}/student/invoices/${invoice_id}?pay=1${bankLine}`;
+    case "account_setup":
+      return `👋 *Set Up Your FutureLabs Account*\n\nHi ${full_name},\nYou're enrolled${program_name ? ` in ${program_name}` : ""}. Create your student account and complete your profile here:\n${FRONTEND_URL}/students/${enrollment_id}`;
     default:
       return `Notification: ${type}`;
   }

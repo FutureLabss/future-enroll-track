@@ -27,6 +27,7 @@ import { DataTable } from '@/components/shared/DataTable';
 import { CurriculumTreeV2 } from '@/components/classroom/CurriculumTreeV2';
 import { AutoScheduleWizard } from '@/components/classroom/AutoScheduleWizard';
 import { CohortScheduleSetupDialog, type ScheduleSetupCohort } from '@/components/cohort/CohortScheduleSetupDialog';
+import { SwitchProgramDialog } from '@/components/enrollment/SwitchProgramDialog';
 import { CohortSetupGapsAlert } from '@/components/cohort/CohortSetupGapsAlert';
 import { PrimaryTutorSelect } from '@/components/cohort/PrimaryTutorSelect';
 import { toast } from 'sonner';
@@ -333,105 +334,6 @@ function CohortStudentsModal({ cohort, classroomId, onClose }: { cohort: any; cl
           );
         })
       )}
-    </div>
-  );
-}
-
-function SwitchClassroomDialog({ student, fromClassroomId, programId, onClose, onSwitched }: {
-  student: any; fromClassroomId: string; programId: string | null; onClose: () => void; onSwitched: () => void;
-}) {
-  const [classrooms, setClassrooms] = useState<any[]>([]);
-  const [cohorts, setCohorts] = useState<any[]>([]);
-  const [toClassroomId, setToClassroomId] = useState('');
-  const [toCohortId, setToCohortId] = useState('');
-  const [reason, setReason] = useState('');
-  const [switching, setSwitching] = useState(false);
-
-  useEffect(() => {
-    if (!programId) return;
-    supabase.from('classrooms')
-      .select('id, name')
-      .eq('program_id', programId)
-      .eq('status', 'active')
-      .neq('id', fromClassroomId)
-      .then(({ data }) => setClassrooms(data || []));
-  }, [programId, fromClassroomId]);
-
-  useEffect(() => {
-    setCohorts([]);
-    setToCohortId('');
-    if (!toClassroomId) return;
-    supabase.from('cohorts')
-      .select('id, cohort_label')
-      .eq('classroom_id', toClassroomId)
-      .in('status', ['active', 'upcoming'])
-      .order('start_date', { ascending: false })
-      .then(({ data }) => setCohorts(data || []));
-  }, [toClassroomId]);
-
-  const handleSwitch = async () => {
-    if (!toClassroomId) { toast.error('Select a destination classroom'); return; }
-    setSwitching(true);
-    try {
-      const { error } = await supabase.rpc('switch_student_classroom' as any, {
-        p_student_id: student.user_id,
-        p_from_classroom_id: fromClassroomId,
-        p_to_classroom_id: toClassroomId,
-        p_to_cohort_id: toCohortId || null,
-        p_reason: reason,
-      });
-      if (error) throw error;
-      toast.success(`${student.full_name} switched to new classroom`);
-      onSwitched();
-      onClose();
-    } catch (e: any) { toast.error(e.message); } finally { setSwitching(false); }
-  };
-
-  return (
-    <div className="space-y-4 mt-2">
-      <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm">
-        <span className="text-muted-foreground">Student: </span>
-        <span className="font-medium">{student.full_name}</span>
-        <span className="text-muted-foreground ml-2">({student.email})</span>
-      </div>
-      <div>
-        <Label>Destination Classroom *</Label>
-        {classrooms.length === 0 ? (
-          <p className="text-sm text-muted-foreground mt-2">No other active classrooms for this program.</p>
-        ) : (
-          <Select value={toClassroomId} onValueChange={setToClassroomId}>
-            <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select classroom..." /></SelectTrigger>
-            <SelectContent>
-              {classrooms.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        )}
-      </div>
-      {toClassroomId && (
-        <div>
-          <Label>Assign to Cohort <span className="text-muted-foreground font-normal">(optional)</span></Label>
-          <Select value={toCohortId || '__none__'} onValueChange={v => setToCohortId(v === '__none__' ? '' : v)}>
-            <SelectTrigger className="mt-1.5"><SelectValue placeholder={cohorts.length ? 'Select cohort...' : 'No active cohorts'} /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none__">No cohort</SelectItem>
-              {cohorts.map(c => <SelectItem key={c.id} value={c.id}>{c.cohort_label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
-      <div>
-        <Label>Reason <span className="text-muted-foreground font-normal">(optional)</span></Label>
-        <Textarea
-          value={reason}
-          onChange={e => setReason(e.target.value)}
-          placeholder="e.g. Scheduling conflict, cohort reassignment..."
-          className="mt-1.5"
-          rows={2}
-        />
-      </div>
-      <Button onClick={handleSwitch} disabled={switching || !toClassroomId || classrooms.length === 0} className="w-full">
-        {switching ? <><Loader2 className="animate-spin h-4 w-4 mr-2" />Switching...</> : <><ArrowLeftRight className="h-4 w-4 mr-2" />Switch Classroom</>}
-      </Button>
     </div>
   );
 }
@@ -902,7 +804,12 @@ export default function ClassroomDetailPage() {
       const { data, error } = await supabase.functions.invoke('send-account-reminders', {
         body: { classroom_id: id },
       });
-      if (error) throw error;
+      if (error) {
+        // FunctionsHttpError wraps the real message inside the response body
+        let msg = error.message;
+        try { const b = await (error as { context?: Response }).context?.json(); if (b?.error) msg = b.error; } catch { /* body wasn't JSON */ }
+        throw new Error(msg);
+      }
       if (data?.error) throw new Error(data.error);
       if (data.signup_sent + data.profile_sent + data.failed === 0) {
         toast.info('No students with an email address needed a reminder.');
@@ -1145,8 +1052,8 @@ export default function ClassroomDetailPage() {
     { key: 'certificate', header: 'Certificate', exportable: false, render: (r: { id: string; full_name: string | null; email: string | null }) => (
       <CertificateAction enrollmentId={r.id} studentName={r.full_name || r.email || ''} certs={certificates} />
     )},
-    { key: 'actions', header: '', render: (r: any) => r.user_id ? (
-      <Button size="sm" variant="ghost" className="h-7 px-2 text-muted-foreground hover:text-foreground" onClick={() => setSwitchModal({ open: true, student: r })} title="Switch classroom">
+    { key: 'actions', header: '', render: (r: any) => !['cancelled', 'withdrawn'].includes(r.enrollment_status) ? (
+      <Button size="sm" variant="ghost" className="h-7 px-2 text-muted-foreground hover:text-foreground" onClick={() => setSwitchModal({ open: true, student: r })} title="Switch programme">
         <ArrowLeftRight className="h-3.5 w-3.5" />
       </Button>
     ) : null },
@@ -1474,20 +1381,13 @@ export default function ClassroomDetailPage() {
             </Button>
           </div>
           <DataTable columns={studentColumns} data={students} searchable searchPlaceholder="Search students..." emptyMessage="No students enrolled" />
-          <Dialog open={switchModal.open} onOpenChange={o => !o && setSwitchModal({ open: false })}>
-            <DialogContent className="max-w-md">
-              <DialogHeader><DialogTitle>Switch Classroom</DialogTitle></DialogHeader>
-              {switchModal.student && (
-                <SwitchClassroomDialog
-                  student={switchModal.student}
-                  fromClassroomId={id!}
-                  programId={programId}
-                  onClose={() => setSwitchModal({ open: false })}
-                  onSwitched={() => queryClient.invalidateQueries({ queryKey: ['classroom-students', id] })}
-                />
-              )}
-            </DialogContent>
-          </Dialog>
+          <SwitchProgramDialog
+            enrollment={switchModal.student && programId
+              ? { id: switchModal.student.id, full_name: switchModal.student.full_name, program_id: programId }
+              : null}
+            onOpenChange={o => !o && setSwitchModal({ open: false })}
+            onSwitched={() => queryClient.invalidateQueries({ queryKey: ['classroom-students', id] })}
+          />
         </TabsContent>
 
         {/* SCHEDULE */}

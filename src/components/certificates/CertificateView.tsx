@@ -18,7 +18,6 @@ export interface CertificateData {
 // 1123×794 px A4-landscape sheet and scaled to fit, so screen and PDF match.
 const PAGE_W = 1123;
 const SIGNATORY = { name: 'Udim Manasseh', title: 'Founder FutureLabs' };
-// Drop the signature scan here (transparent PNG); the line stays blank until it exists.
 const SIGNATURE_SRC = '/certificates/udim-manasseh-signature.png';
 
 const shortDate = (iso: string) =>
@@ -73,15 +72,15 @@ export function CertificateView({ cert, verifyUrl }: { cert: CertificateData; ve
           <div className="mt-[12px] h-[3px] w-[735px] bg-[#F57F20]" />
         </div>
 
-        <div className="absolute left-[66px] top-[594px] w-[205px]">
+        <div className="absolute left-[66px] top-[636px] w-[205px]">
           <p className="w-[170px] text-center text-[14px] font-semibold">{shortDate(cert.completed_on || cert.issued_at)}</p>
           <div className="mb-[6px] mt-[2px] h-[3px] w-[170px] bg-[#F57F20]" />
           <p className="text-[12.5px] leading-[1.3]">{hub} has confirmed the participation of the individual in the program</p>
         </div>
 
-        <div className="absolute left-[790px] top-[548px] flex w-[170px] flex-col items-center">
+        <div className="absolute left-[790px] top-[598px] flex w-[170px] flex-col items-center">
           <div className="flex h-[62px] items-end justify-center">
-            {signature && <img src={SIGNATURE_SRC} alt="" className="h-[62px] object-contain" onError={() => setSignature(false)} />}
+            {signature && <img src={SIGNATURE_SRC} alt="" className="-mb-[12px] h-[78px] object-contain" onError={() => setSignature(false)} />}
           </div>
           <div className="mb-[6px] h-[3px] w-[170px] bg-[#F57F20]" />
           <p className="text-[13.5px] font-semibold">{SIGNATORY.name}</p>
@@ -89,7 +88,7 @@ export function CertificateView({ cert, verifyUrl }: { cert: CertificateData; ve
         </div>
 
         {/* Not on the sample: a printed copy needs its ID to be checkable. */}
-        <p className="absolute top-[722px] w-full text-center text-[10px] text-slate-500">
+        <p className="absolute top-[734px] w-full text-center text-[10px] text-slate-500">
           Certificate ID {cert.code} · Verify at {verifyUrl.replace(/^https?:\/\//, '')}
         </p>
 

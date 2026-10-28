@@ -898,7 +898,12 @@ export default function ClassroomDetailPage() {
       const { data, error } = await supabase.functions.invoke('send-account-reminders', {
         body: { classroom_id: id },
       });
-      if (error) throw error;
+      if (error) {
+        // FunctionsHttpError wraps the real message inside the response body
+        let msg = error.message;
+        try { const b = await (error as { context?: Response }).context?.json(); if (b?.error) msg = b.error; } catch { /* body wasn't JSON */ }
+        throw new Error(msg);
+      }
       if (data?.error) throw new Error(data.error);
       if (data.signup_sent + data.profile_sent + data.failed === 0) {
         toast.info('No students with an email address needed a reminder.');

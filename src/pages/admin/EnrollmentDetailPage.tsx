@@ -12,10 +12,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { ArrowLeft, CheckCircle, XCircle, ExternalLink, Trash2, Pencil, ArrowLeftRight, Eye, ClipboardList, LockKeyhole, Loader2, Save } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, ExternalLink, Trash2, Pencil, ArrowLeftRight, Eye, ClipboardList, LockKeyhole, Loader2, Save, FilePlus, Send, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCertificates } from '@/hooks/useCertificates';
 import { CertificateAction } from '@/components/certificates/CertificateAction';
+import { SwitchProgramDialog } from '@/components/enrollment/SwitchProgramDialog';
 
 interface FieldValue {
   id: string;
@@ -33,6 +34,8 @@ export default function EnrollmentDetailPage() {
   const [showEvidence, setShowEvidence] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [previewing, setPreviewing] = useState(false);
+  const [sendingSetup, setSendingSetup] = useState(false);
+  const [switchProgramOpen, setSwitchProgramOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState({ full_name: '', email: '', phone: '', address: '', guardian_name: '', guardian_phone: '' });
   const [saving, setSaving] = useState(false);
@@ -109,10 +112,38 @@ export default function EnrollmentDetailPage() {
     }
   };
 
+  const setupLink = `https://admin.futurelabs.ng/students/${id}`;
+
+  const handleSendSetupLink = async () => {
+    setSendingSetup(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-notification', {
+        body: { type: 'account_setup', channel: 'both', enrollment_id: id },
+      });
+      if (error || data?.error) throw new Error(data?.error || error?.message);
+      const emailResult = (data?.results || []).find((r: string) => r.startsWith('email_'));
+      if (emailResult !== 'email_sent') throw new Error(emailResult || 'Email was not sent');
+      toast.success(`Account setup link sent to ${enrollment.email}`);
+    } catch (err: any) {
+      toast.error('Could not send setup link: ' + err.message);
+    } finally {
+      setSendingSetup(false);
+    }
+  };
+
+  const handleCopySetupLink = async () => {
+    try {
+      await navigator.clipboard.writeText(setupLink);
+      toast.success('Setup link copied');
+    } catch {
+      toast.error(`Could not copy — the link is ${setupLink}`);
+    }
+  };
+
   const { data: pageData, isLoading: loading } = useQuery({
     queryKey: ['enrollment-detail', id],
     queryFn: async () => {
-      const [eRes, fRes, rRes] = await Promise.all([
+      const [eRes, fRes, rRes, iRes] = await Promise.all([
         supabase.from('enrollments')
           .select('*, programs(program_name, hub_id, hubs(name)), cohorts(cohort_label), organizations(organization_name)')
           .eq('id', id!).single(),
@@ -126,25 +157,35 @@ export default function EnrollmentDetailPage() {
           .eq('visible_to_student', false)
           .gte('sort_order', 100)
           .order('sort_order'),
+        supabase.from('invoices')
+          .select('id', { count: 'exact', head: true })
+          .eq('enrollment_id', id!)
+          .neq('status', 'cancelled'),
       ]);
       if (eRes.error) throw eRes.error;
       let switchHistory: any[] = [];
-      if (eRes.data?.user_id) {
-        const { data: history } = await supabase
-          .from('audit_logs')
-          .select('id, details, created_at, user_id')
-          .eq('action', 'switch_classroom')
-          .filter('details->>student_id', 'eq', eRes.data.user_id)
-          .order('created_at', { ascending: false });
-        if (history && history.length > 0) {
-          const adminIds = [...new Set(history.map((h: any) => h.user_id).filter(Boolean))];
-          const { data: admins } = await supabase.from('profiles').select('user_id, full_name, email').in('user_id', adminIds);
-          const adminMap = new Map((admins || []).map((a: any) => [a.user_id, a]));
-          switchHistory = history.map((h: any) => ({ ...h, admin: adminMap.get(h.user_id) }));
-        }
+      const [classroomSwitches, programSwitches] = await Promise.all([
+        eRes.data?.user_id
+          ? supabase.from('audit_logs')
+            .select('id, action, details, created_at, user_id')
+            .eq('action', 'switch_classroom')
+            .filter('details->>student_id', 'eq', eRes.data.user_id)
+          : Promise.resolve({ data: [] }),
+        supabase.from('audit_logs')
+          .select('id, action, details, created_at, user_id')
+          .eq('action', 'switch_program')
+          .eq('entity_id', id!),
+      ]);
+      const history = [...(classroomSwitches.data || []), ...(programSwitches.data || [])]
+        .sort((a: { created_at: string }, b: { created_at: string }) => b.created_at.localeCompare(a.created_at));
+      if (history.length > 0) {
+        const adminIds = [...new Set(history.map((h: any) => h.user_id).filter(Boolean))];
+        const { data: admins } = await supabase.from('profiles').select('user_id, full_name, email').in('user_id', adminIds);
+        const adminMap = new Map((admins || []).map((a: any) => [a.user_id, a]));
+        switchHistory = history.map((h: any) => ({ ...h, admin: adminMap.get(h.user_id) }));
       }
       const reportingFields = (rRes.data || []).filter((field: any) => !field.hub_id || field.hub_id === eRes.data.programs?.hub_id);
-      return { enrollment: eRes.data, fieldValues: (fRes.data as FieldValue[]) || [], reportingFields, switchHistory };
+      return { enrollment: eRes.data, fieldValues: (fRes.data as FieldValue[]) || [], reportingFields, switchHistory, activeInvoiceCount: iRes.count ?? 0 };
     },
     enabled: !!id,
     staleTime: 30_000,
@@ -153,6 +194,7 @@ export default function EnrollmentDetailPage() {
   const fieldValues = pageData?.fieldValues ?? [];
   const reportingFields = pageData?.reportingFields ?? [];
   const switchHistory = pageData?.switchHistory ?? [];
+  const activeInvoiceCount = pageData?.activeInvoiceCount ?? 0;
 
   const openReporting = () => {
     const values: Record<string, string> = {};
@@ -291,13 +333,33 @@ export default function EnrollmentDetailPage() {
         title={enrollment.full_name}
         description={`Enrollment details — ${enrollment.email}`}
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="ghost" onClick={() => navigate('/admin/enrollments')}>
               <ArrowLeft className="h-4 w-4 mr-2" /> Back
             </Button>
+            {activeInvoiceCount === 0 && enrollment.enrollment_status !== 'cancelled' && (
+              <Button onClick={() => navigate(`/admin/invoices/new?enrollment=${enrollment.id}`)}>
+                <FilePlus className="h-4 w-4 mr-2" /> Create Invoice
+              </Button>
+            )}
+            {!enrollment.user_id && (
+              <>
+                <Button variant="outline" onClick={handleSendSetupLink} disabled={sendingSetup}>
+                  <Send className="h-4 w-4 mr-2" /> {sendingSetup ? 'Sending...' : 'Send Setup Link'}
+                </Button>
+                <Button variant="outline" onClick={handleCopySetupLink}>
+                  <Link2 className="h-4 w-4 mr-2" /> Copy Link
+                </Button>
+              </>
+            )}
             <CertificateAction enrollmentId={enrollment.id} studentName={enrollment.full_name}
               programName={enrollment.programs?.program_name} state={certificates.data.get(enrollment.id)}
               onIssue={certificates.issue} onRevoke={certificates.revoke} onResend={certificates.sendEmail} />
+            {!['cancelled', 'withdrawn'].includes(enrollment.enrollment_status) && (
+              <Button variant="outline" onClick={() => setSwitchProgramOpen(true)}>
+                <ArrowLeftRight className="h-4 w-4 mr-2" /> Switch Programme
+              </Button>
+            )}
             {reportingFields.length > 0 && (
               <Button variant="outline" onClick={openReporting}>
                 <Pencil className="h-4 w-4 mr-2" /> Program Reporting
@@ -434,12 +496,18 @@ export default function EnrollmentDetailPage() {
         </div>
       ))}
 
-      {/* Classroom Switch History */}
+      <SwitchProgramDialog
+        enrollment={switchProgramOpen ? { id: enrollment.id, full_name: enrollment.full_name, program_id: enrollment.program_id } : null}
+        onOpenChange={setSwitchProgramOpen}
+        onSwitched={() => queryClient.invalidateQueries({ queryKey: ['enrollment-detail', id] })}
+      />
+
+      {/* Programme / Classroom Switch History */}
       {switchHistory.length > 0 && (
         <div className="glass-card rounded-xl p-6 mb-6">
           <div className="flex items-center gap-2 mb-4">
             <ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
-            <h3 className="font-heading font-semibold text-lg">Classroom Switch History</h3>
+            <h3 className="font-heading font-semibold text-lg">Switch History</h3>
           </div>
           <div className="space-y-3">
             {switchHistory.map((h: any) => (
@@ -449,16 +517,17 @@ export default function EnrollmentDetailPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium">
-                    <span className="text-muted-foreground">{h.details.from_classroom_name || 'Unknown'}</span>
+                    <span className="text-muted-foreground">{(h.action === 'switch_program' ? h.details.from_program_name : h.details.from_classroom_name) || 'Unknown'}</span>
                     {' → '}
-                    <span>{h.details.to_classroom_name || 'Unknown'}</span>
+                    <span>{(h.action === 'switch_program' ? h.details.to_program_name : h.details.to_classroom_name) || 'Unknown'}</span>
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">{h.action === 'switch_program' ? 'Programme' : 'Classroom'}</span>
                   </p>
                   {h.details.reason && (
                     <p className="text-muted-foreground mt-0.5 italic">"{h.details.reason}"</p>
                   )}
                   <p className="text-xs text-muted-foreground mt-1">
                     By <span className="font-medium text-foreground">{h.admin?.full_name || h.admin?.email || 'Admin'}</span>
-                    {' · '}{new Date(h.created_at).toLocaleString()}
+                    {' · '}{new Date(h.created_at).toLocaleString('en-NG')}
                   </p>
                 </div>
               </div>

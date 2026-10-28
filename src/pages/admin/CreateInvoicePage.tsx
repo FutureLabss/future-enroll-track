@@ -1,5 +1,5 @@
 // @ts-nocheck — pre-existing schema/typegen mismatch (LMS tables not in DB); unblocks build.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 interface Installment {
   amount: string;
@@ -19,6 +19,10 @@ const INSTALLMENT_OPTIONS = [2, 3, 4, 6, 12];
 
 export default function CreateInvoicePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // Set when invoicing an enrollment that already exists (e.g. a converted CRM lead) —
+  // inserting a fresh enrollment would hit uq_enrollments_email_program_active or duplicate the student.
+  const existingEnrollmentId = searchParams.get('enrollment');
   const [loading, setLoading] = useState(false);
 
   const [form, setForm] = useState({
@@ -70,6 +74,36 @@ export default function CreateInvoicePage() {
     staleTime: 5 * 60_000,
   });
 
+  const { data: existingEnrollment } = useQuery({
+    queryKey: ['enrollment-for-invoice', existingEnrollmentId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('enrollments')
+        .select('id, full_name, email, phone, address, guardian_name, guardian_phone, program_id, cohort_id, organization_id')
+        .eq('id', existingEnrollmentId)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!existingEnrollmentId,
+  });
+
+  useEffect(() => {
+    if (!existingEnrollment) return;
+    setForm(f => ({
+      ...f,
+      full_name: existingEnrollment.full_name || '',
+      email: existingEnrollment.email || '',
+      phone: existingEnrollment.phone || '',
+      address: existingEnrollment.address || '',
+      guardian_name: existingEnrollment.guardian_name || '',
+      guardian_phone: existingEnrollment.guardian_phone || '',
+      program_id: existingEnrollment.program_id || '',
+      cohort_id: existingEnrollment.cohort_id || '',
+      organization_id: existingEnrollment.organization_id || '',
+    }));
+  }, [existingEnrollment]);
+
   const filteredCohorts = cohorts.filter((c: any) => c.program_id === form.program_id);
 
   const generateInstallments = (count: number, total: string) => {
@@ -115,22 +149,33 @@ export default function CreateInvoicePage() {
         }
       }
 
-      const { data: enrollment, error: enrollError } = await supabase
-        .from('enrollments')
-        .insert({
-          full_name: form.full_name,
-          email: form.email,
-          phone: form.phone || null,
-          address: form.address || null,
-          guardian_name: form.guardian_name || null,
-          guardian_phone: form.guardian_phone || null,
-          program_id: form.program_id,
-          cohort_id: form.cohort_id || null,
-          organization_id: form.organization_id || null,
-          total_amount: totalAmount,
-        })
-        .select()
-        .single();
+      const { data: enrollment, error: enrollError } = existingEnrollmentId
+        ? await supabase
+          .from('enrollments')
+          .update({
+            program_id: form.program_id,
+            cohort_id: form.cohort_id || null,
+            organization_id: form.organization_id || null,
+          })
+          .eq('id', existingEnrollmentId)
+          .select()
+          .single()
+        : await supabase
+          .from('enrollments')
+          .insert({
+            full_name: form.full_name,
+            email: form.email,
+            phone: form.phone || null,
+            address: form.address || null,
+            guardian_name: form.guardian_name || null,
+            guardian_phone: form.guardian_phone || null,
+            program_id: form.program_id,
+            cohort_id: form.cohort_id || null,
+            organization_id: form.organization_id || null,
+            total_amount: totalAmount,
+          })
+          .select()
+          .single();
 
       if (enrollError) throw enrollError;
 
@@ -166,6 +211,21 @@ export default function CreateInvoicePage() {
         if (instError) throw instError;
       }
 
+      // Same rule as admin_update_invoice: the cached total is the sum of the enrollment's non-cancelled invoices.
+      if (existingEnrollmentId) {
+        const { data: activeInvoices, error: sumError } = await supabase
+          .from('invoices')
+          .select('total_amount')
+          .eq('enrollment_id', enrollment.id)
+          .neq('status', 'cancelled');
+        if (sumError) throw sumError;
+        const { error: totalError } = await supabase
+          .from('enrollments')
+          .update({ total_amount: (activeInvoices || []).reduce((s, inv) => s + Number(inv.total_amount), 0) })
+          .eq('id', enrollment.id);
+        if (totalError) throw totalError;
+      }
+
       try {
         await supabase.functions.invoke('send-notification', {
           body: {
@@ -178,7 +238,7 @@ export default function CreateInvoicePage() {
       } catch (_notifErr) { }
 
       toast.success(`Invoice ${invoice.invoice_number} created!`);
-      navigate('/admin/invoices');
+      navigate(existingEnrollmentId ? `/admin/enrollments/${existingEnrollmentId}` : '/admin/invoices');
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -188,21 +248,30 @@ export default function CreateInvoicePage() {
 
   return (
     <div>
-      <PageHeader title="Create Invoice" description="Create a new invoice and enrollment" />
+      <PageHeader
+        title="Create Invoice"
+        description={existingEnrollmentId ? 'Invoice an existing enrollment' : 'Create a new invoice and enrollment'}
+      />
 
       <form onSubmit={handleSubmit} className="glass-card rounded-2xl p-8 max-w-2xl space-y-6">
+        {existingEnrollmentId && (
+          <p className="text-sm text-muted-foreground">
+            Student details come from the existing enrollment — use Edit Student on the enrollment page to change them.
+          </p>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <Label>Full Name *</Label>
-            <Input required value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })} className="mt-1.5" />
+            <Input required disabled={!!existingEnrollmentId} value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })} className="mt-1.5" />
           </div>
           <div>
             <Label>Email *</Label>
-            <Input required type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className="mt-1.5" />
+            <Input required disabled={!!existingEnrollmentId} type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className="mt-1.5" />
           </div>
           <div>
             <Label>Phone</Label>
             <Input
+              disabled={!!existingEnrollmentId}
               value={form.phone}
               onChange={e => {
                 const val = e.target.value;
@@ -215,21 +284,22 @@ export default function CreateInvoicePage() {
               pattern="^\+[1-9]\d{6,14}$"
               title="Enter phone in international format, e.g. +2347032400529"
             />
-            {form.phone && !/^\+[1-9]\d{6,14}$/.test(form.phone) && (
+            {!existingEnrollmentId && form.phone && !/^\+[1-9]\d{6,14}$/.test(form.phone) && (
               <p className="text-xs text-destructive mt-1">Use international format: +234...</p>
             )}
           </div>
           <div className="sm:col-span-2">
             <Label>Address</Label>
-            <Input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} className="mt-1.5" placeholder="Street, city, state" />
+            <Input disabled={!!existingEnrollmentId} value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} className="mt-1.5" placeholder="Street, city, state" />
           </div>
           <div>
             <Label>Guardian Name</Label>
-            <Input value={form.guardian_name} onChange={e => setForm({ ...form, guardian_name: e.target.value })} className="mt-1.5" placeholder="Parent or guardian full name" />
+            <Input disabled={!!existingEnrollmentId} value={form.guardian_name} onChange={e => setForm({ ...form, guardian_name: e.target.value })} className="mt-1.5" placeholder="Parent or guardian full name" />
           </div>
           <div>
             <Label>Guardian Phone</Label>
             <Input
+              disabled={!!existingEnrollmentId}
               value={form.guardian_phone}
               onChange={e => {
                 const val = e.target.value;

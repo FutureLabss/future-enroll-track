@@ -103,6 +103,14 @@ Deno.serve(async (req) => {
       for (const n of sentToday || []) sentSet.add(`${n.enrollment_id}:${n.type}`);
     }
 
+    // Staff agreed a promise to pay, or wrote the balance off: no overdue emails
+    // until the promised date passes (see payment_followups).
+    if (enrollmentIds.length > 0) {
+      const { data: held, error: holdError } = await supabase.rpc("payment_reminder_holds", { p_enrollment_ids: enrollmentIds });
+      if (holdError) throw holdError;
+      for (const id of (held as string[]) || []) sentSet.add(`${id}:overdue`);
+    }
+
     // Drop already-notified pairs and dedupe within this run (an enrollment
     // with two qualifying installments gets one message per type)
     const toSend: Candidate[] = [];

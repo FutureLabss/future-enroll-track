@@ -170,6 +170,14 @@ Students must exist in **`classroom_students`** to see a classroom. Adding to `c
 - A session where under half the cohort marked in is not counted against anyone (in Oct 2026 several cohorts had 2-3 of 12 marking in, so attendance capture, not truancy). `get_student_risk_flags` reports those sessions to the tutor instead.
 - New flags notify the cohort's primary tutor (else its teaching staff) once per cohort per run; flags resolve on their own, and tutors can dismiss one.
 
+### Payment follow-up (Outstanding page)
+- `payment_followups` logs what staff did about a balance: called / whatsapp / note / promise / written_off / reopened. A promise (date today or later) pauses **overdue** emails for that enrollment until the date passes: `check-due-reminders` asks `payment_reminder_holds`. A new overdue-reminder path must ask it too.
+- "Written off" is collections status only. It changes no invoice, installment, `amount_paid` or revenue figure; never make it do so without the finance rules above.
+
+### Certificates
+- Issued **one student at a time**, never automatically, and only by the CEO (superadmin), a training manager of the hub, or a tutor of the student's cohort (primary tutor or the classroom's teaching staff). `can_issue_certificate` is the single check; plain hub admins can view but not issue.
+- Names are snapshotted at issue; to correct one, revoke (with a reason) and reissue. `/certificate/<code>` is public and verifies via `verify_certificate` (granted to anon). `CertificateView` is a placeholder layout until the official design is supplied.
+
 ---
 
 ## Access Control

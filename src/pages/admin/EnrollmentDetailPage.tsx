@@ -14,6 +14,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { ArrowLeft, CheckCircle, XCircle, ExternalLink, Trash2, Pencil, ArrowLeftRight, Eye, ClipboardList, LockKeyhole, Loader2, Save } from 'lucide-react';
 import { toast } from 'sonner';
+import { useCertificates } from '@/hooks/useCertificates';
+import { CertificateAction } from '@/components/certificates/CertificateAction';
 
 interface FieldValue {
   id: string;
@@ -23,6 +25,7 @@ interface FieldValue {
 
 export default function EnrollmentDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const certificates = useCertificates(id ? [id] : []);
   const navigate = useNavigate();
   const { isSuperadmin } = useAuth();
   const queryClient = useQueryClient();
@@ -292,6 +295,9 @@ export default function EnrollmentDetailPage() {
             <Button variant="ghost" onClick={() => navigate('/admin/enrollments')}>
               <ArrowLeft className="h-4 w-4 mr-2" /> Back
             </Button>
+            <CertificateAction enrollmentId={enrollment.id} studentName={enrollment.full_name}
+              programName={enrollment.programs?.program_name} state={certificates.data.get(enrollment.id)}
+              onIssue={certificates.issue} onRevoke={certificates.revoke} onResend={certificates.sendEmail} />
             {reportingFields.length > 0 && (
               <Button variant="outline" onClick={openReporting}>
                 <Pencil className="h-4 w-4 mr-2" /> Program Reporting

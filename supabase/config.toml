@@ -38,3 +38,6 @@ verify_jwt = false  # same as send-weekly-digest: cron secret or an admin JWT ch
 
 [functions.email-unsubscribe]
 verify_jwt = false  # public unsubscribe links are protected by signed tokens
+
+[functions.send-certificate-email]
+verify_jwt = true

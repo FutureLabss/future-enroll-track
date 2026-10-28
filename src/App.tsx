@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { AppLayout } from "@/components/layout/AppLayout";
 
 const LoginPage = lazy(() => import("@/pages/auth/LoginPage"));
+const CertificatePage = lazy(() => import("@/pages/public/CertificatePage"));
 const ResetPasswordPage = lazy(() => import("@/pages/auth/ResetPasswordPage"));
 const SetPasswordPage = lazy(() => import("@/pages/auth/SetPasswordPage"));
 
@@ -166,6 +167,7 @@ const App = () => (
               <Route path="/accept-hub-invitation" element={<AcceptHubInvitationPage />} />
               <Route path="/set-password" element={<SetPasswordPage />} />
               <Route path="/demo" element={<DemoPage />} />
+              <Route path="/certificate/:code" element={<CertificatePage />} />
               <Route path="/enroll/complete/:id" element={<LegacyEnrollRedirect />} />
               <Route path="/" element={<ProtectedRoute><RoleRedirect /></ProtectedRoute>} />
 

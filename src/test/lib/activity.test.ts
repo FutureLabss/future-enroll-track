@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { activityByClassroom, countOf, filterActivity, groupActivityByDay, type ActivityEvent } from '@/lib/activity';
+import { filterActivity, groupActivityByDay, type ActivityEvent } from '@/lib/activity';
 
 const base: ActivityEvent = {
   id: '1', created_at: '2026-10-22T09:00:00Z', event_type: 'session_completed', category: 'schedule',
@@ -35,33 +35,5 @@ describe('groupActivityByDay', () => {
       ['2026-10-22', ['b']],
       ['2026-10-21', ['c']],
     ]);
-  });
-});
-
-describe('activityByClassroom', () => {
-  it('tallies per classroom and skips events without one', () => {
-    const rows = activityByClassroom([
-      ev({ id: '1', event_type: 'session_completed', created_at: '2026-10-20T09:00:00Z' }),
-      ev({ id: '2', event_type: 'session_cancelled', created_at: '2026-10-22T09:00:00Z' }),
-      ev({ id: '3', event_type: 'assignment_submitted' }),
-      ev({ id: '4', event_type: 'attendance_closed' }),
-      ev({ id: '5', classroom_id: 'c2', classroom_name: 'Design' }),
-      ev({ id: '6', classroom_id: null, event_type: 'payment_recorded' }),
-    ]);
-    expect(rows).toHaveLength(2);
-    expect(rows[0]).toMatchObject({ classroom_id: 'c1', total: 4, held: 1, cancelled: 1, submissions: 1, attendance: 1, last_at: '2026-10-22T09:00:00Z' });
-    expect(rows[1]).toMatchObject({ classroom_id: 'c2', total: 1 });
-  });
-});
-
-describe('countOf', () => {
-  it('sums the requested event types', () => {
-    const counts = [
-      { event_type: 'sessions_scheduled', total: 2 },
-      { event_type: 'session_rescheduled', total: 3 },
-      { event_type: 'payment_recorded', total: 9 },
-    ];
-    expect(countOf(counts, 'sessions_scheduled', 'session_rescheduled')).toBe(5);
-    expect(countOf(counts, 'missing')).toBe(0);
   });
 });

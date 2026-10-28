@@ -15,6 +15,12 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { parseCSV, type CSVContact } from '@/lib/csv';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { StaffPicker } from '@/components/email/StaffPicker';
+import { WeeklyDigestPanel } from '@/components/email/WeeklyDigestPanel';
+import { EmailContactsPanel } from '@/components/email/EmailContactsPanel';
+import { OnboardingPanel } from '@/components/email/OnboardingPanel';
+import { useStaffDirectory } from '@/hooks/useStaffDirectory';
 
 type AudienceType = 'students' | 'staff' | 'students_and_staff';
 type ImportedContact = CSVContact;
@@ -27,6 +33,9 @@ export default function BulkEmailPage() {
   const [sending, setSending] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [audienceType, setAudienceType] = useState<AudienceType>('students');
+  const [staffMode, setStaffMode] = useState<'all' | 'pick'>('all');
+  const [staffIds, setStaffIds] = useState<string[]>([]);
+  const { data: staffDirectory } = useStaffDirectory();
   const [importedContacts, setImportedContacts] = useState<ImportedContact[]>([]);
   const [importError, setImportError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -71,11 +80,16 @@ export default function BulkEmailPage() {
   // Staff count
   useEffect(() => {
     if (audienceType === 'students') { setStaffCount(0); return; }
+    if (staffMode === 'pick') {
+      const picked = new Set(staffIds);
+      setStaffCount(new Set(staffDirectory.filter(s => picked.has(s.id) && s.email).map(s => s.email!.toLowerCase())).size);
+      return;
+    }
     supabase.from('staff').select('id, email').eq('active', true).then(({ data }) => {
       const emails = (data || []).filter(s => s.email).map(s => s.email!.toLowerCase());
       setStaffCount(new Set(emails).size);
     });
-  }, [audienceType]);
+  }, [audienceType, staffMode, staffIds, staffDirectory]);
 
   const importedUnique = new Set(importedContacts.map(c => c.email)).size;
   const recipientCount = studentCount + staffCount + importedUnique;
@@ -127,6 +141,7 @@ export default function BulkEmailPage() {
           cohort_id: filters.cohort_id === 'all' ? undefined : filters.cohort_id,
           enrollment_status: filters.enrollment_status === 'all' ? undefined : filters.enrollment_status,
           audience: filters.audience,
+          staff_ids: audienceType !== 'students' && staffMode === 'pick' ? staffIds : undefined,
         },
       };
       const { data, error } = await supabase.functions.invoke('send-bulk-email', { body: payload });
@@ -145,8 +160,21 @@ export default function BulkEmailPage() {
   return (
     <>
     <div>
-      <PageHeader title="Bulk Email" description="Send announcements to students, staff, or imported contacts" />
+      <PageHeader title="Bulk Email" description="One-off announcements, the weekly digest, and the contacts they go to" />
 
+      <Tabs defaultValue="send">
+        <TabsList className="mb-6 flex-wrap h-auto gap-1">
+          <TabsTrigger value="send">Send now</TabsTrigger>
+          <TabsTrigger value="digest">Weekly digest</TabsTrigger>
+          <TabsTrigger value="onboarding">Onboarding</TabsTrigger>
+          <TabsTrigger value="contacts">Contacts</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="digest"><WeeklyDigestPanel /></TabsContent>
+        <TabsContent value="onboarding"><OnboardingPanel /></TabsContent>
+        <TabsContent value="contacts"><EmailContactsPanel /></TabsContent>
+
+        <TabsContent value="send">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2">
           <CardHeader><CardTitle>Compose</CardTitle></CardHeader>
@@ -251,6 +279,19 @@ export default function BulkEmailPage() {
                   </div>
                 </>
               )}
+              {audienceType !== 'students' && (
+                <div className="space-y-2">
+                  <Label>Which staff</Label>
+                  <Select value={staffMode} onValueChange={v => setStaffMode(v as 'all' | 'pick')}>
+                    <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All active staff</SelectItem>
+                      <SelectItem value="pick">Choose staff…</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {staffMode === 'pick' && <StaffPicker staff={staffDirectory} value={staffIds} onChange={setStaffIds} />}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -299,6 +340,8 @@ export default function BulkEmailPage() {
           </Card>
         </div>
       </div>
+        </TabsContent>
+      </Tabs>
     </div>
 
     <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>

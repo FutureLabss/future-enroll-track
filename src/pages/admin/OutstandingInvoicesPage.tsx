@@ -11,6 +11,15 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, Wallet, Clock } from 'lucide-react';
+import { usePaymentFollowups } from '@/hooks/usePaymentFollowups';
+import { PaymentFollowupDialog, type FollowupTarget } from '@/components/finance/PaymentFollowupDialog';
+import { FOLLOWUP_LABELS, daysAgo, followupBucket, followupSummary } from '@/lib/followups';
+
+const FOLLOWUP_COLOURS: Record<string, string> = {
+  promised: 'bg-blue-500/15 text-blue-600 border-blue-500/30',
+  broken: 'bg-warning/15 text-warning border-warning/30',
+  written_off: 'bg-muted text-muted-foreground border-muted',
+};
 
 type Row = {
   invoice_id: string;
@@ -34,7 +43,9 @@ type Row = {
 const fmt = (n: number) => `₦${Number(n || 0).toLocaleString('en-NG')}`;
 
 export default function OutstandingInvoicesPage() {
-  const [tab, setTab] = useState<'all' | 'overdue'>('all');
+  const [tab, setTab] = useState<'all' | 'overdue' | 'promised' | 'written_off'>('overdue');
+  const [followup, setFollowup] = useState<FollowupTarget | null>(null);
+  const { data: followups, log } = usePaymentFollowups();
   const [q, setQ] = useState('');
 
   const { data: rows = [], isLoading: loading } = useQuery({
@@ -48,7 +59,11 @@ export default function OutstandingInvoicesPage() {
   });
 
   const filtered = useMemo(() => {
-    const base = tab === 'overdue' ? rows.filter(r => r.is_overdue) : rows;
+    const bucket = (r: Row) => followupBucket(followups.get(r.enrollment_id));
+    const base = (tab === 'written_off' ? rows.filter(r => bucket(r) === 'written_off')
+      : tab === 'promised' ? rows.filter(r => bucket(r) === 'promised')
+      : rows.filter(r => bucket(r) !== 'written_off' && (tab === 'all' || r.is_overdue)))
+      .slice().sort((a, b) => (b.days_overdue - a.days_overdue) || (Number(b.outstanding) - Number(a.outstanding)));
     if (!q.trim()) return base;
     const s = q.toLowerCase();
     return base.filter(r =>
@@ -57,9 +72,14 @@ export default function OutstandingInvoicesPage() {
       r.invoice_number?.toLowerCase().includes(s) ||
       r.program_name?.toLowerCase().includes(s)
     );
-  }, [rows, tab, q]);
+  }, [rows, tab, q, followups]);
 
-  const totals = rows.reduce((a, r) => {
+  const counts = rows.reduce((a, r) => {
+    a[followupBucket(followups.get(r.enrollment_id))]++;
+    return a;
+  }, { promised: 0, broken: 0, written_off: 0, none: 0 });
+
+  const totals = rows.filter(r => !followups.get(r.enrollment_id)?.written_off).reduce((a, r) => {
     a.outstanding += Number(r.outstanding);
     if (r.is_overdue) { a.overdueAmt += Number(r.outstanding); a.overdueCount++; }
     return a;
@@ -67,7 +87,7 @@ export default function OutstandingInvoicesPage() {
 
   return (
     <div>
-      <PageHeader title="Outstanding & Overdue" description="Invoices with unpaid balances" />
+      <PageHeader title="Outstanding & Overdue" description="Unpaid balances, most overdue first. Log calls and promises to pay; overdue emails pause while a promise stands." />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <StatCard title="Total Outstanding" value={fmt(totals.outstanding)} icon={Wallet} />
@@ -80,8 +100,10 @@ export default function OutstandingInvoicesPage() {
           <div className="flex flex-col sm:flex-row gap-3 mb-4">
             <Tabs value={tab} onValueChange={(v: any) => setTab(v)}>
               <TabsList>
-                <TabsTrigger value="all">All Outstanding ({rows.length})</TabsTrigger>
                 <TabsTrigger value="overdue">Overdue ({totals.overdueCount})</TabsTrigger>
+                <TabsTrigger value="all">All Outstanding ({rows.length - counts.written_off})</TabsTrigger>
+                <TabsTrigger value="promised">Promised ({counts.promised})</TabsTrigger>
+                <TabsTrigger value="written_off">Written off ({counts.written_off})</TabsTrigger>
               </TabsList>
             </Tabs>
             <Input placeholder="Search name, email, invoice…" value={q} onChange={e => setQ(e.target.value)} className="sm:max-w-xs" />
@@ -102,12 +124,13 @@ export default function OutstandingInvoicesPage() {
                     <TableHead className="text-right">Outstanding</TableHead>
                     <TableHead>Next Due</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Follow-up</TableHead>
                     <TableHead></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtered.length === 0 ? (
-                    <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">No invoices</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-8">No invoices</TableCell></TableRow>
                   ) : filtered.map(r => (
                     <TableRow key={r.invoice_id}>
                       <TableCell className="font-medium">{r.invoice_number}</TableCell>
@@ -132,10 +155,31 @@ export default function OutstandingInvoicesPage() {
                           <Badge variant="secondary">Outstanding</Badge>
                         )}
                       </TableCell>
+                      <TableCell className="min-w-40">
+                        {(() => {
+                          const st = followups.get(r.enrollment_id);
+                          const bucket = followupBucket(st);
+                          const summary = followupSummary(st);
+                          return (
+                            <div className="space-y-1">
+                              {summary && <Badge variant="outline" className={FOLLOWUP_COLOURS[bucket]}>{summary}</Badge>}
+                              <div className="text-xs text-muted-foreground">
+                                {st ? `${FOLLOWUP_LABELS[st.last_kind]} ${daysAgo(st.last_at)}` : 'Not contacted'}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </TableCell>
                       <TableCell>
-                        <Button asChild size="sm" variant="outline">
-                          <Link to={`/admin/invoices/${r.invoice_id}`}>View</Link>
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={() => setFollowup({
+                            enrollment_id: r.enrollment_id, full_name: r.full_name, email: r.email, phone: r.phone,
+                            outstanding: Number(r.outstanding), days_overdue: r.days_overdue,
+                          })}>Follow up</Button>
+                          <Button asChild size="sm" variant="outline">
+                            <Link to={`/admin/invoices/${r.invoice_id}`}>View</Link>
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -145,6 +189,15 @@ export default function OutstandingInvoicesPage() {
           )}
         </CardContent>
       </Card>
+
+      {followup && (
+        <PaymentFollowupDialog
+          target={followup}
+          state={followups.get(followup.enrollment_id)}
+          onClose={() => setFollowup(null)}
+          onLog={input => log(followup.enrollment_id, input)}
+        />
+      )}
     </div>
   );
 }

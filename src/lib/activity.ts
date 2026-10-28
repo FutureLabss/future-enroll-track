@@ -17,15 +17,30 @@ export interface ActivityEvent {
   hub_name: string | null;
 }
 
+// Computed from the source tables for the selected range (get_activity_stats),
+// not from activity_events, which only exist from go-live onwards.
+export interface ActivityStats {
+  classes_held: number;
+  classes_cancelled: number;
+  attendance_sessions: number;
+  check_ins: number;
+  sessions_scheduled: number;
+  submissions: number;
+  assignments_published: number;
+  enrollments: number;
+  payments_count: number;
+  payments_amount: number;
+}
+
 export interface ClassroomActivity {
   classroom_id: string;
   classroom_name: string;
-  total: number;
-  held: number;
-  cancelled: number;
+  hub_name: string | null;
+  classes_held: number;
+  classes_cancelled: number;
+  check_ins: number;
   submissions: number;
-  attendance: number;
-  last_at: string;
+  last_activity_at: string | null;
 }
 
 export function filterActivity(events: ActivityEvent[], search: string): ActivityEvent[] {
@@ -46,29 +61,4 @@ export function groupActivityByDay(events: ActivityEvent[]): { day: string; even
     groups.get(day)!.push(e);
   }
   return Array.from(groups, ([day, evs]) => ({ day, events: evs }));
-}
-
-export function activityByClassroom(events: ActivityEvent[]): ClassroomActivity[] {
-  const rows = new Map<string, ClassroomActivity>();
-  for (const e of events) {
-    if (!e.classroom_id) continue;
-    const row = rows.get(e.classroom_id) ?? {
-      classroom_id: e.classroom_id,
-      classroom_name: e.classroom_name || 'Classroom',
-      total: 0, held: 0, cancelled: 0, submissions: 0, attendance: 0,
-      last_at: e.created_at,
-    };
-    row.total += 1;
-    if (e.event_type === 'session_completed') row.held += 1;
-    if (e.event_type === 'session_cancelled') row.cancelled += 1;
-    if (e.event_type === 'assignment_submitted') row.submissions += 1;
-    if (e.event_type === 'attendance_closed') row.attendance += 1;
-    if (e.created_at > row.last_at) row.last_at = e.created_at;
-    rows.set(e.classroom_id, row);
-  }
-  return Array.from(rows.values()).sort((a, b) => b.total - a.total);
-}
-
-export function countOf(counts: { event_type: string; total: number }[], ...types: string[]): number {
-  return counts.filter(c => types.includes(c.event_type)).reduce((sum, c) => sum + Number(c.total), 0);
 }

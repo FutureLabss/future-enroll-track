@@ -22,6 +22,7 @@ interface Payload {
     enrollment_status?: string;
     audience?: "all" | "outstanding" | "paid";
     staff_type?: "teaching" | "non_teaching"; // filter by classroom_staff.staff_type
+    staff_ids?: string[]; // hand-picked staff; when set, only these are emailed
   };
 }
 
@@ -179,7 +180,17 @@ Deno.serve(async (req) => {
     if (audienceType === "staff" || audienceType === "students_and_staff") {
       let staffRows: any[] = [];
 
-      if (f.staff_type) {
+      if (f.staff_ids?.length) {
+        let pickedQ = admin
+          .from("staff")
+          .select("id, full_name, email")
+          .in("id", f.staff_ids)
+          .eq("active", true);
+        if (hubId) pickedQ = pickedQ.eq("hub_id", hubId);
+        const { data, error: staffErr } = await pickedQ;
+        if (staffErr) throw staffErr;
+        staffRows = data || [];
+      } else if (f.staff_type) {
         // Join through classroom_staff to filter by teaching/non_teaching
         const { data, error: staffErr } = await admin
           .from("classroom_staff")

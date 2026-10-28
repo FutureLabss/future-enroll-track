@@ -159,6 +159,25 @@ Students must exist in **`classroom_students`** to see a classroom. Adding to `c
 ### Calendar sync
 - `/functions/v1/calendar-feed/<token>.ics` serves each user's classes, assignment due dates and cohort start/end dates (`calendar_feed_events`). Times are wall-clock `Africa/Lagos`. The token is the only credential calendar apps can send, so never log it and keep `verify_jwt = false` for this function only.
 
+### Marketing email (weekly digest, onboarding)
+- One suppression list per hub, `email_suppressions`, shared by the digest, onboarding and CRM leads. Every marketing email carries the signed `email-unsubscribe` link (`_shared/digestEmail.ts`); a new sender must check suppressions and use the same token.
+- Onboarding (`onboarding_*`, `send-onboarding-emails`, 10-minute cron): `trg_start_onboarding` opens one journey per person per hub on their **first** enrollment, only while the hub has it switched on, never back-filled. Steps are due N days after joining at 09:00 WAT; anything more than 3 days late is skipped, not sent.
+- `send-weekly-digest` and `send-onboarding-emails` run with `verify_jwt = false`: the cron authenticates with the `crm_cron_secret` vault secret, and admin calls are checked inside the function.
+- Opens, clicks, bounces and complaints arrive through the one Resend webhook, `resend-marketing-webhook`, which calls `record_email_event` for digest/onboarding deliveries and handles CRM deliveries itself. A permanent bounce or complaint suppresses the address via `suppress_email`. Store Resend's message id as `provider_message_id` on any new delivery table and add it to `record_email_event`.
+
+### Students who need attention
+- `student_risk_flags`, refreshed daily at 08:30 WAT by `refresh_student_risk_flags()` (pg_cron): absent from the cohort's last 2 countable sessions, or a published assignment 12h+ past due with no submission. Absence means **no** `attendance_records` row, since only present/late/excused are stored.
+- A session where under half the cohort marked in is not counted against anyone (in Oct 2026 several cohorts had 2-3 of 12 marking in, so attendance capture, not truancy). `get_student_risk_flags` reports those sessions to the tutor instead.
+- New flags notify the cohort's primary tutor (else its teaching staff) once per cohort per run; flags resolve on their own, and tutors can dismiss one.
+
+### Payment follow-up (Outstanding page)
+- `payment_followups` logs what staff did about a balance: called / whatsapp / note / promise / written_off / reopened. A promise (date today or later) pauses **overdue** emails for that enrollment until the date passes: `check-due-reminders` asks `payment_reminder_holds`. A new overdue-reminder path must ask it too.
+- "Written off" is collections status only. It changes no invoice, installment, `amount_paid` or revenue figure; never make it do so without the finance rules above.
+
+### Certificates
+- Issued **one student at a time**, never automatically, and only by the CEO (superadmin), a training manager of the hub, or a tutor of the student's cohort (primary tutor or the classroom's teaching staff). `can_issue_certificate` is the single check; plain hub admins can view but not issue.
+- Names are snapshotted at issue; to correct one, revoke (with a reason) and reissue. `/certificate/<code>` is public and verifies via `verify_certificate` (granted to anon). `CertificateView` follows the official FutureLabs sample (Oct 2026): a fixed 1123×794 px sheet scaled to fit, signed by Udim Manasseh, Founder. The logo is `public/certificates/futurelabs-logo.svg`, traced from futurelabs.ng's 191×38 PNG (brand orange `#F57F20`); swap in a designer's vector file if one turns up. The signature is `public/certificates/udim-manasseh-signature.png` (from the founder's scan, background removed, ink darkened to match the sample). The certificate ID line at the bottom isn't on the sample but keeps printed copies verifiable.
+
 ---
 
 ## Access Control

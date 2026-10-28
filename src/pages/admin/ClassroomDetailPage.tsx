@@ -31,6 +31,9 @@ import { CohortSetupGapsAlert } from '@/components/cohort/CohortSetupGapsAlert';
 import { PrimaryTutorSelect } from '@/components/cohort/PrimaryTutorSelect';
 import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
+import { StudentRiskPanel } from '@/components/classroom/StudentRiskPanel';
+import { useCertificates } from '@/hooks/useCertificates';
+import { CertificateAction } from '@/components/certificates/CertificateAction';
 import {
   Users, BookOpen, Calendar, ClipboardList, BarChart2, UserPlus, Loader2,
   GraduationCap, LayoutList, Layers, Plus, Pencil, Ban, CheckCircle, PlayCircle,
@@ -701,6 +704,7 @@ export default function ClassroomDetailPage() {
     staleTime: 30_000,
   });
   const students = studentsData ?? [];
+  const certificates = useCertificates(students.map((s: { id: string }) => s.id));
   // Mirrors the filter in send-account-reminders
   const remindable = students.filter(s => s.email && s.enrollment_status !== 'cancelled');
 
@@ -1143,12 +1147,16 @@ export default function ClassroomDetailPage() {
       ? <Badge variant="outline" className="bg-success/10 text-success border-success/30">Active</Badge>
       : <Badge variant="outline" className="text-muted-foreground">No account</Badge>
     },
+    { key: 'certificate', header: 'Certificate', exportable: false, render: (r: { id: string; full_name: string | null; email: string | null }) => (
+      <CertificateAction enrollmentId={r.id} studentName={r.full_name || r.email || ''} state={certificates.data.get(r.id)}
+        onIssue={certificates.issue} onRevoke={certificates.revoke} onResend={certificates.sendEmail} />
+    )},
     { key: 'actions', header: '', render: (r: any) => r.user_id ? (
       <Button size="sm" variant="ghost" className="h-7 px-2 text-muted-foreground hover:text-foreground" onClick={() => setSwitchModal({ open: true, student: r })} title="Switch classroom">
         <ArrowLeftRight className="h-3.5 w-3.5" />
       </Button>
     ) : null },
-  ], []);
+  ], [certificates]);
 
   const lessonColumns = useMemo(() => [
     { key: 'date', header: 'Date', render: (r: any) => new Date(r.lesson_date).toLocaleDateString('en-NG') },
@@ -1455,6 +1463,7 @@ export default function ClassroomDetailPage() {
 
         {/* STUDENTS */}
         <TabsContent value="students">
+          <StudentRiskPanel classroomId={id!} />
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <div className="text-sm text-muted-foreground">
               {(() => {

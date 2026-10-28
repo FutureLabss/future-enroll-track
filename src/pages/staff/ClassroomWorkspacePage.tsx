@@ -35,6 +35,9 @@ import {
   UserPlus, UserMinus, UserCheck, Trash2, Bell,
 } from 'lucide-react';
 import { downloadICS } from '@/lib/ics';
+import { StudentRiskPanel } from '@/components/classroom/StudentRiskPanel';
+import { useCertificates } from '@/hooks/useCertificates';
+import { CertificateAction } from '@/components/certificates/CertificateAction';
 
 const STATUS_COLOURS: Record<string, string> = {
   upcoming: 'bg-blue-500/15 text-blue-600 border-blue-500/30',
@@ -252,6 +255,7 @@ export default function ClassroomWorkspacePage() {
   const permissions = classroomData?.classroom_permissions ?? null;
   const staffList = pageData?.staffList ?? [];
   const students = pageData?.students ?? [];
+  const certificates = useCertificates(students.map((s: { id: string }) => s.id));
 
   const { data: optionsData } = useQuery({
     queryKey: ['workspace-options', id],
@@ -1210,6 +1214,7 @@ export default function ClassroomWorkspacePage() {
         {/* STUDENTS */}
         {can.can_view_students && (
           <TabsContent value="students">
+            <StudentRiskPanel classroomId={id!} />
             <DataTable
               columns={[
                 { key: 'name', header: 'Student', render: (r: any) => (r.profiles as any)?.full_name || r.full_name || '—' },
@@ -1221,6 +1226,10 @@ export default function ClassroomWorkspacePage() {
                   ? <Badge variant="outline" className="bg-success/10 text-success border-success/30">Active</Badge>
                   : <Badge variant="outline" className="bg-muted text-muted-foreground">No account</Badge>
                 },
+                { key: 'certificate', header: 'Certificate', exportable: false, render: (r: { id: string; full_name: string | null; email: string | null }) => (
+                  <CertificateAction enrollmentId={r.id} studentName={r.full_name || r.email || ''} state={certificates.data.get(r.id)}
+                    onIssue={certificates.issue} onRevoke={certificates.revoke} onResend={certificates.sendEmail} />
+                )},
               ]}
               data={students}
               searchable

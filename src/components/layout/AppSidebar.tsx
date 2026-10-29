@@ -33,6 +33,8 @@ import {
   Megaphone,
   CalendarClock,
   Activity,
+  Award,
+  UserMinus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -77,6 +79,8 @@ const adminNav = [
   { to: '/admin/programs', icon: GraduationCap, label: 'Programs' },
   { to: '/admin/classrooms', icon: School, label: 'Classrooms' },
   { to: '/admin/cohorts', icon: BookOpen, label: 'Cohorts' },
+  { to: '/admin/certificates', icon: Award, label: 'Certificates' },
+  { to: '/admin/dropouts', icon: UserMinus, label: 'Dropped off' },
   { to: '/admin/staff-invitations', icon: Mail, label: 'Staff Invitations' },
   { to: '/admin/organizations', icon: Building2, label: 'Organizations' },
   { to: '/admin/custom-fields', icon: FormInput, label: 'Custom Fields' },

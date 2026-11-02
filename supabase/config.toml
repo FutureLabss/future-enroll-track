@@ -41,3 +41,12 @@ verify_jwt = false  # public unsubscribe links are protected by signed tokens
 
 [functions.send-certificate-email]
 verify_jwt = true
+
+[functions.create-project-tracker-sso]
+verify_jwt = true
+
+[functions.redeem-project-tracker-sso]
+verify_jwt = false  # server-to-server from the Tracker backend; authenticated with PROJECT_TRACKER_REDEEM_SECRET
+
+[functions.project-tracker-access]
+verify_jwt = true

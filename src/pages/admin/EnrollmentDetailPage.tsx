@@ -17,6 +17,7 @@ import { ArrowLeft, CheckCircle, XCircle, ExternalLink, Trash2, Pencil, ArrowLef
 import { toast } from 'sonner';
 import { useCertificates } from '@/hooks/useCertificates';
 import { CertificateAction } from '@/components/certificates/CertificateAction';
+import { ScholarshipAction } from '@/components/scholarships/ScholarshipAction';
 import { SwitchProgramDialog } from '@/components/enrollment/SwitchProgramDialog';
 
 interface FieldValue {
@@ -356,6 +357,8 @@ export default function EnrollmentDetailPage() {
             )}
             <CertificateAction enrollmentId={enrollment.id} studentName={enrollment.full_name}
               programName={enrollment.programs?.program_name} certs={certificates} />
+            <ScholarshipAction enrollmentId={enrollment.id} studentName={enrollment.full_name}
+              outstanding={Number(enrollment.outstanding_balance || 0)} />
             {!['cancelled', 'withdrawn'].includes(enrollment.enrollment_status) && (
               <Button variant="outline" onClick={() => setSwitchProgramOpen(true)}>
                 <ArrowLeftRight className="h-4 w-4 mr-2" /> Switch Programme

@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { CheckCircle, Upload, GraduationCap } from 'lucide-react';
@@ -15,6 +16,7 @@ export default function EnrollPage() {
   const [uploading, setUploading] = useState(false);
   const [evidenceUrl, setEvidenceUrl] = useState('');
   const [evidenceFileName, setEvidenceFileName] = useState('');
+  const [whatsappOptIn, setWhatsappOptIn] = useState(false);
 
   const [form, setForm] = useState({
     full_name: '',
@@ -123,6 +125,7 @@ export default function EnrollPage() {
         payment_evidence_url: evidenceUrl,
         verification_status: 'pending',
         enrollment_status: 'pending',
+        whatsapp_opt_in: whatsappOptIn,
       } as any).select().single();
 
       if (error) throw error;
@@ -139,6 +142,7 @@ export default function EnrollPage() {
     setForm({ full_name: '', email: '', phone: '', program_id: '', cohort_id: '', total_amount: '' });
     setEvidenceUrl('');
     setEvidenceFileName('');
+    setWhatsappOptIn(false);
   };
 
   if (submitted) {
@@ -213,6 +217,10 @@ export default function EnrollPage() {
                   <p className="text-xs text-destructive mt-1">Use international format: +234...</p>
                 )}
               </div>
+              <label className="flex items-start gap-2 text-sm text-muted-foreground sm:col-span-2">
+                <Checkbox className="mt-0.5" checked={whatsappOptIn} onCheckedChange={v => setWhatsappOptIn(Boolean(v))} />
+                Send me payment reminders, receipts and class updates on WhatsApp
+              </label>
             </div>
           </div>
 

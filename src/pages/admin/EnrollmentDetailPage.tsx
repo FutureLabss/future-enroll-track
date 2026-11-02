@@ -10,9 +10,10 @@ import { CustomFieldsForm } from '@/components/enrollment/CustomFieldsForm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { ArrowLeft, CheckCircle, XCircle, ExternalLink, Trash2, Pencil, ArrowLeftRight, Eye, ClipboardList, LockKeyhole, Loader2, Save, FilePlus, Send, Link2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, ExternalLink, Trash2, Pencil, ArrowLeftRight, Eye, ClipboardList, LockKeyhole, Loader2, Save, FilePlus, Send, Link2, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCertificates } from '@/hooks/useCertificates';
 import { CertificateAction } from '@/components/certificates/CertificateAction';
@@ -37,6 +38,7 @@ export default function EnrollmentDetailPage() {
   const [sendingSetup, setSendingSetup] = useState(false);
   const [switchProgramOpen, setSwitchProgramOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [consentOpen, setConsentOpen] = useState(false);
   const [editForm, setEditForm] = useState({ full_name: '', email: '', phone: '', address: '', guardian_name: '', guardian_phone: '' });
   const [saving, setSaving] = useState(false);
   const [reportingOpen, setReportingOpen] = useState(false);
@@ -455,6 +457,8 @@ export default function EnrollmentDetailPage() {
             ['Address', (enrollment as any).address || '—'],
             ['Guardian Name', (enrollment as any).guardian_name || '—'],
             ['Guardian Phone', (enrollment as any).guardian_phone || '—'],
+            ['WhatsApp', consentLabel((enrollment as any).whatsapp_opt_in)],
+            ['Contact guardian', (enrollment as any).guardian_phone ? consentLabel((enrollment as any).guardian_contact_opt_in) : '—'],
             ['Payment Type', enrollment.payment_type],
             ['Sponsor', enrollment.organizations?.organization_name || '—'],
             ['Verification', enrollment.verification_status || 'pending'],
@@ -468,7 +472,14 @@ export default function EnrollmentDetailPage() {
             </div>
           ))}
         </div>
+        <Button size="sm" variant="outline" className="mt-4" onClick={() => setConsentOpen(true)}>
+          <MessageCircle className="h-4 w-4 mr-2" /> Record WhatsApp consent
+        </Button>
       </div>
+      {consentOpen && (
+        <ConsentDialog enrollment={enrollment} onClose={() => setConsentOpen(false)}
+          onSaved={() => queryClient.invalidateQueries({ queryKey: ['enrollment-detail', id] })} />
+      )}
 
       {/* Custom Field Values */}
       {fieldValues.length > 0 && groupFields(fieldValues).map(group => (
@@ -638,5 +649,49 @@ export default function EnrollmentDetailPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+const consentLabel = (v: boolean | null | undefined) => v === true ? 'Agreed' : v === false ? 'Declined' : 'Not asked';
+
+// Consent given in person or by phone at the front desk; the database stamps when.
+function ConsentDialog({ enrollment, onClose, onSaved }: { enrollment: any; onClose: () => void; onSaved: () => void }) {
+  const [whatsapp, setWhatsapp] = useState(enrollment.whatsapp_opt_in === true);
+  const [guardian, setGuardian] = useState(enrollment.guardian_contact_opt_in === true);
+  const [busy, setBusy] = useState(false);
+  return (
+    <Dialog open onOpenChange={o => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>WhatsApp consent</DialogTitle>
+          <DialogDescription>Ask {enrollment.full_name} and tick only what they agree to. Meta requires this before we message them first.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <label className="flex items-start gap-2 text-sm">
+            <Checkbox className="mt-0.5" checked={whatsapp} onCheckedChange={v => setWhatsapp(Boolean(v))} />
+            Agrees to payment reminders, receipts and class updates on WhatsApp{enrollment.phone ? ` (${enrollment.phone})` : ''}
+          </label>
+          {enrollment.guardian_phone && (
+            <label className="flex items-start gap-2 text-sm">
+              <Checkbox className="mt-0.5" checked={guardian} onCheckedChange={v => setGuardian(Boolean(v))} />
+              Agrees we may contact their guardian ({enrollment.guardian_phone}) if fees are more than 30 days overdue
+            </label>
+          )}
+        </div>
+        <DialogFooter>
+          <Button disabled={busy} onClick={async () => {
+            setBusy(true);
+            const { error } = await supabase.from('enrollments')
+              .update({ whatsapp_opt_in: whatsapp, guardian_contact_opt_in: Boolean(enrollment.guardian_phone) && guardian } as any)
+              .eq('id', enrollment.id);
+            setBusy(false);
+            if (error) { toast.error(error.message); return; }
+            toast.success('Consent recorded');
+            onSaved();
+            onClose();
+          }}>{busy ? 'Saving…' : 'Save'}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

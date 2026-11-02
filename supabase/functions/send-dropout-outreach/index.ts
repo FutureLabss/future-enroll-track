@@ -22,6 +22,7 @@ interface Outreach {
   hub_name: string | null;
   reply_to: string | null;
   message_no: number;
+  whatsapp_ok: boolean;
 }
 
 const FRONTEND = Deno.env.get("FRONTEND_URL") || "https://admin.futurelabs.ng";
@@ -80,8 +81,9 @@ Deno.serve(async (req) => {
         failed++;
       }
     }
-    if (o.phone && whatsappConfigured()) {
-      try { await sendWhatsApp(o.phone, msg.whatsapp); whatsapped++; } catch { failed++; }
+    if (o.phone && o.whatsapp_ok && whatsappConfigured()) {
+      const template = { key: "dropout_checkin", vars: [firstName(o.full_name), o.program_name, `${FRONTEND}/reconnect/${o.token}`] };
+      try { await sendWhatsApp(o.phone, msg.whatsapp, template); whatsapped++; } catch { failed++; }
     }
   }
   return json({ cases: (data || []).length, emailed, whatsapped, failed });

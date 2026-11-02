@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
@@ -32,6 +33,8 @@ export default function CreateInvoicePage() {
     address: '',
     guardian_name: '',
     guardian_phone: '',
+    whatsapp_opt_in: false,
+    guardian_contact_opt_in: false,
     program_id: '',
     cohort_id: '',
     organization_id: '',
@@ -169,6 +172,8 @@ export default function CreateInvoicePage() {
             address: form.address || null,
             guardian_name: form.guardian_name || null,
             guardian_phone: form.guardian_phone || null,
+            whatsapp_opt_in: form.whatsapp_opt_in,
+            guardian_contact_opt_in: Boolean(form.guardian_phone) && form.guardian_contact_opt_in,
             program_id: form.program_id,
             cohort_id: form.cohort_id || null,
             organization_id: form.organization_id || null,
@@ -311,6 +316,21 @@ export default function CreateInvoicePage() {
               placeholder="+2347032400529"
             />
           </div>
+          {!existingEnrollmentId && (
+            <div className="space-y-2 sm:col-span-2">
+              <p className="text-xs text-muted-foreground">Ask the student, and only tick what they agree to:</p>
+              <label className="flex items-start gap-2 text-sm">
+                <Checkbox className="mt-0.5" checked={form.whatsapp_opt_in} onCheckedChange={v => setForm({ ...form, whatsapp_opt_in: Boolean(v) })} />
+                Agrees to payment reminders, receipts and class updates on WhatsApp
+              </label>
+              {form.guardian_phone && (
+                <label className="flex items-start gap-2 text-sm">
+                  <Checkbox className="mt-0.5" checked={form.guardian_contact_opt_in} onCheckedChange={v => setForm({ ...form, guardian_contact_opt_in: Boolean(v) })} />
+                  Agrees we may contact their guardian if fees are more than 30 days overdue
+                </label>
+              )}
+            </div>
+          )}
           <div>
             <Label>Program *</Label>
             <Select value={form.program_id} onValueChange={v => setForm({ ...form, program_id: v, cohort_id: '' })}>

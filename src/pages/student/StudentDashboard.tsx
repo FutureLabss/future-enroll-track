@@ -33,6 +33,7 @@ import { enrichSchedules, SCHEDULE_COLUMNS } from '@/hooks/useSchedules';
 import { StudentCertificatesCard } from '@/components/certificates/StudentCertificatesCard';
 import { usePausedAccess } from '@/hooks/usePausedAccess';
 import { AccessPausedBanner } from '@/components/payments/AccessPaused';
+import { WhatsAppConsentCard } from '@/components/enrollment/WhatsAppConsentCard';
 
 const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
 const formatDate = (date?: string | null) => date
@@ -290,6 +291,7 @@ export default function StudentDashboard() {
       <PageHeader title="My Dashboard" description="Your classes, assignments, progress, and payments" />
       <CompleteProfileBanner />
       <AccessPausedBanner paused={pausedAccess} />
+      <WhatsAppConsentCard onlyUnanswered />
       <StudentCertificatesCard />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">

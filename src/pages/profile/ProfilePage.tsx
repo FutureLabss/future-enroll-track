@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { CalendarSyncButton } from '@/components/shared/CalendarSync';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { CustomFieldsForm } from '@/components/enrollment/CustomFieldsForm';
+import { WhatsAppConsentCard } from '@/components/enrollment/WhatsAppConsentCard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -170,6 +171,8 @@ export default function ProfilePage() {
   return (
     <div>
       <PageHeader title="My Profile" description="Manage your student profile and enrollment information" actions={<CalendarSyncButton />} />
+
+      <WhatsAppConsentCard />
 
       <div className="mb-6 grid gap-4 md:grid-cols-3">
         <div className="glass-card rounded-xl border border-border p-4">

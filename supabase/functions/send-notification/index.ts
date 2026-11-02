@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendWhatsApp } from "../_shared/whatsapp.ts";
+import { sendWhatsApp, type WhatsAppTemplate } from "../_shared/whatsapp.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -239,6 +239,47 @@ function buildEmailContent(type: string, data: Record<string, any>): { subject: 
   }
 }
 
+// The approved template for each message type, with its {{1}}, {{2}}… values in order.
+// Keys and wording are in docs/whatsapp-templates.md; change both together, because
+// Meta rejects a send whose variables don't match the approved template.
+function whatsAppTemplate(type: string, data: Record<string, unknown>): WhatsAppTemplate | null {
+  const { full_name, invoice_number, total_amount, currency, due_date, amount_paid, outstanding_balance, installment_amount, program_name, enrollment_id, invoice_id, FRONTEND_URL } = data;
+  const sym = currency === "USD" ? "$" : "₦";
+  const fmt = (n: unknown) => `${sym}${Number(n || 0).toLocaleString("en-NG", { maximumFractionDigits: 0 })}`;
+  const day = (d: unknown) => d ? new Date(`${String(d).slice(0, 10)}T00:00:00`).toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" }) : "today";
+  const name = String(full_name || "there").trim().split(/\s+/)[0];
+  const programme = String(program_name || "your programme");
+  const payLink = `${FRONTEND_URL}/student/invoices/${invoice_id}?pay=1`;
+  const owed = fmt(installment_amount ?? outstanding_balance);
+  const step = Number(data.stage_day ?? 0);
+  const days = String(data.days_overdue ?? step);
+
+  switch (type) {
+    case "invoice_created":
+      return { key: "invoice_created", vars: [name, String(invoice_number), programme, fmt(total_amount), day(due_date), `${FRONTEND_URL}/students/${enrollment_id}`] };
+    case "account_setup":
+      return { key: "account_setup", vars: [name, programme, `${FRONTEND_URL}/students/${enrollment_id}`] };
+    case "payment_reminder":
+      return { key: "payment_reminder", vars: [name, owed, programme, day(due_date), payLink] };
+    case "overdue":
+      if (data.access_paused) return { key: "overdue_paused", vars: [name, owed, programme, days, payLink] };
+      if (step >= 7 && data.pause_date) return { key: "overdue_pause_warning", vars: [name, owed, programme, days, day(data.pause_date), payLink] };
+      return { key: "overdue", vars: [name, owed, programme, day(due_date), payLink] };
+    case "overdue_guardian":
+      return {
+        key: "guardian_overdue",
+        vars: [String(data.guardian_name || "Parent/Guardian").trim(), String(full_name || "your ward"), programme, days, fmt(outstanding_balance),
+          data.access_paused ? "is now paused" : data.pause_date ? `pauses on ${day(data.pause_date)}` : "will pause soon", payLink],
+      };
+    case "payment_received":
+      return { key: "payment_received", vars: [name, String(invoice_number), fmt(amount_paid), fmt(outstanding_balance)] };
+    case "invoice_settled":
+      return { key: "invoice_settled", vars: [name, String(invoice_number), programme] };
+    default:
+      return null;
+  }
+}
+
 function buildWhatsAppMessage(type: string, data: Record<string, any>): string {
   const { full_name, invoice_number, total_amount, currency, due_date, amount_paid, outstanding_balance, installment_amount, program_name, enrollment_id, invoice_id, FRONTEND_URL } = data;
   const sym = currency === "USD" ? "$" : "₦";
@@ -396,11 +437,15 @@ Deno.serve(async (req) => {
     }
 
     // Send WhatsApp (to the guardian on the enrollment for overdue_guardian)
-    const waTo = type === "overdue_guardian" ? enrollment.guardian_phone : enrollment.phone;
-    if ((channel === "whatsapp" || channel === "both") && waTo) {
+    // Only to people who agreed to WhatsApp messages (enrollments.*_opt_in).
+    const guardianMessage = type === "overdue_guardian";
+    const waConsent = guardianMessage ? enrollment.guardian_contact_opt_in : enrollment.whatsapp_opt_in;
+    const waTo = guardianMessage ? enrollment.guardian_phone : enrollment.phone;
+    if ((channel === "whatsapp" || channel === "both") && waTo && !waConsent) results.push("whatsapp_skipped_no_consent");
+    if ((channel === "whatsapp" || channel === "both") && waTo && waConsent) {
       try {
         const message = buildWhatsAppMessage(type, templateData);
-        await sendWhatsApp(waTo, message);
+        await sendWhatsApp(waTo, message, whatsAppTemplate(type, templateData) ?? undefined);
         results.push("whatsapp_sent");
 
         await supabase.from("notifications").insert({

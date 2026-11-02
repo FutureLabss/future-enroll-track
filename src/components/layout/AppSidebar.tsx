@@ -33,13 +33,16 @@ import {
   Megaphone,
   CalendarClock,
   Activity,
+  FolderKanban,
   Award,
   UserMinus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { ProjectTrackerLink } from '@/components/shared/ProjectTrackerLink';
 import { ThemeToggle } from '@/components/shared/ThemeToggle';
+import { useHasProjectTrackerAccess } from '@/hooks/useProjectTrackerAccess';
 import { NotificationBell } from './NotificationBell';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -198,6 +201,7 @@ export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps)
     enabled: Boolean(user) && isAdmin && !isDemo,
     staleTime: 5 * 60_000,
   });
+  const canOpenTracker = useHasProjectTrackerAccess(isDemo ? undefined : user?.id);
   const nav = useMemo(() => {
     const rawBaseNav = isAdmin ? adminNav : isMarketing ? marketingNav : isOrganization ? orgNav : isStaff ? staffNav : studentNav;
     const baseNav = isDemo ? rawBaseNav.filter(item => !DEMO_HIDDEN_ROUTES.has(item.to)) : rawBaseNav;
@@ -210,6 +214,7 @@ export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps)
             ? [
                 { to: '/admin/payroll', icon: Banknote, label: 'Payroll' },
                 { to: '/admin/manage-admins', icon: ShieldCheck, label: 'Manage Admins' },
+                { to: '/admin/project-tracker-access', icon: FolderKanban, label: 'Tracker Access' },
                 { to: '/admin/hubs', icon: Building2, label: 'Hub Management' },
               ]
             : []),
@@ -259,6 +264,7 @@ export function AppSidebar({ variant = 'desktop', onNavigate }: AppSidebarProps)
             {item.label}
           </NavLink>
         ))}
+        {canOpenTracker && <ProjectTrackerLink />}
       </nav>
 
       {isSuperadmin && user && (

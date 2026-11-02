@@ -32,6 +32,7 @@ const PartnerReportPage = lazy(() => import("@/pages/admin/PartnerReportPage"));
 const AuditLogPage = lazy(() => import("@/pages/admin/AuditLogPage"));
 const ActivityReportPage = lazy(() => import("@/pages/admin/ActivityReportPage"));
 const ManageAdminsPage = lazy(() => import("@/pages/admin/ManageAdminsPage"));
+const ProjectTrackerAccessPage = lazy(() => import("@/pages/admin/ProjectTrackerAccessPage"));
 const PayrollPage = lazy(() => import("@/pages/admin/PayrollPage"));
 const OtherIncomePage = lazy(() => import("@/pages/admin/OtherIncomePage"));
 const ExpensesPage = lazy(() => import("@/pages/admin/ExpensesPage"));
@@ -203,6 +204,7 @@ const App = () => (
                   <Route path="/admin/audit-logs" element={<AuditLogPage />} />
                   <Route path="/admin/activity" element={<ActivityReportPage />} />
                   <Route path="/admin/manage-admins" element={<ManageAdminsPage />} />
+                  <Route path="/admin/project-tracker-access" element={<ProjectTrackerAccessPage />} />
                   <Route path="/admin/payroll" element={<PayrollPage />} />
                   <Route path="/admin/other-income" element={<OtherIncomePage />} />
                   <Route path="/admin/expenses" element={<ExpensesPage />} />

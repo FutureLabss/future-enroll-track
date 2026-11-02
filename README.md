@@ -50,3 +50,7 @@ Push to the connected hosting provider (e.g., Netlify) to deploy.
 ## Custom domain
 
 Configure your custom domain through your hosting provider's domain settings.
+
+## Project Tracker SSO
+
+See [setup, security contract, deployment and verification](docs/project-tracker-sso.md).

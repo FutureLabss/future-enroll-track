@@ -50,3 +50,6 @@ verify_jwt = false  # server-to-server from the Tracker backend; authenticated w
 
 [functions.project-tracker-access]
 verify_jwt = true
+
+[functions.send-dropout-outreach]
+verify_jwt = false  # daily cron, authenticated with the CRM cron secret

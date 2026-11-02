@@ -26,6 +26,8 @@ import {
   Users, Video, ExternalLink, Send, ShieldCheck, Presentation,
 } from 'lucide-react';
 import { downloadICS } from '@/lib/ics';
+import { usePausedAccess } from '@/hooks/usePausedAccess';
+import { AccessPausedCard } from '@/components/payments/AccessPaused';
 
 const ATTENDANCE_STATUS_COLOURS: Record<string, string> = {
   present: 'bg-success/15 text-success border-success/30',
@@ -765,6 +767,7 @@ function PresentationsTab({ classroomId, cohortId }: { classroomId: string; coho
 export default function StudentClassroomPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const { data: paused } = usePausedAccess();
 
   const { data: pageData } = useQuery({
     // Keyed on user?.id, not the user object — token auto-refresh mints a new
@@ -834,6 +837,8 @@ export default function StudentClassroomPage() {
 
   if (!pageData) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
   if (!classroom) return <div className="text-center py-20 text-muted-foreground">Classroom not found.</div>;
+  const pausedHere = paused.find(p => p.program_id === classroom.program_id);
+  if (pausedHere) return <AccessPausedCard paused={pausedHere} classroomName={classroom.name} />;
 
   const visibleLessons = lessons.filter(l => !l.cohort_id || l.cohort_id === cohortId);
   const todayLessons = visibleLessons.filter(l => l.lesson_date === today);

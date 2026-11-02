@@ -353,8 +353,7 @@ export default function EnrollmentDetailPage() {
               </>
             )}
             <CertificateAction enrollmentId={enrollment.id} studentName={enrollment.full_name}
-              programName={enrollment.programs?.program_name} state={certificates.data.get(enrollment.id)}
-              onIssue={certificates.issue} onRevoke={certificates.revoke} onResend={certificates.sendEmail} />
+              programName={enrollment.programs?.program_name} certs={certificates} />
             {!['cancelled', 'withdrawn'].includes(enrollment.enrollment_status) && (
               <Button variant="outline" onClick={() => setSwitchProgramOpen(true)}>
                 <ArrowLeftRight className="h-4 w-4 mr-2" /> Switch Programme

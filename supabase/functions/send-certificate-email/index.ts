@@ -1,9 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { escapeHtml, firstName } from "../_shared/digestEmail.ts";
 
-// Emails a student their certificate link. Called by whoever issued it (or may
-// issue it, to resend): { certificate_id }. The caller's own permission is checked
-// with can_issue_certificate under their JWT.
+// Emails a student their certificate link: { certificate_id }. Called by the CEO or a
+// training manager after issuing or approving (or to resend); the caller's permission
+// is checked with can_approve_certificate under their JWT.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
     if (!cert) return json({ error: "Certificate not found" }, 404);
     if (cert.revoked_at) return json({ error: "This certificate has been revoked" }, 400);
 
-    const { data: allowed, error: permError } = await userClient.rpc("can_issue_certificate", { p_enrollment_id: cert.enrollment_id });
+    const { data: allowed, error: permError } = await userClient.rpc("can_approve_certificate", { p_enrollment_id: cert.enrollment_id });
     if (permError || !allowed) return json({ error: "Not allowed" }, 403);
 
     const to = cert.enrollments?.email?.trim();

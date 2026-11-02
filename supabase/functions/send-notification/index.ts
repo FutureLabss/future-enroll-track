@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendWhatsApp } from "../_shared/whatsapp.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -27,6 +28,8 @@ async function sendEmail(to: string, subject: string, html: string) {
     body: JSON.stringify({
       from: "FutureLabs <notifications@futurelabs.ng>",
       to: [to],
+      // Payment emails ask students to reply to agree a plan; replies must reach a person.
+      reply_to: Deno.env.get("PAYMENTS_REPLY_TO") || "hello@futurelabs.africa",
       subject,
       html,
     }),
@@ -39,40 +42,33 @@ async function sendEmail(to: string, subject: string, html: string) {
   return await res.json();
 }
 
-async function sendWhatsApp(to: string, body: string) {
-  const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
-  const authToken = Deno.env.get("TWILIO_AUTH_TOKEN");
-  const fromNumber = Deno.env.get("TWILIO_WHATSAPP_NUMBER");
-
-  if (!accountSid || !authToken || !fromNumber) {
-    throw new Error("Twilio credentials not fully configured");
+// Overdue messages escalate (check-due-reminders sends one per step): each says what
+// happens next and when, instead of repeating the same reminder.
+function overdueStage(data: Record<string, unknown>): { subject: string; heading: string; message: string } {
+  const step = Number(data.stage_day ?? 0);
+  const days = Number(data.days_overdue ?? step);
+  const pause = data.pause_date
+    ? new Date(`${data.pause_date}T00:00:00`).toLocaleDateString("en-NG", { weekday: "long", day: "numeric", month: "long" })
+    : "";
+  if (data.access_paused) {
+    return {
+      subject: step >= 60 ? "Final notice: your classroom access is paused" : "Your classroom access has been paused",
+      heading: step >= 60 ? "Final notice" : "Classroom access paused",
+      message: `Your payment is ${days} days overdue, so your access to classes, materials and assignments is paused. It is restored as soon as you pay, or as soon as you agree a payment date with us: reply to this email or call the front desk today. Your certificate can't be issued while a balance is outstanding.`,
+    };
   }
-
-  // Ensure the 'to' number has whatsapp: prefix
-  const toWhatsApp = to.startsWith("whatsapp:") ? to : `whatsapp:${to}`;
-
-  const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
-  const credentials = btoa(`${accountSid}:${authToken}`);
-
-  const params = new URLSearchParams();
-  params.append("From", fromNumber);
-  params.append("To", toWhatsApp);
-  params.append("Body", body);
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${credentials}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: params.toString(),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Twilio API error [${res.status}]: ${err}`);
+  if (step >= 7 && pause) {
+    return {
+      subject: `Action needed: classroom access pauses on ${pause}`,
+      heading: "Payment overdue: access pauses soon",
+      message: `Your payment is ${days} days overdue. If it isn't paid, or a payment date agreed with us, by <strong>${pause}</strong>, your access to classes, materials and assignments will be paused. If you are having difficulty, reply to this email and we'll agree a plan.`,
+    };
   }
-  return await res.json();
+  return {
+    subject: "Payment overdue",
+    heading: "Payment Overdue",
+    message: "Your payment is now overdue. Please settle it as soon as possible, or reply to this email if you need to agree a payment date.",
+  };
 }
 
 function buildEmailContent(type: string, data: Record<string, any>): { subject: string; html: string } {
@@ -181,13 +177,14 @@ function buildEmailContent(type: string, data: Record<string, any>): { subject: 
         `),
       };
 
-    case "overdue":
+    case "overdue": {
+      const stage = overdueStage(data);
       return {
-        subject: `⚠️ Overdue Payment – ${invoice_number}`,
+        subject: `⚠️ ${stage.subject} – ${invoice_number}`,
         html: wrapper(`
-          <h2 style="color: #dc2626; margin-top: 0;">Payment Overdue</h2>
+          <h2 style="color: #dc2626; margin-top: 0;">${stage.heading}</h2>
           <p>Hi ${full_name},</p>
-          <p>Your payment is now overdue. Please settle it immediately to avoid disruption to your enrollment.</p>
+          <p>${stage.message}</p>
           <div style="background: #fef2f2; border-radius: 8px; padding: 20px; margin: 20px 0; border-left: 4px solid #dc2626;">
             <table style="width:100%; font-size:14px; border-collapse:collapse;">
               <tr><td style="padding:5px 0; color:#6b7280;">Invoice</td><td style="padding:5px 0; text-align:right; font-weight:600;">${invoice_number}</td></tr>
@@ -211,6 +208,7 @@ function buildEmailContent(type: string, data: Record<string, any>): { subject: 
           </div>
         `),
       };
+    }
 
     case "invoice_settled":
       return {
@@ -259,9 +257,11 @@ function buildWhatsAppMessage(type: string, data: Record<string, any>): string {
     case "payment_reminder":
       return `⏰ *Payment Reminder*\n\nHi ${full_name},\nInvoice: ${invoice_number}${program_name ? ` · ${program_name}` : ""}\nTotal: ${amt} | Paid: ${paid} | Balance: ${balance}${dueNow}\nDue: ${due_date}\n\nPay online: ${FRONTEND_URL}/student/invoices/${invoice_id}?pay=1${bankLine}`;
     case "overdue":
-      return `⚠️ *Payment Overdue*\n\nHi ${full_name},\nInvoice: ${invoice_number}${program_name ? ` · ${program_name}` : ""}\nTotal: ${amt} | Paid: ${paid} | Balance: ${balance}${dueNow}\nDue: ${due_date} (OVERDUE)\n\nPay immediately: ${FRONTEND_URL}/student/invoices/${invoice_id}?pay=1${bankLine}`;
+      return `⚠️ *${overdueStage(data).heading}*\n\nHi ${full_name},\n${overdueStage(data).message.replace(/<\/?strong>/g, "*")}\n\nInvoice: ${invoice_number}${program_name ? ` · ${program_name}` : ""}\nTotal: ${amt} | Paid: ${paid} | Balance: ${balance}${dueNow}\nDue: ${due_date} (OVERDUE)\n\nPay immediately: ${FRONTEND_URL}/student/invoices/${invoice_id}?pay=1${bankLine}`;
     case "invoice_settled":
       return `🎉 *Invoice Fully Paid*\n\nHi ${full_name},\nInvoice: ${invoice_number}\nTotal: ${amt}\n\nThank you for completing payment!`;
+    case "overdue_guardian":
+      return `Hello${data.guardian_name ? ` ${data.guardian_name}` : ""}, this is FutureLabs.\n\n${full_name}'s fees for ${program_name || "their programme"} are ${data.days_overdue} days overdue (balance ${balance}), and their classroom access ${data.access_paused ? "is now paused" : "will pause soon"}.\n\nPlease help ensure payment, or call us to agree a plan.\nPay online: ${FRONTEND_URL}/student/invoices/${invoice_id}?pay=1${bankLine}`;
     case "account_setup":
       return `👋 *Set Up Your FutureLabs Account*\n\nHi ${full_name},\nYou're enrolled${program_name ? ` in ${program_name}` : ""}. Create your student account and complete your profile here:\n${FRONTEND_URL}/students/${enrollment_id}`;
     default:
@@ -395,17 +395,18 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Send WhatsApp
-    if ((channel === "whatsapp" || channel === "both") && enrollment.phone) {
+    // Send WhatsApp (to the guardian on the enrollment for overdue_guardian)
+    const waTo = type === "overdue_guardian" ? enrollment.guardian_phone : enrollment.phone;
+    if ((channel === "whatsapp" || channel === "both") && waTo) {
       try {
         const message = buildWhatsAppMessage(type, templateData);
-        await sendWhatsApp(enrollment.phone, message);
+        await sendWhatsApp(waTo, message);
         results.push("whatsapp_sent");
 
         await supabase.from("notifications").insert({
           type,
           title: `WhatsApp: ${type.replace(/_/g, " ")}`,
-          message: `WhatsApp sent to ${enrollment.phone}`,
+          message: `WhatsApp sent to ${waTo}`,
           channel: "whatsapp",
           enrollment_id,
           user_id: enrollment.user_id,

@@ -18,6 +18,8 @@ export interface FollowupTarget {
   phone: string | null;
   outstanding: number;
   days_overdue: number;
+  guardian_name?: string | null;
+  guardian_phone?: string | null;
 }
 
 const money = (n: number) => `₦${Number(n || 0).toLocaleString('en-NG', { maximumFractionDigits: 0 })}`;
@@ -36,6 +38,7 @@ export function PaymentFollowupDialog({ target, state, onClose, onLog }: {
   const [date, setDate] = useState('');
   const [saving, setSaving] = useState(false);
   const wa = whatsappLink(target.phone);
+  const guardianWa = whatsappLink(target.guardian_phone);
   const summary = followupSummary(state);
 
   const valid = kind !== 'promise' || (date && date >= lagosToday() && (!amount || Number(amount) > 0));
@@ -76,6 +79,13 @@ export function PaymentFollowupDialog({ target, state, onClose, onLog }: {
           {target.phone && <Button asChild size="sm" variant="outline"><a href={`tel:${target.phone}`}><Phone className="mr-1.5 h-4 w-4" />Call</a></Button>}
           {target.email && <Button asChild size="sm" variant="outline"><a href={`mailto:${target.email}`}><Mail className="mr-1.5 h-4 w-4" />Email</a></Button>}
         </div>
+        {target.guardian_phone && (
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Guardian: {target.guardian_name || 'no name given'}</span>
+            {guardianWa && <Button asChild size="sm" variant="outline"><a href={guardianWa} target="_blank" rel="noreferrer"><MessageCircle className="mr-1.5 h-4 w-4" />WhatsApp guardian</a></Button>}
+            <Button asChild size="sm" variant="outline"><a href={`tel:${target.guardian_phone}`}><Phone className="mr-1.5 h-4 w-4" />Call guardian</a></Button>
+          </div>
+        )}
 
         <div className="space-y-3 rounded-lg border border-border p-3">
           <div>

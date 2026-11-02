@@ -31,6 +31,8 @@ import {
 import { ASSIGNMENT_COLUMNS } from '@/hooks/useAssignments';
 import { enrichSchedules, SCHEDULE_COLUMNS } from '@/hooks/useSchedules';
 import { StudentCertificatesCard } from '@/components/certificates/StudentCertificatesCard';
+import { usePausedAccess } from '@/hooks/usePausedAccess';
+import { AccessPausedBanner } from '@/components/payments/AccessPaused';
 
 const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
 const formatDate = (date?: string | null) => date
@@ -56,6 +58,7 @@ const withTimeout = async <T,>(request: PromiseLike<T>, fallback: T, label: stri
 export default function StudentDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { data: pausedAccess } = usePausedAccess();
 
   const { data: dashData, isLoading: loading } = useQuery({
     queryKey: ['student-dashboard', user?.id],
@@ -286,6 +289,7 @@ export default function StudentDashboard() {
     <div>
       <PageHeader title="My Dashboard" description="Your classes, assignments, progress, and payments" />
       <CompleteProfileBanner />
+      <AccessPausedBanner paused={pausedAccess} />
       <StudentCertificatesCard />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">

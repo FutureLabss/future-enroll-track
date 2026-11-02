@@ -9,6 +9,7 @@ const LoginPage = lazy(() => import("@/pages/auth/LoginPage"));
 const ReconnectPage = lazy(() => import("@/pages/public/ReconnectPage"));
 const DropoutsPage = lazy(() => import("@/pages/admin/DropoutsPage"));
 const CertificatesPage = lazy(() => import("@/pages/admin/CertificatesPage"));
+const ScholarshipsPage = lazy(() => import("@/pages/admin/ScholarshipsPage"));
 const CertificatePage = lazy(() => import("@/pages/public/CertificatePage"));
 const ResetPasswordPage = lazy(() => import("@/pages/auth/ResetPasswordPage"));
 const SetPasswordPage = lazy(() => import("@/pages/auth/SetPasswordPage"));
@@ -220,6 +221,7 @@ const App = () => (
                   <Route path="/admin/cohorts" element={<CohortsPage />} />
                   <Route path="/admin/cohorts/:id" element={<CohortDetailPage />} />
                   <Route path="/admin/certificates" element={<CertificatesPage />} />
+                  <Route path="/admin/scholarships" element={<ScholarshipsPage />} />
                   <Route path="/admin/dropouts" element={<DropoutsPage />} />
                   <Route path="/admin/staff-invitations" element={<StaffInvitationsAdminPage />} />
                 </Route>

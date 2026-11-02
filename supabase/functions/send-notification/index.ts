@@ -242,13 +242,13 @@ function buildEmailContent(type: string, data: Record<string, any>): { subject: 
 // The approved template for each message type, with its {{1}}, {{2}}… values in order.
 // Keys and wording are in docs/whatsapp-templates.md; change both together, because
 // Meta rejects a send whose variables don't match the approved template.
-function whatsAppTemplate(type: string, data: Record<string, any>): WhatsAppTemplate | null {
+function whatsAppTemplate(type: string, data: Record<string, unknown>): WhatsAppTemplate | null {
   const { full_name, invoice_number, total_amount, currency, due_date, amount_paid, outstanding_balance, installment_amount, program_name, enrollment_id, invoice_id, FRONTEND_URL } = data;
   const sym = currency === "USD" ? "$" : "₦";
-  const fmt = (n: number) => `${sym}${Number(n || 0).toLocaleString("en-NG", { maximumFractionDigits: 0 })}`;
-  const day = (d: string) => d ? new Date(`${String(d).slice(0, 10)}T00:00:00`).toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" }) : "today";
+  const fmt = (n: unknown) => `${sym}${Number(n || 0).toLocaleString("en-NG", { maximumFractionDigits: 0 })}`;
+  const day = (d: unknown) => d ? new Date(`${String(d).slice(0, 10)}T00:00:00`).toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" }) : "today";
   const name = String(full_name || "there").trim().split(/\s+/)[0];
-  const programme = program_name || "your programme";
+  const programme = String(program_name || "your programme");
   const payLink = `${FRONTEND_URL}/student/invoices/${invoice_id}?pay=1`;
   const owed = fmt(installment_amount ?? outstanding_balance);
   const step = Number(data.stage_day ?? 0);
@@ -256,7 +256,7 @@ function whatsAppTemplate(type: string, data: Record<string, any>): WhatsAppTemp
 
   switch (type) {
     case "invoice_created":
-      return { key: "invoice_created", vars: [name, invoice_number, programme, fmt(total_amount), day(due_date), `${FRONTEND_URL}/students/${enrollment_id}`] };
+      return { key: "invoice_created", vars: [name, String(invoice_number), programme, fmt(total_amount), day(due_date), `${FRONTEND_URL}/students/${enrollment_id}`] };
     case "account_setup":
       return { key: "account_setup", vars: [name, programme, `${FRONTEND_URL}/students/${enrollment_id}`] };
     case "payment_reminder":
@@ -272,9 +272,9 @@ function whatsAppTemplate(type: string, data: Record<string, any>): WhatsAppTemp
           data.access_paused ? "is now paused" : data.pause_date ? `pauses on ${day(data.pause_date)}` : "will pause soon", payLink],
       };
     case "payment_received":
-      return { key: "payment_received", vars: [name, invoice_number, fmt(amount_paid), fmt(outstanding_balance)] };
+      return { key: "payment_received", vars: [name, String(invoice_number), fmt(amount_paid), fmt(outstanding_balance)] };
     case "invoice_settled":
-      return { key: "invoice_settled", vars: [name, invoice_number, programme] };
+      return { key: "invoice_settled", vars: [name, String(invoice_number), programme] };
     default:
       return null;
   }

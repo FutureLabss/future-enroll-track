@@ -457,8 +457,8 @@ export default function EnrollmentDetailPage() {
             ['Address', (enrollment as any).address || '—'],
             ['Guardian Name', (enrollment as any).guardian_name || '—'],
             ['Guardian Phone', (enrollment as any).guardian_phone || '—'],
-            ['WhatsApp', consentLabel((enrollment as any).whatsapp_opt_in)],
-            ['Contact guardian', (enrollment as any).guardian_phone ? consentLabel((enrollment as any).guardian_contact_opt_in) : '—'],
+            ['WhatsApp', consentLabel((enrollment as ConsentFields).whatsapp_opt_in)],
+            ['Contact guardian', (enrollment as ConsentFields).guardian_phone ? consentLabel((enrollment as ConsentFields).guardian_contact_opt_in) : '—'],
             ['Payment Type', enrollment.payment_type],
             ['Sponsor', enrollment.organizations?.organization_name || '—'],
             ['Verification', enrollment.verification_status || 'pending'],
@@ -652,10 +652,19 @@ export default function EnrollmentDetailPage() {
   );
 }
 
+interface ConsentFields {
+  id: string;
+  full_name: string;
+  phone: string | null;
+  guardian_phone?: string | null;
+  whatsapp_opt_in?: boolean | null;
+  guardian_contact_opt_in?: boolean | null;
+}
+
 const consentLabel = (v: boolean | null | undefined) => v === true ? 'Agreed' : v === false ? 'Declined' : 'Not asked';
 
 // Consent given in person or by phone at the front desk; the database stamps when.
-function ConsentDialog({ enrollment, onClose, onSaved }: { enrollment: any; onClose: () => void; onSaved: () => void }) {
+function ConsentDialog({ enrollment, onClose, onSaved }: { enrollment: ConsentFields; onClose: () => void; onSaved: () => void }) {
   const [whatsapp, setWhatsapp] = useState(enrollment.whatsapp_opt_in === true);
   const [guardian, setGuardian] = useState(enrollment.guardian_contact_opt_in === true);
   const [busy, setBusy] = useState(false);
@@ -682,7 +691,7 @@ function ConsentDialog({ enrollment, onClose, onSaved }: { enrollment: any; onCl
           <Button disabled={busy} onClick={async () => {
             setBusy(true);
             const { error } = await supabase.from('enrollments')
-              .update({ whatsapp_opt_in: whatsapp, guardian_contact_opt_in: Boolean(enrollment.guardian_phone) && guardian } as any)
+              .update({ whatsapp_opt_in: whatsapp, guardian_contact_opt_in: Boolean(enrollment.guardian_phone) && guardian } as never)
               .eq('id', enrollment.id);
             setBusy(false);
             if (error) { toast.error(error.message); return; }

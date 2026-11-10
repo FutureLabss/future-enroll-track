@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { escapeHtml, firstName } from "../_shared/digestEmail.ts";
 
 // Emails the payer of an other-income row: { other_income_id, receipt?, booking? }.
-// Receipts are blind-copied to the hub's `receipt_copy_to` staff.
+// Both emails are blind-copied to the hub's `receipt_copy_to` staff.
 // `receipt` sends a numbered payment receipt; `booking` sends the hall booking
 // confirmation (date, time, facilities, inclusions, conditions). The caller must be
 // able to see the row under their own JWT, i.e. an admin of its hub.
@@ -134,7 +134,7 @@ ${textToHtml(bookingRow.conditions)}
 <p style="font-size:14px;line-height:1.6;margin:0;">By using the hall you agree to these conditions. If anything needs to change, reply to this email as early as you can.</p>
 ${footer}`);
       const text = `Booking confirmed: ${bookingRow.venue_name}\n\nHi ${name}, your booking is confirmed.\n\nDate and time: ${when}\n${defaults?.address ? `Venue: ${bookingRow.venue_name}, ${defaults.address}\n` : ""}${bookingRow.purpose ? `Event: ${bookingRow.purpose}\n` : ""}${bookingRow.guests ? `Guests: ${bookingRow.guests}\n` : ""}Amount paid: ${naira(income.amount)}\n\nFacilities you can use:\n${bookingRow.facilities}\n\nWhat your booking includes:\n${bookingRow.inclusions}\n\nConditions of use:\n${bookingRow.conditions}\n\nBy using the hall you agree to these conditions.\n\n${org}`;
-      await send(`Your booking of ${bookingRow.venue_name} on ${longDate(bookingRow.usage_date)}`, html, text);
+      await send(`Your booking of ${bookingRow.venue_name} on ${longDate(bookingRow.usage_date)}`, html, text, copyTo);
       await db.from("venue_bookings").update({ details_sent_at: new Date().toISOString() }).eq("id", bookingRow.id);
       sent.push("booking");
     }

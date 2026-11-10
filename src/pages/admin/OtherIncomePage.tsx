@@ -15,13 +15,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Plus, Pencil, Trash2, Wallet, TrendingUp, Repeat, Check, Square, Mail, Phone } from 'lucide-react';
+import { Plus, Pencil, Trash2, Wallet, TrendingUp, Repeat, Check, Square, Mail, Phone, Send, Settings2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { StatCard } from '@/components/shared/StatCard';
+import { Checkbox } from '@/components/ui/checkbox';
+import { useVenueBookings, type BookingInput } from '@/hooks/useVenueBookings';
+import { HallBookingFields } from '@/components/finance/HallBookingFields';
+import { VenueDefaultsDialog } from '@/components/finance/VenueDefaultsDialog';
 
 const CATEGORIES = ['workspace', 'rental', 'consulting', 'event', 'other'];
 const fmt = (v: number) => `₦${Number(v).toLocaleString('en-NG', { maximumFractionDigits: 0 })}`;
 const todayStr = () => new Date().toISOString().slice(0, 10);
+
+const blankBooking = (date: string): BookingInput => ({
+  venue_name: '', usage_date: date, end_date: null, start_time: '09:00', end_time: '17:00',
+  guests: null, purpose: null, facilities: '', inclusions: '', conditions: '',
+});
 
 const blankForm = {
   category: 'workspace',
@@ -41,8 +50,13 @@ const blankForm = {
 };
 
 export default function OtherIncomePage() {
-  const { user } = useAuth();
+  const { user, hubId } = useAuth();
   const queryClient = useQueryClient();
+  const venue = useVenueBookings();
+  const [booking, setBooking] = useState<BookingInput>(blankBooking(todayStr()));
+  const [emailPayer, setEmailPayer] = useState(true);
+  const [defaultsOpen, setDefaultsOpen] = useState(false);
+  const [emailing, setEmailing] = useState<string | null>(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<typeof blankForm>(blankForm);
@@ -77,19 +91,29 @@ export default function OtherIncomePage() {
   const refetchRows = () => queryClient.invalidateQueries({ queryKey: ['other-income'] });
   const refetchRecurring = () => queryClient.invalidateQueries({ queryKey: ['recurring-income'] });
 
+  const bookingFromDefaults = (date: string): BookingInput => {
+    const d = venue.data.defaults;
+    return { ...blankBooking(date), venue_name: d?.venue_name ?? '', facilities: d?.facilities ?? '', inclusions: d?.inclusions ?? '', conditions: d?.conditions ?? '' };
+  };
+
   const openNew = () => {
     setEditingKey(null);
     setDupAcknowledged(false);
+    setBooking(bookingFromDefaults(todayStr()));
+    setEmailPayer(true);
     setForm({ ...blankForm, payment_date: todayStr(), next_due_date: todayStr() });
     setDialogOpen(true);
   };
 
   const openEditIncome = useCallback((r: any) => {
     setEditingKey(r.id);
+    const existing = venue.data.byIncome.get(r.id);
+    setBooking(existing ? { ...existing, start_time: existing.start_time.slice(0, 5), end_time: existing.end_time.slice(0, 5) } : bookingFromDefaults(r.payment_date || todayStr()));
+    setEmailPayer(false);
     setForm({
       category: r.category || 'workspace',
       payer_name: r.payer_name || '',
-      payer_email: '',
+      payer_email: r.payer_email || '',
       payer_phone: '',
       amount: r.amount != null ? String(r.amount) : '',
       payment_date: r.payment_date || todayStr(),
@@ -102,7 +126,8 @@ export default function OtherIncomePage() {
       end_date: '',
     });
     setDialogOpen(true);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [venue.data]);
 
   const openSetAsRecurring = useCallback((r: any) => {
     setEditingKey(null);
@@ -150,6 +175,13 @@ export default function OtherIncomePage() {
       const amount = parseFloat(form.amount);
       if (!form.payer_name) throw new Error('Payer name is required');
       if (isNaN(amount) || amount <= 0) throw new Error('Valid amount is required');
+      const isHallRental = form.category === 'rental' && !form.is_recurring && !editingKey?.startsWith('recurring:');
+      if (isHallRental) {
+        if (!booking.venue_name.trim() || !booking.usage_date || !booking.start_time || !booking.end_time) throw new Error('Enter the venue, date and times of the booking');
+        if (!booking.end_date && booking.end_time <= booking.start_time) throw new Error('The end time must be after the start time');
+        if (!booking.facilities.trim() || !booking.inclusions.trim() || !booking.conditions.trim()) throw new Error('Fill in the facilities, inclusions and conditions');
+      }
+      if (isHallRental && emailPayer && !form.payer_email.trim()) throw new Error("Add the payer's email to send the receipt and booking details");
 
       if (editingKey?.startsWith('recurring:')) {
         // Edit existing recurring template
@@ -179,15 +211,18 @@ export default function OtherIncomePage() {
         const { error } = await supabase.from('other_income').update({
           category: form.category,
           payer_name: form.payer_name,
+          payer_email: form.payer_email.trim() || null,
           amount,
           payment_date: form.payment_date,
           payment_method: form.payment_method || null,
           payment_reference: form.payment_reference || null,
           notes: form.notes || null,
-        }).eq('id', editingKey);
+        } as never).eq('id', editingKey);
         if (error) throw error;
+        if (isHallRental) await venue.saveBooking(editingKey, booking);
         toast.success('Income updated');
         refetchRows();
+        if (emailPayer && form.payer_email.trim()) await emailIncome(editingKey, isHallRental);
       } else if (form.is_recurring) {
         // Warn if an active template already exists for this payer — duplicates
         // send double reminders and don't get silenced when the other is paid
@@ -222,23 +257,39 @@ export default function OtherIncomePage() {
         refetchRecurring();
       } else {
         // Create new one-off income
-        const { error } = await supabase.from('other_income').insert({
+        const { data: created, error } = await supabase.from('other_income').insert({
           category: form.category,
           payer_name: form.payer_name,
+          payer_email: form.payer_email.trim() || null,
           amount,
           payment_date: form.payment_date,
           payment_method: form.payment_method || null,
           payment_reference: form.payment_reference || null,
           notes: form.notes || null,
           recorded_by: user?.id || null,
-        });
+        } as never).select('id').single();
         if (error) throw error;
+        const incomeId = (created as { id: string }).id;
+        if (isHallRental) await venue.saveBooking(incomeId, booking);
         toast.success('Income recorded');
         refetchRows();
+        if (emailPayer && form.payer_email.trim()) await emailIncome(incomeId, isHallRental);
       }
 
       setDialogOpen(false);
     } catch (err: any) { toast.error(err.message); }
+  };
+
+  const emailIncome = async (incomeId: string, withBooking: boolean) => {
+    setEmailing(incomeId);
+    try {
+      const r = await venue.sendEmails(incomeId, { receipt: true, booking: withBooking });
+      toast.success(r.sent.includes('booking') ? `Receipt and booking details sent to ${r.sent_to}` : `Receipt sent to ${r.sent_to}`);
+    } catch (e) {
+      toast.error(`Saved, but the email failed: ${(e as Error).message}`);
+    } finally {
+      setEmailing(null);
+    }
   };
 
   const removeIncome = useCallback(async (id: string) => {
@@ -311,13 +362,28 @@ export default function OtherIncomePage() {
   const incomeColumns = useMemo(() => [
     { key: 'payment_date', header: 'Date', render: (r: any) => new Date(r.payment_date).toLocaleDateString('en-NG') },
     { key: 'category', header: 'Category', render: (r: any) => <span className="capitalize">{r.category}</span> },
-    { key: 'payer_name', header: 'Payer' },
+    { key: 'payer_name', header: 'Payer', render: (r: any) => {
+      const b = venue.data.byIncome.get(r.id);
+      return (
+        <div>
+          <p>{r.payer_name}</p>
+          {b && <p className="text-xs text-muted-foreground">{b.venue_name}, {new Date(`${b.usage_date}T00:00:00`).toLocaleDateString('en-NG')} {b.start_time.slice(0, 5)}–{b.end_time.slice(0, 5)}</p>}
+          {r.receipt_number && <p className="text-xs text-muted-foreground">{r.receipt_number}{r.receipt_sent_at ? ` emailed ${new Date(r.receipt_sent_at).toLocaleDateString('en-NG')}` : ''}</p>}
+        </div>
+      );
+    } },
     { key: 'amount', header: 'Amount', render: (r: any) => fmt(Number(r.amount)) },
     { key: 'payment_method', header: 'Method', render: (r: any) => r.payment_method || '—' },
     { key: 'payment_reference', header: 'Reference', render: (r: any) => r.payment_reference || '—' },
     {
       key: 'actions', header: '', render: (r: any) => (
         <div className="flex gap-1 justify-end">
+          {r.payer_email && (
+            <Button variant="ghost" size="sm" title={venue.data.byIncome.has(r.id) ? 'Email receipt and booking details' : 'Email receipt'}
+              disabled={emailing === r.id} onClick={e => { e.stopPropagation(); emailIncome(r.id, venue.data.byIncome.has(r.id)); }}>
+              <Send className="h-4 w-4" />
+            </Button>
+          )}
           <Button variant="ghost" size="sm" title="Set as recurring" onClick={e => { e.stopPropagation(); openSetAsRecurring(r); }}>
             <Repeat className="h-4 w-4" />
           </Button>
@@ -344,7 +410,8 @@ export default function OtherIncomePage() {
         </div>
       ),
     },
-  ], [openEditIncome, openSetAsRecurring, removeIncome]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [openEditIncome, openSetAsRecurring, removeIncome, venue.data, emailing]);
 
   return (
     <div>
@@ -352,6 +419,8 @@ export default function OtherIncomePage() {
         title="Other Income"
         description="Workspace, rental, consulting and other revenue"
         actions={
+          <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setDefaultsOpen(true)}><Settings2 className="h-4 w-4 mr-2" /> Hall rental defaults</Button>
           <Dialog open={dialogOpen} onOpenChange={o => { setDialogOpen(o); }}>
             <DialogTrigger asChild>
               <Button onClick={openNew}><Plus className="h-4 w-4 mr-2" /> Record Income</Button>
@@ -382,7 +451,7 @@ export default function OtherIncomePage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label>Payer Email</Label>
-                    <Input className="mt-1.5" type="email" placeholder="for reminders" value={form.payer_email} onChange={e => setForm(f => ({ ...f, payer_email: e.target.value }))} />
+                    <Input className="mt-1.5" type="email" placeholder="for receipts and reminders" value={form.payer_email} onChange={e => setForm(f => ({ ...f, payer_email: e.target.value }))} />
                   </div>
                   <div>
                     <Label>Payer Phone</Label>
@@ -465,6 +534,17 @@ export default function OtherIncomePage() {
                   </div>
                 )}
 
+                {form.category === 'rental' && !showRecurringFields && (
+                  <HallBookingFields value={booking} onChange={setBooking} />
+                )}
+
+                {!showRecurringFields && (
+                  <label className="flex items-start gap-2 text-sm">
+                    <Checkbox className="mt-0.5" checked={emailPayer} onCheckedChange={v => setEmailPayer(Boolean(v))} />
+                    {form.category === 'rental' ? 'Email the payer a receipt and the booking details' : 'Email the payer a receipt'}
+                  </label>
+                )}
+
                 {/* Notes */}
                 <div>
                   <Label>Notes</Label>
@@ -477,6 +557,7 @@ export default function OtherIncomePage() {
               </div>
             </DialogContent>
           </Dialog>
+          </div>
         }
       />
 
@@ -630,6 +711,10 @@ export default function OtherIncomePage() {
           )}
         </TabsContent>
       </Tabs>
+      {defaultsOpen && (
+        <VenueDefaultsDialog defaults={venue.data.defaults} onClose={() => setDefaultsOpen(false)}
+          onSave={d => venue.saveDefaults(d, hubId ?? '')} />
+      )}
     </div>
   );
 }

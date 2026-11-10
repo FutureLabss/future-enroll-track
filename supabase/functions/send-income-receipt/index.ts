@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { escapeHtml, firstName } from "../_shared/digestEmail.ts";
 
 // Emails the payer of an other-income row: { other_income_id, receipt?, booking? }.
-// Both emails are blind-copied to the hub's `receipt_copy_to` staff.
+// Both emails are blind-copied to the hub's `receipt_copy_to` staff and to whoever sent them.
 // `receipt` sends a numbered payment receipt; `booking` sends the hall booking
 // confirmation (date, time, facilities, inclusions, conditions). The caller must be
 // able to see the row under their own JWT, i.e. an admin of its hub.
@@ -65,7 +65,9 @@ Deno.serve(async (req) => {
 
     const { data: bookingRow } = await db.from("venue_bookings").select("*").eq("other_income_id", other_income_id).maybeSingle();
     const { data: defaults } = await db.from("venue_booking_defaults").select("address, contact, receipt_copy_to").eq("hub_id", income.hub_id).maybeSingle();
-    const copyTo = ((defaults?.receipt_copy_to ?? []) as string[]).map((e) => e.trim()).filter((e) => e && e.toLowerCase() !== to.toLowerCase());
+    const { data: { user: sender } } = await userClient.auth.getUser();
+    const copyTo = [...new Set([...((defaults?.receipt_copy_to ?? []) as string[]), sender?.email ?? ""]
+      .map((e) => e.trim().toLowerCase()).filter((e) => e && e !== to.toLowerCase()))];
     const hub = (income.hubs as { name: string; contact_email: string | null } | null);
     const org = hub?.name || "FutureLabs";
     const replyTo = hub?.contact_email || Deno.env.get("PAYMENTS_REPLY_TO") || "hello@futurelabs.africa";

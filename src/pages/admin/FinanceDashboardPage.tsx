@@ -93,14 +93,14 @@ export default function FinanceDashboardPage() {
       <FinanceChart rows={displayRows} loading={loading} />
 
       <div className="mb-6">
-        <EnrollmentTargets />
+        <MonthSummaryTable
+          rows={displayRows}
+          selectedMonth={selectedMonth}
+          onSelectMonth={handleSelectMonth}
+        />
       </div>
 
-      <MonthSummaryTable
-        rows={displayRows}
-        selectedMonth={selectedMonth}
-        onSelectMonth={handleSelectMonth}
-      />
+      <EnrollmentTargets />
 
       <MonthDetailSheet
         month={selectedMonth}

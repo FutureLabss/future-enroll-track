@@ -362,7 +362,7 @@ export default function OtherIncomePage() {
   const incomeColumns = useMemo(() => [
     { key: 'payment_date', header: 'Date', render: (r: any) => new Date(r.payment_date).toLocaleDateString('en-NG') },
     { key: 'category', header: 'Category', render: (r: any) => <span className="capitalize">{r.category}</span> },
-    { key: 'payer_name', header: 'Payer', render: (r: any) => {
+    { key: 'payer_name', header: 'Payer', render: (r: { id: string; payer_name: string; receipt_number?: string | null; receipt_sent_at?: string | null }) => {
       const b = venue.data.byIncome.get(r.id);
       return (
         <div>

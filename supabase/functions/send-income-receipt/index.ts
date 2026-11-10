@@ -2,7 +2,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { escapeHtml, firstName } from "../_shared/digestEmail.ts";
 
 // Emails the payer of an other-income row: { other_income_id, receipt?, booking? }.
-// Both emails are blind-copied to the hub's `receipt_copy_to` staff.
+// Both emails are blind-copied to the hub's `receipt_copy_to` staff and to whoever sent them.
+// `copy_only_to` (staff addresses) sends a copy to those staff only, without emailing the
+// payer again or marking anything as sent; it accepts only the hub's admins, owners and
+// managers, its receipt_copy_to list, and the superadmin.
 // `receipt` sends a numbered payment receipt; `booking` sends the hall booking
 // confirmation (date, time, facilities, inclusions, conditions). The caller must be
 // able to see the row under their own JWT, i.e. an admin of its hub.
@@ -51,7 +54,7 @@ Deno.serve(async (req) => {
       global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
     });
 
-    const { other_income_id, receipt = true, booking = true } = await req.json().catch(() => ({}));
+    const { other_income_id, receipt = true, booking = true, copy_only_to } = await req.json().catch(() => ({}));
     if (!other_income_id) return json({ error: "other_income_id is required" }, 400);
 
     const { data: visible } = await userClient.from("other_income").select("id").eq("id", other_income_id).maybeSingle();
@@ -65,7 +68,19 @@ Deno.serve(async (req) => {
 
     const { data: bookingRow } = await db.from("venue_bookings").select("*").eq("other_income_id", other_income_id).maybeSingle();
     const { data: defaults } = await db.from("venue_booking_defaults").select("address, contact, receipt_copy_to").eq("hub_id", income.hub_id).maybeSingle();
-    const copyTo = ((defaults?.receipt_copy_to ?? []) as string[]).map((e) => e.trim()).filter((e) => e && e.toLowerCase() !== to.toLowerCase());
+    const { data: { user: sender } } = await userClient.auth.getUser();
+    const copyTo = [...new Set([...((defaults?.receipt_copy_to ?? []) as string[]), sender?.email ?? ""]
+      .map((e) => e.trim().toLowerCase()).filter((e) => e && e !== to.toLowerCase()))];
+    let copyOnly: string[] | null = null;
+    if (Array.isArray(copy_only_to) && copy_only_to.length) {
+      const { data: staffIds } = await db.from("hub_members").select("user_id").eq("hub_id", income.hub_id).in("hub_role", ["owner", "admin", "manager"]);
+      const { data: staff } = await db.from("profiles").select("email").in("user_id", (staffIds ?? []).map((m) => m.user_id));
+      const allowed = new Set([...(staff ?? []).map((p) => p.email), ...((defaults?.receipt_copy_to ?? []) as string[]), "manassehudim@gmail.com"]
+        .filter(Boolean).map((e) => String(e).trim().toLowerCase()));
+      copyOnly = copy_only_to.map((e: string) => String(e).trim().toLowerCase());
+      const outsider = copyOnly.find((e) => !allowed.has(e));
+      if (outsider) return json({ error: `${outsider} is not staff of this hub` }, 403);
+    }
     const hub = (income.hubs as { name: string; contact_email: string | null } | null);
     const org = hub?.name || "FutureLabs";
     const replyTo = hub?.contact_email || Deno.env.get("PAYMENTS_REPLY_TO") || "hello@futurelabs.africa";
@@ -76,7 +91,11 @@ Deno.serve(async (req) => {
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { Authorization: `Bearer ${Deno.env.get("RESEND_API_KEY")}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ from: Deno.env.get("MARKETING_FROM") || "FutureLabs <notifications@futurelabs.ng>", to: [to], ...(bcc.length ? { bcc } : {}), reply_to: replyTo, subject, html, text }),
+        body: JSON.stringify({
+          from: Deno.env.get("MARKETING_FROM") || "FutureLabs <notifications@futurelabs.ng>",
+          ...(copyOnly ? { to: copyOnly, subject: `Copy: ${subject}` } : { to: [to], ...(bcc.length ? { bcc } : {}), subject }),
+          reply_to: replyTo, html, text,
+        }),
       });
       if (!res.ok) throw new Error(`Email failed: ${(await res.text()).slice(0, 200)}`);
     };
@@ -108,7 +127,7 @@ ${row("Receipt number", number)}
 ${footer}`);
       const text = `Payment receipt ${number}\n\nHi ${name}, thank you. We have received your payment.\n\nReceived from: ${income.payer_name}\nFor: ${what}\n${when ? `Booking: ${when}\n` : ""}Amount paid: ${naira(income.amount)}\nDate paid: ${longDate(income.payment_date)}\n${income.payment_method ? `Method: ${method(income.payment_method)}\n` : ""}${income.payment_reference ? `Reference: ${income.payment_reference}\n` : ""}\n${org}`;
       await send(`Receipt ${number}: ${what}`, html, text, copyTo);
-      await db.from("other_income").update({ receipt_sent_at: new Date().toISOString() }).eq("id", other_income_id);
+      if (!copyOnly) await db.from("other_income").update({ receipt_sent_at: new Date().toISOString() }).eq("id", other_income_id);
       sent.push("receipt");
     }
 
@@ -135,11 +154,11 @@ ${textToHtml(bookingRow.conditions)}
 ${footer}`);
       const text = `Booking confirmed: ${bookingRow.venue_name}\n\nHi ${name}, your booking is confirmed.\n\nDate and time: ${when}\n${defaults?.address ? `Venue: ${bookingRow.venue_name}, ${defaults.address}\n` : ""}${bookingRow.purpose ? `Event: ${bookingRow.purpose}\n` : ""}${bookingRow.guests ? `Guests: ${bookingRow.guests}\n` : ""}Amount paid: ${naira(income.amount)}\n\nFacilities you can use:\n${bookingRow.facilities}\n\nWhat your booking includes:\n${bookingRow.inclusions}\n\nConditions of use:\n${bookingRow.conditions}\n\nBy using the hall you agree to these conditions.\n\n${org}`;
       await send(`Your booking of ${bookingRow.venue_name} on ${longDate(bookingRow.usage_date)}`, html, text, copyTo);
-      await db.from("venue_bookings").update({ details_sent_at: new Date().toISOString() }).eq("id", bookingRow.id);
+      if (!copyOnly) await db.from("venue_bookings").update({ details_sent_at: new Date().toISOString() }).eq("id", bookingRow.id);
       sent.push("booking");
     }
 
-    return json({ sent_to: to, sent });
+    return json({ sent_to: copyOnly ? copyOnly.join(", ") : to, sent });
   } catch (e) {
     return json({ error: (e as Error).message }, 500);
   }

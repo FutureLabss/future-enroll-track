@@ -193,7 +193,7 @@ Students must exist in **`classroom_students`** to see a classroom. Adding to `c
 
 ### Hall rentals (2026-11-10)
 - A hall rental is an `other_income` row (category `rental`) plus a `venue_bookings` row (date, times, facilities, inclusions, conditions). The booking keeps its own copy of the text; `venue_booking_defaults` (one per hub, edited under Other Income > "Hall rental defaults") only pre-fills new bookings, so editing defaults never changes what a past renter was sent.
-- `send-income-receipt` emails the payer a receipt (numbered `RCT-000001…` by `assign_income_receipt_number` on first send; a resend keeps the number) and, for a rental, the booking confirmation; both are blind-copied to the hub's `venue_booking_defaults.receipt_copy_to` staff (FutureLabs: the hub manager). Permission = the caller can read the income row under RLS.
+- `send-income-receipt` emails the payer a receipt (numbered `RCT-000001…` by `assign_income_receipt_number` on first send; a resend keeps the number) and, for a rental, the booking confirmation; both are blind-copied to the hub's `venue_booking_defaults.receipt_copy_to` staff (FutureLabs: the hub manager) and to the staff member who sent them. Permission = the caller can read the income row under RLS.
 
 ### Certificates
 - **Request, then approve** (2026-10-28): the class tutor (`can_issue_certificate`: primary tutor or the classroom's teaching staff), a training manager or a hub admin may request (`can_request_certificate`); the CEO (superadmin) or a training manager approves (`can_approve_certificate`). Either approver is enough, and an approver's own request issues at once. Only approvers revoke. Requests live in `certificate_requests`; approvers work them on `/admin/certificates`.

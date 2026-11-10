@@ -33,7 +33,7 @@ export function VenueDefaultsDialog({ defaults, onClose, onSave }: {
           <div>
             <Label htmlFor="vd-copy">Copy receipts and booking details to</Label>
             <Input id="vd-copy" className="mt-1.5" placeholder="manager@example.com, accounts@example.com" value={copyTo} onChange={e => setCopyTo(e.target.value)} />
-            <p className="mt-1 text-xs text-muted-foreground">Staff who should see every income receipt and hall booking confirmation. They are blind-copied, so payers don't see these addresses.</p>
+            <p className="mt-1 text-xs text-muted-foreground">Staff who should see every income receipt and hall booking confirmation. They are blind-copied, so payers don't see these addresses. Whoever sends the emails always gets a copy too.</p>
           </div>
           <div><Label htmlFor="vd-facilities">Facilities</Label><Textarea id="vd-facilities" className="mt-1.5" rows={6} value={form.facilities} onChange={set('facilities')} /></div>
           <div><Label htmlFor="vd-inclusions">What a booking includes</Label><Textarea id="vd-inclusions" className="mt-1.5" rows={5} value={form.inclusions} onChange={set('inclusions')} /></div>

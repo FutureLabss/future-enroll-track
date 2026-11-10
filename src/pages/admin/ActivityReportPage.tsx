@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { ProgrammeMarginSection } from '@/components/admin/ProgrammeMarginSection';
 import { useActivityReport, useActivityReportViewers, useCanViewActivityReport } from '@/hooks/useActivityReport';
 import { filterActivity, groupActivityByDay, type ActivityEvent, type ClassroomActivity } from '@/lib/activity';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -222,6 +223,8 @@ export default function ActivityReportPage() {
       </div>
 
       <CohortSetupGapsAlert showClassroom />
+
+      <ProgrammeMarginSection />
 
       {data.classrooms.length > 0 && (
         <section className="mb-8">

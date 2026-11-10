@@ -29,7 +29,7 @@ describe('HallBookingFields', () => {
 describe('VenueDefaultsDialog', () => {
   it('saves the edited defaults and needs every section filled', async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
-    const defaults = { venue_name: 'FutureLabs Hall', address: 'Chubb Road', contact: '0703', facilities: '- Wi-Fi', inclusions: '- Staff on site', conditions: '1. No smoking' };
+    const defaults = { venue_name: 'FutureLabs Hall', address: 'Chubb Road', contact: '0703', facilities: '- Wi-Fi', inclusions: '- Staff on site', conditions: '1. No smoking', receipt_copy_to: ['gideon@example.com'] };
     render(<VenueDefaultsDialog defaults={defaults} onClose={vi.fn()} onSave={onSave} />);
     const save = screen.getByRole('button', { name: 'Save defaults' });
     fireEvent.change(screen.getByLabelText('Conditions of use'), { target: { value: '' } });
@@ -37,5 +37,14 @@ describe('VenueDefaultsDialog', () => {
     fireEvent.change(screen.getByLabelText('Conditions of use'), { target: { value: '1. No smoking\n2. Pay overtime' } });
     fireEvent.click(save);
     await waitFor(() => expect(onSave).toHaveBeenCalledWith({ ...defaults, conditions: '1. No smoking\n2. Pay overtime' }));
+  });
+
+  it('saves the receipt copy list as separate addresses', async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const defaults = { venue_name: 'Hall', address: null, contact: null, facilities: '- Wi-Fi', inclusions: '- Staff', conditions: '1. No smoking', receipt_copy_to: [] };
+    render(<VenueDefaultsDialog defaults={defaults} onClose={vi.fn()} onSave={onSave} />);
+    fireEvent.change(screen.getByLabelText('Copy every receipt to'), { target: { value: 'gideon@example.com, accounts@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save defaults' }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith({ ...defaults, receipt_copy_to: ['gideon@example.com', 'accounts@example.com'] }));
   });
 });

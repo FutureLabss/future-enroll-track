@@ -8,6 +8,7 @@ export interface VenueDefaults {
   facilities: string;
   inclusions: string;
   conditions: string;
+  receipt_copy_to: string[];
 }
 
 export interface VenueBooking {
@@ -39,7 +40,7 @@ export function useVenueBookings() {
     queryFn: async () => {
       const [{ data: bookings, error: bErr }, { data: defaults, error: dErr }] = await Promise.all([
         table('venue_bookings').select('*'),
-        table('venue_booking_defaults').select('venue_name, address, contact, facilities, inclusions, conditions').maybeSingle(),
+        table('venue_booking_defaults').select('venue_name, address, contact, facilities, inclusions, conditions, receipt_copy_to').maybeSingle(),
       ]);
       if (bErr) throw bErr;
       if (dErr) throw dErr;

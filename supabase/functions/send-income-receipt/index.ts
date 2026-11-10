@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { escapeHtml, firstName } from "../_shared/digestEmail.ts";
 
 // Emails the payer of an other-income row: { other_income_id, receipt?, booking? }.
+// Receipts are blind-copied to the hub's `receipt_copy_to` staff.
 // `receipt` sends a numbered payment receipt; `booking` sends the hall booking
 // confirmation (date, time, facilities, inclusions, conditions). The caller must be
 // able to see the row under their own JWT, i.e. an admin of its hub.
@@ -63,18 +64,19 @@ Deno.serve(async (req) => {
     if (!to) return json({ error: "Add the payer's email first" }, 400);
 
     const { data: bookingRow } = await db.from("venue_bookings").select("*").eq("other_income_id", other_income_id).maybeSingle();
-    const { data: defaults } = await db.from("venue_booking_defaults").select("address, contact").eq("hub_id", income.hub_id).maybeSingle();
+    const { data: defaults } = await db.from("venue_booking_defaults").select("address, contact, receipt_copy_to").eq("hub_id", income.hub_id).maybeSingle();
+    const copyTo = ((defaults?.receipt_copy_to ?? []) as string[]).map((e) => e.trim()).filter((e) => e && e.toLowerCase() !== to.toLowerCase());
     const hub = (income.hubs as { name: string; contact_email: string | null } | null);
     const org = hub?.name || "FutureLabs";
     const replyTo = hub?.contact_email || Deno.env.get("PAYMENTS_REPLY_TO") || "hello@futurelabs.africa";
     const name = firstName(income.payer_name);
     const footer = `<p style="font-size:13px;color:#64748b;margin:20px 0 0;line-height:1.6;">${escapeHtml(org)}${defaults?.address ? ` · ${escapeHtml(defaults.address)}` : ""}${defaults?.contact ? ` · ${escapeHtml(defaults.contact)}` : ""}<br/>Questions? Reply to this email.</p>`;
 
-    const send = async (subject: string, html: string, text: string) => {
+    const send = async (subject: string, html: string, text: string, bcc: string[] = []) => {
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { Authorization: `Bearer ${Deno.env.get("RESEND_API_KEY")}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ from: Deno.env.get("MARKETING_FROM") || "FutureLabs <notifications@futurelabs.ng>", to: [to], reply_to: replyTo, subject, html, text }),
+        body: JSON.stringify({ from: Deno.env.get("MARKETING_FROM") || "FutureLabs <notifications@futurelabs.ng>", to: [to], ...(bcc.length ? { bcc } : {}), reply_to: replyTo, subject, html, text }),
       });
       if (!res.ok) throw new Error(`Email failed: ${(await res.text()).slice(0, 200)}`);
     };
@@ -105,7 +107,7 @@ ${row("Receipt number", number)}
 <p style="font-size:14px;line-height:1.6;margin:0;">Keep this email as your proof of payment.${bookingRow ? " Your booking details and the hall conditions are in a separate email." : ""}</p>
 ${footer}`);
       const text = `Payment receipt ${number}\n\nHi ${name}, thank you. We have received your payment.\n\nReceived from: ${income.payer_name}\nFor: ${what}\n${when ? `Booking: ${when}\n` : ""}Amount paid: ${naira(income.amount)}\nDate paid: ${longDate(income.payment_date)}\n${income.payment_method ? `Method: ${method(income.payment_method)}\n` : ""}${income.payment_reference ? `Reference: ${income.payment_reference}\n` : ""}\n${org}`;
-      await send(`Receipt ${number}: ${what}`, html, text);
+      await send(`Receipt ${number}: ${what}`, html, text, copyTo);
       await db.from("other_income").update({ receipt_sent_at: new Date().toISOString() }).eq("id", other_income_id);
       sent.push("receipt");
     }

@@ -162,6 +162,7 @@ Students must exist in **`classroom_students`** to see a classroom. Adding to `c
 
 ### Marketing email (weekly digest, onboarding)
 - One suppression list per hub, `email_suppressions`, shared by the digest, onboarding and CRM leads. Every marketing email carries the signed `email-unsubscribe` link (`_shared/digestEmail.ts`); a new sender must check suppressions and use the same token.
+- The digest audience (`_digest_audience`) is picked staff, enrolled students (`include_students`; cancelled enrollments and `@no-email.invalid` placeholders skipped), imported contacts and CRM leads, minus suppressions.
 - Onboarding (`onboarding_*`, `send-onboarding-emails`, 10-minute cron): `trg_start_onboarding` opens one journey per person per hub on their **first** enrollment, only while the hub has it switched on, never back-filled. Steps are due N days after joining at 09:00 WAT; anything more than 3 days late is skipped, not sent.
 - `send-weekly-digest` and `send-onboarding-emails` run with `verify_jwt = false`: the cron authenticates with the `crm_cron_secret` vault secret, and admin calls are checked inside the function.
 - Opens, clicks, bounces and complaints arrive through the one Resend webhook, `resend-marketing-webhook`, which calls `record_email_event` for digest/onboarding deliveries and handles CRM deliveries itself. A permanent bounce or complaint suppresses the address via `suppress_email`. Store Resend's message id as `provider_message_id` on any new delivery table and add it to `record_email_event`.

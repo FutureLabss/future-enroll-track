@@ -6,6 +6,7 @@ import { nextDigestSlot } from '@/lib/digest';
 
 export interface DigestSettings {
   enabled: boolean;
+  include_students: boolean;
   include_contacts: boolean;
   contact_lists: string[];
   include_leads: boolean;
@@ -30,6 +31,7 @@ export interface Digest {
 export interface DigestAudience {
   total: number;
   staff: number;
+  students?: number;
   contacts: number;
   leads: number;
   suppressed: number;
@@ -37,6 +39,7 @@ export interface DigestAudience {
 
 export const DEFAULT_DIGEST_SETTINGS: DigestSettings = {
   enabled: true,
+  include_students: false,
   include_contacts: true,
   contact_lists: [],
   include_leads: true,
@@ -55,7 +58,7 @@ export function useEmailDigest() {
     queryKey: ['email-digest', hubId],
     queryFn: async () => {
       const [settings, digests] = await Promise.all([
-        table('email_digest_settings').select('enabled, include_contacts, contact_lists, include_leads, excluded_lead_statuses, staff_ids').eq('hub_id', hubId!).maybeSingle(),
+        table('email_digest_settings').select('enabled, include_students, include_contacts, contact_lists, include_leads, excluded_lead_statuses, staff_ids').eq('hub_id', hubId!).maybeSingle(),
         table('email_digests').select('*').eq('hub_id', hubId!).order('created_at', { ascending: false }).limit(52),
       ]);
       if (settings.error) throw settings.error;

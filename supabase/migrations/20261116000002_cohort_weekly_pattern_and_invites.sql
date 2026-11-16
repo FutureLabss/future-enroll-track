@@ -137,7 +137,9 @@ BEGIN
     IF OLD.cohort_id IS NOT NULL THEN
       UPDATE public.cohorts SET invite_sequence = invite_sequence + 1 WHERE id = OLD.cohort_id AND class_days IS NOT NULL;
     END IF;
-  ELSIF NEW.cohort_id IS NOT NULL AND (NEW.status IS DISTINCT FROM OLD.status OR NEW.scheduled_date IS DISTINCT FROM OLD.scheduled_date) THEN
+  -- Only cancelling, restoring or moving a class; marking one completed changes nothing.
+  ELSIF NEW.cohort_id IS NOT NULL
+    AND ((NEW.status = 'cancelled') IS DISTINCT FROM (OLD.status = 'cancelled') OR NEW.scheduled_date IS DISTINCT FROM OLD.scheduled_date) THEN
     UPDATE public.cohorts SET invite_sequence = invite_sequence + 1 WHERE id = NEW.cohort_id AND class_days IS NOT NULL;
   END IF;
   RETURN NULL;

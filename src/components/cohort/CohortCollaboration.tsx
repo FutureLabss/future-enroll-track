@@ -20,6 +20,8 @@ import {
   Plus, Send, Trash2, Loader2, MessageCircle, Pencil,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { CohortScheduleSetupDialog, type ScheduleSetupCohort } from '@/components/cohort/CohortScheduleSetupDialog';
+import { describeClassPattern } from '@/lib/classPattern';
 
 const fmtDate = (d: string) =>
   new Date(`${d}T00:00:00`).toLocaleDateString('en-NG', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
@@ -39,9 +41,9 @@ const fmtWhen = (iso: string) => {
 // SCHEDULE TAB
 // --------------------------------------------------------------------------
 export function CohortScheduleTab({ cohortId }: { cohortId: string }) {
-  const { user } = useAuth();
   const qc = useQueryClient();
-  const qk = ['cohort-schedules', cohortId];
+  const qk = ['cohort-classes', cohortId];
+  const [patternOpen, setPatternOpen] = useState(false);
 
   // Only the cohort's tutor, a training manager or the superadmin may change its schedule.
   const { data: canEdit = false } = useQuery({
@@ -51,83 +53,99 @@ export function CohortScheduleTab({ cohortId }: { cohortId: string }) {
       return Boolean(data);
     },
   });
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<any | null>(null);
+
+  const { data: cohort } = useQuery({
+    queryKey: ['cohort-pattern', cohortId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('cohorts')
+        .select('id, cohort_label, start_date, end_date, classroom_id, program_id, primary_tutor_id, class_days, class_start_time, class_end_time, class_location, class_meeting_link')
+        .eq('id', cohortId).single();
+      if (error) throw error;
+      return data as unknown as ScheduleSetupCohort;
+    },
+  });
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: qk,
     queryFn: async () => {
+      // schedules predates the generated types.
       const { data, error } = await supabase
-        .from('cohort_schedules')
-        .select('*')
+        .from('schedules' as never)
+        .select('id, title, scheduled_date, start_time, end_time, location, meeting_link, status')
         .eq('cohort_id', cohortId)
         .order('scheduled_date', { ascending: true })
         .order('start_time', { ascending: true });
       if (error) throw error;
-      return data || [];
+      return (data || []) as unknown as ClassRow[];
     },
   });
 
   useEffect(() => {
     const ch = supabase
-      .channel(`cohort_schedules:${cohortId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'cohort_schedules', filter: `cohort_id=eq.${cohortId}` },
+      .channel(`schedules:${cohortId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'schedules', filter: `cohort_id=eq.${cohortId}` },
         () => qc.invalidateQueries({ queryKey: qk }))
       .subscribe();
     return () => { supabase.removeChannel(ch); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cohortId]);
 
-  const remove = async (id: string) => {
-    const { error } = await supabase.from('cohort_schedules').delete().eq('id', id);
+  // Cancelling or restoring a class sends everyone an updated calendar invite.
+  const setCancelled = async (row: ClassRow, cancelled: boolean) => {
+    const { error } = await supabase.from('schedules' as never).update({ status: cancelled ? 'cancelled' : 'scheduled' } as never).eq('id', row.id);
     if (error) return toast.error(error.message);
-    toast.success('Removed');
+    toast.success(cancelled
+      ? `Class on ${fmtDate(row.scheduled_date)} cancelled. Calendars update within 10 minutes.`
+      : `Class on ${fmtDate(row.scheduled_date)} restored. Calendars update within 10 minutes.`);
+    qc.invalidateQueries({ queryKey: qk });
   };
 
+  const pattern = describeClassPattern(cohort?.class_days, cohort?.class_start_time, cohort?.class_end_time);
   const now = Date.now();
-  const upcoming = rows.filter((r: any) => new Date(`${r.scheduled_date}T${r.end_time}`).getTime() >= now);
-  const past = rows.filter((r: any) => new Date(`${r.scheduled_date}T${r.end_time}`).getTime() < now);
+  const upcoming = rows.filter(r => new Date(`${r.scheduled_date}T${r.end_time}`).getTime() >= now);
+  const past = rows.filter(r => new Date(`${r.scheduled_date}T${r.end_time}`).getTime() < now);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="font-heading font-semibold text-lg">Schedule</h3>
-          <p className="text-sm text-muted-foreground">Class sessions and meetings for this cohort</p>
+          <p className="text-sm text-muted-foreground">
+            {pattern
+              ? <>Classes run <span className="font-medium text-foreground">{pattern}</span>{cohort?.class_location ? ` · ${cohort.class_location}` : ''}. Every student and the tutor has a calendar invite.</>
+              : 'No weekly schedule yet. Set the days and time this cohort meets; every class is created and everyone gets a calendar invite.'}
+          </p>
         </div>
-        {canEdit && (
-          <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setEditing(null); }}>
-            <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-1.5" />Add Session</Button></DialogTrigger>
-            <ScheduleForm
-              cohortId={cohortId}
-              userId={user?.id}
-              editing={editing}
-              onSaved={() => { setOpen(false); setEditing(null); }}
-            />
-          </Dialog>
+        {canEdit && cohort && (
+          <Button size="sm" onClick={() => setPatternOpen(true)}>
+            <CalendarDays className="h-4 w-4 mr-1.5" />{pattern ? 'Change weekly schedule' : 'Set weekly schedule'}
+          </Button>
         )}
       </div>
+
+      <CohortScheduleSetupDialog
+        cohort={patternOpen ? cohort ?? null : null}
+        onOpenChange={o => setPatternOpen(o)}
+        onScheduled={() => {
+          qc.invalidateQueries({ queryKey: qk });
+          qc.invalidateQueries({ queryKey: ['cohort-pattern', cohortId] });
+        }}
+      />
 
       {isLoading ? (
         <div className="flex justify-center py-12"><Loader2 className="animate-spin h-6 w-6 text-primary" /></div>
       ) : rows.length === 0 ? (
         <div className="glass-card rounded-xl p-10 text-center">
           <CalendarDays className="h-10 w-10 mx-auto text-muted-foreground/50 mb-3" />
-          <p className="text-muted-foreground">No sessions scheduled yet</p>
+          <p className="text-muted-foreground">No classes scheduled yet</p>
         </div>
       ) : (
         <div className="space-y-6">
           {upcoming.length > 0 && (
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-3">Upcoming</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-3">Upcoming ({upcoming.filter(r => r.status !== 'cancelled').length})</p>
               <div className="space-y-2">
-                {upcoming.map((s: any) => (
-                  <ScheduleCard
-                    key={s.id} row={s} isAdmin={canEdit}
-                    onEdit={() => { setEditing(s); setOpen(true); }}
-                    onDelete={() => remove(s.id)}
-                  />
-                ))}
+                {upcoming.map(r => <ClassCard key={r.id} row={r} canEdit={canEdit} onCancel={c => setCancelled(r, c)} />)}
               </div>
             </div>
           )}
@@ -135,13 +153,7 @@ export function CohortScheduleTab({ cohortId }: { cohortId: string }) {
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-3">Past</p>
               <div className="space-y-2 opacity-70">
-                {past.map((s: any) => (
-                  <ScheduleCard
-                    key={s.id} row={s} isAdmin={canEdit}
-                    onEdit={() => { setEditing(s); setOpen(true); }}
-                    onDelete={() => remove(s.id)}
-                  />
-                ))}
+                {past.map(r => <ClassCard key={r.id} row={r} canEdit={false} onCancel={() => undefined} />)}
               </div>
             </div>
           )}
@@ -151,108 +163,64 @@ export function CohortScheduleTab({ cohortId }: { cohortId: string }) {
   );
 }
 
-function ScheduleCard({ row, isAdmin, onEdit, onDelete }: any) {
+interface ClassRow {
+  id: string;
+  title: string | null;
+  scheduled_date: string;
+  start_time: string;
+  end_time: string;
+  location: string | null;
+  meeting_link: string | null;
+  status: string;
+}
+
+function ClassCard({ row, canEdit, onCancel }: { row: ClassRow; canEdit: boolean; onCancel: (cancelled: boolean) => void }) {
+  const cancelled = row.status === 'cancelled';
   return (
-    <div className="glass-card rounded-xl p-4 flex items-start gap-4">
+    <div className={`glass-card rounded-xl p-4 flex items-start gap-4 ${cancelled ? 'opacity-60' : ''}`}>
       <div className="rounded-lg bg-primary/10 text-primary p-2.5 shrink-0">
         <CalendarDays className="h-5 w-5" />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <p className="font-semibold">{row.title}</p>
-            <p className="text-sm text-muted-foreground mt-0.5">{fmtDate(row.scheduled_date)}</p>
+            <p className={`font-semibold ${cancelled ? 'line-through' : ''}`}>{fmtDate(row.scheduled_date)}</p>
+            {row.title && <p className="text-sm text-muted-foreground mt-0.5">{row.title}</p>}
           </div>
-          {isAdmin && (
-            <div className="flex gap-1 shrink-0">
-              <Button size="sm" variant="ghost" onClick={onEdit}><Pencil className="h-3.5 w-3.5" /></Button>
+          <div className="flex shrink-0 items-center gap-2">
+            {cancelled && <Badge variant="outline" className="border-destructive/30 text-destructive">Cancelled</Badge>}
+            {canEdit && (cancelled ? (
+              <Button size="sm" variant="ghost" onClick={() => onCancel(false)}>Restore</Button>
+            ) : (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button size="sm" variant="ghost" className="text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button>
+                  <Button size="sm" variant="ghost" className="text-destructive">Cancel class</Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Delete session?</AlertDialogTitle>
-                    <AlertDialogDescription>"{row.title}" will be removed. This cannot be undone.</AlertDialogDescription>
+                    <AlertDialogTitle>Cancel the class on {fmtDate(row.scheduled_date)}?</AlertDialogTitle>
+                    <AlertDialogDescription>It is removed from every student's and the tutor's calendar. You can restore it later.</AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={onDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+                    <AlertDialogCancel>Keep it</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => onCancel(true)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Cancel class</AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
-            </div>
-          )}
+            ))}
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground mt-2">
           <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" />{fmtTime(row.start_time)} – {fmtTime(row.end_time)}</span>
           {row.location && <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{row.location}</span>}
-          {row.meeting_link && (
+          {row.meeting_link && !cancelled && (
             <a href={row.meeting_link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
               <LinkIcon className="h-3.5 w-3.5" />Join
             </a>
           )}
         </div>
-        {row.description && <p className="text-sm text-foreground/80 mt-2 whitespace-pre-wrap">{row.description}</p>}
       </div>
     </div>
-  );
-}
-
-function ScheduleForm({ cohortId, userId, editing, onSaved }: { cohortId: string; userId?: string; editing: any | null; onSaved: () => void }) {
-  const [form, setForm] = useState({
-    title: editing?.title || '',
-    description: editing?.description || '',
-    scheduled_date: editing?.scheduled_date || '',
-    start_time: editing?.start_time?.slice(0, 5) || '',
-    end_time: editing?.end_time?.slice(0, 5) || '',
-    location: editing?.location || '',
-    meeting_link: editing?.meeting_link || '',
-  });
-  const [saving, setSaving] = useState(false);
-
-  const save = async () => {
-    if (!form.title.trim() || !form.scheduled_date || !form.start_time || !form.end_time) {
-      toast.error('Title, date, start and end are required'); return;
-    }
-    setSaving(true);
-    const payload = {
-      cohort_id: cohortId,
-      title: form.title.trim(),
-      description: form.description.trim() || null,
-      scheduled_date: form.scheduled_date,
-      start_time: form.start_time,
-      end_time: form.end_time,
-      location: form.location.trim() || null,
-      meeting_link: form.meeting_link.trim() || null,
-    };
-    const { error } = editing
-      ? await supabase.from('cohort_schedules').update(payload).eq('id', editing.id)
-      : await supabase.from('cohort_schedules').insert({ ...payload, created_by: userId });
-    setSaving(false);
-    if (error) return toast.error(error.message);
-    toast.success(editing ? 'Session updated' : 'Session scheduled');
-    onSaved();
-  };
-
-  return (
-    <DialogContent>
-      <DialogHeader><DialogTitle>{editing ? 'Edit Session' : 'New Session'}</DialogTitle></DialogHeader>
-      <div className="space-y-3 mt-2">
-        <div><Label>Title *</Label><Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="mt-1.5" placeholder="e.g. Week 3 Live Class" /></div>
-        <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={2} className="mt-1.5" placeholder="Optional notes for students" /></div>
-        <div className="grid grid-cols-3 gap-2">
-          <div><Label>Date *</Label><Input type="date" value={form.scheduled_date} onChange={e => setForm({ ...form, scheduled_date: e.target.value })} className="mt-1.5" /></div>
-          <div><Label>Start *</Label><Input type="time" value={form.start_time} onChange={e => setForm({ ...form, start_time: e.target.value })} className="mt-1.5" /></div>
-          <div><Label>End *</Label><Input type="time" value={form.end_time} onChange={e => setForm({ ...form, end_time: e.target.value })} className="mt-1.5" /></div>
-        </div>
-        <div><Label>Location</Label><Input value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} className="mt-1.5" placeholder="Room 3B or 'Online'" /></div>
-        <div><Label>Meeting link</Label><Input value={form.meeting_link} onChange={e => setForm({ ...form, meeting_link: e.target.value })} className="mt-1.5" placeholder="https://" /></div>
-      </div>
-      <DialogFooter className="mt-4">
-        <Button onClick={save} disabled={saving}>{saving ? 'Saving…' : editing ? 'Save changes' : 'Create session'}</Button>
-      </DialogFooter>
-    </DialogContent>
   );
 }
 

@@ -34,6 +34,7 @@ import { StudentCertificatesCard } from '@/components/certificates/StudentCertif
 import { usePausedAccess } from '@/hooks/usePausedAccess';
 import { AccessPausedBanner } from '@/components/payments/AccessPaused';
 import { WhatsAppConsentCard } from '@/components/enrollment/WhatsAppConsentCard';
+import { CommunityLinksCard } from '@/components/community/CommunityLinksCard';
 
 const formatCurrency = (val: number) => `₦${val.toLocaleString('en-NG')}`;
 const formatDate = (date?: string | null) => date
@@ -292,6 +293,7 @@ export default function StudentDashboard() {
       <CompleteProfileBanner />
       <AccessPausedBanner paused={pausedAccess} />
       <WhatsAppConsentCard onlyUnanswered />
+      <CommunityLinksCard />
       <StudentCertificatesCard />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">

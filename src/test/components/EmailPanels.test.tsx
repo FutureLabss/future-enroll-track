@@ -7,13 +7,13 @@ const saveSettings = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/hooks/useEmailDigest', () => ({
   useEmailDigest: () => ({
     data: {
-      settings: { enabled: true, include_contacts: true, contact_lists: [], include_leads: true, excluded_lead_statuses: ['not_interested'], staff_ids: ['s1'] },
+      settings: { enabled: true, include_students: false, include_contacts: true, contact_lists: [], include_leads: true, excluded_lead_statuses: ['not_interested'], staff_ids: ['s1'] },
       digests: [
         { id: 'd1', subject: 'Week 1 news', body: 'Hello', status: 'sent', scheduled_for: '2026-10-26T06:00:00Z', send_immediately: false, recipient_count: 40, sent_count: 39, failed_count: 1, created_at: '2026-10-20T10:00:00Z', sent_at: '2026-10-26T06:05:00Z' },
         { id: 'd2', subject: 'Week 2 news', body: 'Hi {{first_name}}', status: 'scheduled', scheduled_for: '2026-11-02T06:00:00Z', send_immediately: false, recipient_count: 0, sent_count: 0, failed_count: 0, created_at: '2026-10-27T10:00:00Z', sent_at: null },
       ],
       current: { id: 'd2', subject: 'Week 2 news', body: 'Hi {{first_name}}', status: 'scheduled', scheduled_for: '2026-11-02T06:00:00Z', send_immediately: false, recipient_count: 0, sent_count: 0, failed_count: 0, created_at: '2026-10-27T10:00:00Z', sent_at: null },
-      audience: { total: 42, staff: 1, contacts: 30, leads: 11, suppressed: 2 },
+      audience: { total: 42, staff: 1, students: 0, contacts: 30, leads: 11, suppressed: 2 },
     },
     loading: false,
     saveSettings, saveDraft: vi.fn(), schedule: vi.fn(), unschedule: vi.fn(), sendNow: vi.fn(), sendTest: vi.fn(),
@@ -90,6 +90,13 @@ describe('WeeklyDigestPanel', () => {
     render(<WeeklyDigestPanel />);
     fireEvent.click(screen.getByText('Past students 2025'));
     expect(saveSettings).toHaveBeenCalledWith({ include_contacts: false, contact_lists: [] });
+  });
+
+  it('can add enrolled students to the audience', async () => {
+    const { WeeklyDigestPanel } = await import('@/components/email/WeeklyDigestPanel');
+    render(<WeeklyDigestPanel />);
+    fireEvent.click(screen.getByRole('switch', { name: 'Enrolled students' }));
+    expect(saveSettings).toHaveBeenCalledWith({ include_students: true });
   });
 });
 

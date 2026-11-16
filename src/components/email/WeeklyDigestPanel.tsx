@@ -180,10 +180,18 @@ export function WeeklyDigestPanel() {
             <CardContent className="space-y-5">
               {audience && (
                 <p className="text-xs text-muted-foreground">
-                  {audience.contacts} imported · {audience.leads} leads · {audience.staff} staff
+                  {audience.students ?? 0} students · {audience.contacts} imported · {audience.leads} leads · {audience.staff} staff
                   {audience.suppressed ? ` · ${audience.suppressed} unsubscribed (never emailed)` : ''}
                 </p>
               )}
+
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <Label>Enrolled students</Label>
+                  <p className="text-xs text-muted-foreground">Everyone enrolled on a programme, past or present, except cancelled enrollments.</p>
+                </div>
+                <Switch aria-label="Enrolled students" checked={settings.include_students} onCheckedChange={v => updateSettings({ include_students: v })} />
+              </div>
 
               <div className="space-y-2">
                 <div className="flex items-start justify-between gap-3">

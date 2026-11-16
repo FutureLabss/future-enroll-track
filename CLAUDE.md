@@ -167,6 +167,10 @@ Students must exist in **`classroom_students`** to see a classroom. Adding to `c
 - `send-weekly-digest` and `send-onboarding-emails` run with `verify_jwt = false`: the cron authenticates with the `crm_cron_secret` vault secret, and admin calls are checked inside the function.
 - Opens, clicks, bounces and complaints arrive through the one Resend webhook, `resend-marketing-webhook`, which calls `record_email_event` for digest/onboarding deliveries and handles CRM deliveries itself. A permanent bounce or complaint suppresses the address via `suppress_email`. Store Resend's message id as `provider_message_id` on any new delivery table and add it to `record_email_event`.
 
+### Enrollment confirmation and community links (2026-11-16)
+- Approving a public-form enrollment (`EnrollmentDetailPage`) asks for the date the money arrived and who paid, then sends `enrollment_confirmed` (email only; it has no approved WhatsApp template) with the hub's WhatsApp group and Slack invite.
+- The links live on `hubs.whatsapp_group_url` / `slack_invite_url`, edited under Bulk Email > Onboarding (`set_hub_community_links`). Students see them on the dashboard only while they hold an active, overdue or completed enrollment (`get_my_community_links`), so someone who only filled in the form never gets them.
+
 ### Students who need attention
 - `student_risk_flags`, refreshed daily at 08:30 WAT by `refresh_student_risk_flags()` (pg_cron): absent from the cohort's last 2 countable sessions, or a published assignment 12h+ past due with no submission. Absence means **no** `attendance_records` row, since only present/late/excused are stored.
 - A session where under half the cohort marked in is not counted against anyone (in Oct 2026 several cohorts had 2-3 of 12 marking in, so attendance capture, not truancy). `get_student_risk_flags` reports those sessions to the tutor instead.

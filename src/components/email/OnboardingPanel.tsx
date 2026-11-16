@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { FlaskConical, Mail, Pencil, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { CommunityLinksSettings } from '@/components/community/CommunityLinksSettings';
 
 const STATUS_COLOURS: Record<string, string> = {
   active: 'bg-success/15 text-success border-success/30',
@@ -95,6 +96,8 @@ export function OnboardingPanel() {
             onCheckedChange={v => run('enabled', async () => { await setEnabled(v); toast.success(v ? 'Onboarding is on' : 'Onboarding paused'); })} />
         </CardContent>
       </Card>
+
+      <CommunityLinksSettings />
 
       <section className="space-y-3">
         <div className="flex items-center justify-between gap-2">

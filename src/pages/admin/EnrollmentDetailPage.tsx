@@ -33,6 +33,9 @@ export default function EnrollmentDetailPage() {
   const { isSuperadmin } = useAuth();
   const queryClient = useQueryClient();
   const [verifying, setVerifying] = useState(false);
+  const [approveOpen, setApproveOpen] = useState(false);
+  const [paidOn, setPaidOn] = useState(() => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }));
+  const [paidBy, setPaidBy] = useState('');
   const [showEvidence, setShowEvidence] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [previewing, setPreviewing] = useState(false);
@@ -257,10 +260,11 @@ export default function EnrollmentDetailPage() {
         verification_status: action,
         enrollment_status: action === 'approved' ? 'active' : 'cancelled',
       };
+      const paidAt = new Date(`${paidOn}T12:00:00+01:00`).toISOString();
       if (action === 'approved') {
         updates.amount_paid = enrollment.total_amount;
         updates.first_payment_date = await getEnrollmentDate();
-        updates.last_payment_date = new Date().toISOString();
+        updates.last_payment_date = paidAt;
       }
       const { error } = await supabase.from('enrollments').update(updates).eq('id', enrollment.id);
       if (error) throw error;
@@ -277,10 +281,9 @@ export default function EnrollmentDetailPage() {
           .neq('status', 'paid');
         if (invoices?.length) {
           const invoiceIds = invoices.map((i: any) => i.id);
-          const now = new Date().toISOString();
           await supabase
             .from('installments')
-            .update({ status: 'paid', paid_at: now })
+            .update({ status: 'paid', paid_at: paidAt, paid_by: paidBy.trim() || null } as never)
             .in('invoice_id', invoiceIds)
             .neq('status', 'paid');
           await supabase
@@ -296,11 +299,12 @@ export default function EnrollmentDetailPage() {
       if (action === 'approved' && enrollment.verification_status !== 'approved') {
         try {
           await supabase.functions.invoke('send-notification', {
-            body: { type: 'invoice_settled', channel: 'both', enrollment_id: enrollment.id, extra: { verification_action: action } },
+            body: { type: 'enrollment_confirmed', channel: 'email', enrollment_id: enrollment.id, extra: { amount_paid: enrollment.total_amount, payment_method: 'bank_transfer' } },
           });
         } catch {}
       }
 
+      setApproveOpen(false);
       toast.success(`Enrollment ${action}`);
       queryClient.invalidateQueries({ queryKey: ['enrollment-detail', id] });
     } catch (err: any) {
@@ -425,6 +429,33 @@ export default function EnrollmentDetailPage() {
         </div>
       </div>
 
+      <Dialog open={approveOpen} onOpenChange={setApproveOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Approve payment</DialogTitle>
+            <DialogDescription>
+              Marks the invoice paid and emails {enrollment.full_name} that their place is confirmed, with the community links.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="approve-paid-on">Date the money arrived</Label>
+              <Input id="approve-paid-on" type="date" value={paidOn} max={new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })} onChange={e => setPaidOn(e.target.value)} className="mt-1.5" />
+            </div>
+            <div>
+              <Label htmlFor="approve-paid-by">Paid by (if not the student)</Label>
+              <Input id="approve-paid-by" value={paidBy} onChange={e => setPaidBy(e.target.value)} placeholder="Name on the transfer" className="mt-1.5" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setApproveOpen(false)}>Cancel</Button>
+            <Button onClick={() => handleVerify('approved')} disabled={verifying || !paidOn}>
+              <CheckCircle className="h-4 w-4 mr-2" /> Approve
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Verification banner */}
       {isPending && enrollment.payment_evidence_url && (
         <div className="glass-card rounded-xl p-6 mb-8 border-warning/30 bg-warning/5">
@@ -437,7 +468,7 @@ export default function EnrollmentDetailPage() {
               <Button variant="outline" onClick={() => setShowEvidence(true)}>
                 <ExternalLink className="h-4 w-4 mr-2" /> View Evidence
               </Button>
-              <Button onClick={() => handleVerify('approved')} disabled={verifying}>
+              <Button onClick={() => setApproveOpen(true)} disabled={verifying}>
                 <CheckCircle className="h-4 w-4 mr-2" /> Approve
               </Button>
               <Button variant="destructive" onClick={() => handleVerify('rejected')} disabled={verifying}>

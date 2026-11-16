@@ -26,6 +26,10 @@ vi.mock('@/hooks/useOnboarding', () => ({
   }),
 }));
 
+vi.mock('@/hooks/useCommunityLinks', () => ({
+  useHubCommunityLinks: () => ({ data: undefined, save: vi.fn() }),
+}));
+
 vi.mock('@/hooks/useEmailEngagement', () => ({
   useEmailEngagement: () => ({ data: {
     digests: { d1: { sent: 39, delivered: 38, opened: 20, clicked: 6, bounced: 1, complained: 0 } },

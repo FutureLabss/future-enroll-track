@@ -8,7 +8,7 @@ const corsHeaders = {
 };
 
 interface NotificationPayload {
-  type: string; // invoice_created, payment_received, payment_reminder, overdue, invoice_settled, account_setup
+  type: string; // invoice_created, payment_received, payment_reminder, overdue, invoice_settled, account_setup, enrollment_confirmed
   channel: "email" | "whatsapp" | "both";
   enrollment_id: string;
   invoice_id?: string;
@@ -222,6 +222,27 @@ function buildEmailContent(type: string, data: Record<string, any>): { subject: 
         `),
       };
 
+    case "enrollment_confirmed": {
+      const links = [
+        data.whatsapp_group_url ? `<a href="${data.whatsapp_group_url}" style="display: inline-block; padding: 12px 20px; background: #25D366; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 4px;">Join the WhatsApp group</a>` : "",
+        data.slack_invite_url ? `<a href="${data.slack_invite_url}" style="display: inline-block; padding: 12px 20px; background: #4A154B; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 4px;">Join us on Slack</a>` : "",
+      ].filter(Boolean).join("");
+      return {
+        subject: `You're in! Your place${program_name ? ` in ${program_name}` : ""} is confirmed`,
+        html: wrapper(`
+          <h2 style="color: #22c55e;">Enrollment confirmed</h2>
+          <p>Hello ${full_name},</p>
+          <p>We've confirmed your payment${program_name ? ` and your place in <strong>${program_name}</strong>` : ""}. Welcome to FutureLabs!</p>
+          ${receiptBlock}
+          ${links ? `<h3 style="margin: 24px 0 8px;">Join the community</h3>
+          <p>Class updates, announcements and help from tutors and classmates happen here, so please join both today.</p>
+          <div style="margin: 12px 0;">${links}</div>` : ""}
+          <p>Next, create your student account to see your classroom, schedule and invoices:</p>
+          <a href="${FRONTEND_URL}/students/${enrollment_id}" style="display: inline-block; padding: 12px 24px; background: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 8px 0;">Set up my account</a>
+        `),
+      };
+    }
+
     case "account_setup":
       return {
         subject: "Set up your FutureLabs student account",
@@ -360,6 +381,12 @@ Deno.serve(async (req) => {
       if (data && data.length > 0) nextDue = data[0];
     }
 
+    let community: { whatsapp_group_url: string | null; slack_invite_url: string | null } | null = null;
+    if (type === "enrollment_confirmed") {
+      const { data } = await supabase.from("programs").select("hubs(whatsapp_group_url, slack_invite_url)").eq("id", enrollment.program_id).maybeSingle();
+      community = (data?.hubs as typeof community) ?? null;
+    }
+
     const totalAmount = Number(invoice?.total_amount || enrollment.total_amount || 0);
     const amountPaid = Number(extra?.amount_paid ?? enrollment.amount_paid ?? 0);
 
@@ -377,6 +404,8 @@ Deno.serve(async (req) => {
       enrollment_id: enrollment_id,
       invoice_id: invoice_id || null,
       FRONTEND_URL: "https://admin.futurelabs.ng",
+      whatsapp_group_url: community?.whatsapp_group_url ?? null,
+      slack_invite_url: community?.slack_invite_url ?? null,
       ...extra,
       installment_amount: extra?.installment_amount ?? (nextDue ? Number(nextDue.amount) : null),
     };

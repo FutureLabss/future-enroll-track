@@ -157,6 +157,10 @@ Students must exist in **`classroom_students`** to see a classroom. Adding to `c
 ### Who may set schedules
 - Only the cohort's primary tutor (or, for a cohort without one and for classroom-wide sessions, the classroom's active **teaching** staff), a training manager (`hub_members.hub_role = 'manager'`) or the superadmin. `can_set_schedule(classroom_id, cohort_id)` is the single source of truth: it drives RLS on `schedules`/`cohort_schedules` and the check in `generate_cohort_schedule`. The UI reads it through `get_schedule_permissions` / `useSchedulePermissions` only to hide controls. Hub admins can read schedules but not change them.
 
+### Weekly class pattern and calendar invites (2026-11-16)
+- Classes follow a weekly pattern stored on the cohort (`class_days`, `class_start_time`/`class_end_time`, `class_location`, `class_meeting_link`). `set_cohort_class_pattern` (and `generate_cohort_schedule`, which now calls it) creates a `schedules` row on every matching day from the start date (or today) to `end_date`, whether or not there is a curriculum. Re-saving rebuilds upcoming `scheduled` rows only; past rows and any row holding attendance or presentations are kept.
+- Each active member and the primary tutor get **one recurring invite per cohort** (`_shared/cohortInvite.ts`, UID `cohort-<id>@futurelabs.ng`) from `send-cohort-invites` (10-minute cron). `cohorts.invite_sequence` is the iTIP SEQUENCE: saving the pattern, cancelling/restoring/moving a class or deleting one bumps it (`trg_schedules_bump_invites`; marking a class completed does not), and everyone behind gets an updated invite that replaces the old event. Cancelled dates go out as EXDATE. `cohort_calendar_invites` records what each person last received; someone who leaves the cohort gets a CANCEL.
+
 ### Calendar sync
 - `/functions/v1/calendar-feed/<token>.ics` serves each user's classes, assignment due dates and cohort start/end dates (`calendar_feed_events`). Times are wall-clock `Africa/Lagos`. The token is the only credential calendar apps can send, so never log it and keep `verify_jwt = false` for this function only.
 

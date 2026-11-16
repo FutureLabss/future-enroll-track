@@ -56,3 +56,6 @@ verify_jwt = false  # daily cron, authenticated with the CRM cron secret
 
 [functions.send-income-receipt]
 verify_jwt = true
+
+[functions.send-cohort-invites]
+verify_jwt = false  # 10-minute cron authenticates with the CRM cron secret

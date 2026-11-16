@@ -24,6 +24,11 @@ export interface ScheduleSetupCohort {
   classroom_id?: string | null;
   program_id?: string | null;
   primary_tutor_id?: string | null;
+  class_days?: string[] | null;
+  class_start_time?: string | null;
+  class_end_time?: string | null;
+  class_location?: string | null;
+  class_meeting_link?: string | null;
 }
 
 interface Props {
@@ -38,12 +43,19 @@ interface Props {
 // created without one, and from every "no schedule" warning.
 export function CohortScheduleSetupDialog({ cohort, onOpenChange, onScheduled, staffList, justCreated }: Props) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({ start_date: '', end_date: '', days: [] as string[], start_time: '09:00', end_time: '11:00', instructor_id: '' });
+  const [form, setForm] = useState({ start_date: '', end_date: '', days: [] as string[], start_time: '09:00', end_time: '11:00', instructor_id: '', location: '', meeting_link: '' });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (cohort) {
-      setForm(f => ({ ...f, start_date: cohort.start_date || '', end_date: cohort.end_date || '', days: [], instructor_id: cohort.primary_tutor_id || '' }));
+      setForm({
+        start_date: cohort.start_date || '', end_date: cohort.end_date || '',
+        days: cohort.class_days ?? [],
+        start_time: cohort.class_start_time?.slice(0, 5) || '09:00',
+        end_time: cohort.class_end_time?.slice(0, 5) || '11:00',
+        instructor_id: cohort.primary_tutor_id || '',
+        location: cohort.class_location || '', meeting_link: cohort.class_meeting_link || '',
+      });
     }
   }, [cohort]);
 
@@ -81,6 +93,17 @@ export function CohortScheduleSetupDialog({ cohort, onOpenChange, onScheduled, s
     }
   }, [cohort, justCreated, allowed, onOpenChange]);
 
+  const hasPattern = Boolean(cohort?.class_days?.length);
+  const { data: invites } = useQuery({
+    queryKey: ['cohort-invite-status', cohort?.id],
+    queryFn: async () => {
+      const { data, error } = await untypedRpc('get_cohort_invite_status', { p_cohort_id: cohort!.id });
+      if (error) throw error;
+      return data as unknown as { sent: number; failed: number } | null;
+    },
+    enabled: Boolean(cohort && hasPattern),
+  });
+
   const toggleDay = (day: string) =>
     setForm(f => ({ ...f, days: f.days.includes(day) ? f.days.filter(d => d !== day) : [...f.days, day] }));
 
@@ -91,6 +114,7 @@ export function CohortScheduleSetupDialog({ cohort, onOpenChange, onScheduled, s
     if (form.end_date < form.start_date) { toast.error('End date must be after the start date'); return; }
     if (form.days.length === 0) { toast.error('Pick at least one class day'); return; }
     if (form.end_time <= form.start_time) { toast.error('End time must be after the start time'); return; }
+    if (form.meeting_link.trim() && !/^https?:\/\//.test(form.meeting_link.trim())) { toast.error('The meeting link should start with https://'); return; }
 
     setSaving(true);
     try {
@@ -103,21 +127,22 @@ export function CohortScheduleSetupDialog({ cohort, onOpenChange, onScheduled, s
         if (error) throw error;
       }
 
-      const { data: count, error } = await untypedRpc('generate_cohort_schedule', {
+      const { data: count, error } = await untypedRpc('set_cohort_class_pattern', {
         p_cohort_id: cohort.id,
         p_days: form.days,
         p_start_time: form.start_time,
         p_end_time: form.end_time,
         p_instructor_id: form.instructor_id || null,
+        p_location: form.location,
+        p_meeting_link: form.meeting_link,
       });
       if (error) throw error;
 
       const n = Number(count) || 0;
-      if (n === 0) {
-        toast.error('No sessions were created. Check the dates and class days, and that the classroom has curriculum modules.');
-        return;
-      }
-      toast.success(`${n} session${n === 1 ? '' : 's'} scheduled for ${cohort.cohort_label}`);
+      toast.success(n > 0
+        ? `${n} class${n === 1 ? '' : 'es'} scheduled for ${cohort.cohort_label}. Calendar invites go out within 10 minutes.`
+        : `Schedule saved for ${cohort.cohort_label}. Calendar invites go out within 10 minutes.`);
+      queryClient.invalidateQueries({ queryKey: ['cohort-invite-status', cohort.id] });
       queryClient.invalidateQueries({ queryKey: ['cohort-setup-gaps'] });
       queryClient.invalidateQueries({ queryKey: ['schedules', classroomId] });
       queryClient.invalidateQueries({ queryKey: ['classroom-cohorts', classroomId] });
@@ -137,12 +162,14 @@ export function CohortScheduleSetupDialog({ cohort, onOpenChange, onScheduled, s
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CalendarClock className="h-5 w-5 text-primary" />
-            Set up the schedule for {cohort?.cohort_label}
+            Class schedule for {cohort?.cohort_label}
           </DialogTitle>
           <DialogDescription>
             {justCreated
-              ? 'Your cohort is created. Every running cohort needs a class schedule, so add its sessions now. Students and tutors are notified, and the sessions appear in their synced calendars.'
-              : 'This cohort has no upcoming classes. Add its sessions so students know when to attend. They will be notified, and the sessions appear in their synced calendars.'}
+              ? 'Your cohort is created. Set the days and time its classes run each week. Every class from the start date to the end date is scheduled, and each student and the tutor get a calendar invite.'
+              : hasPattern
+                ? 'Change the weekly pattern and upcoming classes are rebuilt from it. Past classes and attendance are kept, and everyone gets an updated calendar invite that replaces the old one.'
+                : 'Set the days and time its classes run each week. Every class from the start date to the end date is scheduled, and each student and the tutor get a calendar invite.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -189,6 +216,15 @@ export function CohortScheduleSetupDialog({ cohort, onOpenChange, onScheduled, s
             <div><Label>Start time</Label><Input type="time" value={form.start_time} onChange={e => setForm({ ...form, start_time: e.target.value })} className="mt-1.5" /></div>
             <div><Label>End time</Label><Input type="time" value={form.end_time} onChange={e => setForm({ ...form, end_time: e.target.value })} className="mt-1.5" /></div>
           </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div><Label htmlFor="class-location">Room or venue</Label><Input id="class-location" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} placeholder="e.g. Lab 2, FutureLabs" className="mt-1.5" /></div>
+            <div><Label htmlFor="class-meeting-link">Online meeting link</Label><Input id="class-meeting-link" value={form.meeting_link} onChange={e => setForm({ ...form, meeting_link: e.target.value })} placeholder="https://meet.google.com/…" className="mt-1.5" /></div>
+          </div>
+          {hasPattern && invites && (
+            <p className="text-xs text-muted-foreground">
+              Calendar invite received by {invites.sent} {invites.sent === 1 ? 'person' : 'people'}{invites.failed ? `; ${invites.failed} could not be sent` : ''}. New students get it within 10 minutes of joining.
+            </p>
+          )}
           {instructors.length > 0 && (
             <div>
               <Label>Instructor</Label>
@@ -200,7 +236,7 @@ export function CohortScheduleSetupDialog({ cohort, onOpenChange, onScheduled, s
           )}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button variant="ghost" onClick={() => onOpenChange(false)}>Remind me later</Button>
-            <Button onClick={handleSave} disabled={saving || !classroomId}>{saving ? 'Scheduling…' : 'Create schedule'}</Button>
+            <Button onClick={handleSave} disabled={saving || !classroomId}>{saving ? 'Saving…' : hasPattern ? 'Update schedule' : 'Create schedule'}</Button>
           </div>
         </div>
         )}

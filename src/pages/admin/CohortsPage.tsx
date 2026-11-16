@@ -15,7 +15,8 @@ import { CohortScheduleSetupDialog, type ScheduleSetupCohort } from '@/component
 import { CohortSetupGapsAlert } from '@/components/cohort/CohortSetupGapsAlert';
 import { PrimaryTutorSelect } from '@/components/cohort/PrimaryTutorSelect';
 import { useStaffOptions } from '@/hooks/useStaffOptions';
-import { Plus } from 'lucide-react';
+import { CalendarClock, Plus } from 'lucide-react';
+import { describeClassPattern } from '@/lib/classPattern';
 import { toast } from 'sonner';
 
 const STATUS_COLOURS: Record<string, string> = {
@@ -41,6 +42,7 @@ export default function CohortsPage() {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [setupCohort, setSetupCohort] = useState<ScheduleSetupCohort | null>(null);
+  const [setupIsNew, setSetupIsNew] = useState(false);
   const [form, setForm] = useState({ cohort_label: '', program_id: '', start_date: '', end_date: '', scope_type: '', primary_tutor_id: '' });
 
   const { data: cohorts = [], isLoading: loading } = useQuery({
@@ -81,6 +83,7 @@ export default function CohortsPage() {
     setSaving(false);
     if (error) { toast.error(error.message || 'Failed to create cohort'); return; }
     toast.success('Cohort created');
+    setSetupIsNew(true);
     setSetupCohort(created);
     setOpen(false);
     setForm({ cohort_label: '', program_id: '', start_date: '', end_date: '', scope_type: '', primary_tutor_id: '' });
@@ -119,6 +122,15 @@ export default function CohortsPage() {
       render: (r: any) => r.scope_type
         ? <span className="capitalize text-primary/80 text-sm">{r.scope_type}</span>
         : <span className="text-muted-foreground text-xs">—</span>,
+    },
+    {
+      key: 'classes', header: 'Classes',
+      render: (r: ScheduleSetupCohort) => (
+        <Button size="sm" variant="ghost" className="h-auto px-2 py-1 text-xs" onClick={e => { e.stopPropagation(); setSetupIsNew(false); setSetupCohort(r); }}>
+          <CalendarClock className="mr-1.5 h-3.5 w-3.5" />
+          {describeClassPattern(r.class_days, r.class_start_time, r.class_end_time) ?? <span className="text-warning">Set schedule</span>}
+        </Button>
+      ),
     },
     { key: 'start_date', header: 'Start', render: (r: any) => r.start_date ? new Date(r.start_date).toLocaleDateString('en-NG') : '—' },
     { key: 'end_date', header: 'End', render: (r: any) => r.end_date ? new Date(r.end_date).toLocaleDateString('en-NG') : '—' },
@@ -166,7 +178,7 @@ export default function CohortsPage() {
         }
       />
       <CohortSetupGapsAlert showClassroom />
-      <CohortScheduleSetupDialog cohort={setupCohort} justCreated onOpenChange={o => !o && setSetupCohort(null)} />
+      <CohortScheduleSetupDialog cohort={setupCohort} justCreated={setupIsNew} onOpenChange={o => !o && setSetupCohort(null)} />
       {loading
         ? <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>
         : <DataTable columns={columns} data={cohorts} searchable searchPlaceholder="Search cohorts..." onRowClick={(r) => navigate(`/admin/cohorts/${r.id}`)} />

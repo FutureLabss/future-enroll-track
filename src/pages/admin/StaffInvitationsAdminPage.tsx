@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable } from '@/components/shared/DataTable';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { Mail, CheckCircle2, XCircle, Clock, ShieldCheck, Loader2 } from 'lucide-react';
 
@@ -12,6 +13,8 @@ export default function StaffInvitationsAdminPage() {
   const [invitations, setInvitations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [resending, setResending] = useState<string | null>(null);
+  const [promoteTarget, setPromoteTarget] = useState<any | null>(null);
+  const [promoting, setPromoting] = useState(false);
 
   const fetchInvitations = async () => {
     setLoading(true);
@@ -27,26 +30,32 @@ export default function StaffInvitationsAdminPage() {
     fetchInvitations();
   }, []);
 
-  const handlePromoteToAdmin = useCallback(async (invitation: any) => {
-    if (!confirm(`Promote ${invitation.staff?.full_name} to admin? They'll have full admin access to this hub.`)) return;
-    const { data: cs, error: csErr } = await supabase
-      .from('classroom_staff')
-      .select('user_id')
-      .eq('classroom_id', invitation.classroom_id)
-      .eq('staff_id', invitation.staff_id)
-      .maybeSingle();
-    if (csErr || !cs?.user_id) {
-      toast.error('Could not find user account — has this person accepted their invitation?');
-      return;
+  const handlePromoteToAdmin = async () => {
+    const invitation = promoteTarget;
+    setPromoting(true);
+    try {
+      const { data: cs, error: csErr } = await supabase
+        .from('classroom_staff')
+        .select('user_id')
+        .eq('classroom_id', invitation.classroom_id)
+        .eq('staff_id', invitation.staff_id)
+        .maybeSingle();
+      if (csErr || !cs?.user_id) {
+        toast.error('Could not find user account — has this person accepted their invitation?');
+        return;
+      }
+      const { error } = await supabase.rpc('promote_staff_to_admin' as any, { p_user_id: cs.user_id });
+      if (error) {
+        toast.error(error.message);
+      } else {
+        toast.success(`${invitation.staff?.full_name} is now an admin.`);
+        setPromoteTarget(null);
+        fetchInvitations();
+      }
+    } finally {
+      setPromoting(false);
     }
-    const { error } = await supabase.rpc('promote_staff_to_admin' as any, { p_user_id: cs.user_id });
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success(`${invitation.staff?.full_name} is now an admin.`);
-      fetchInvitations();
-    }
-  }, []);
+  };
 
   const handleRevoke = useCallback(async (id: string) => {
     const { error } = await supabase
@@ -99,14 +108,14 @@ export default function StaffInvitationsAdminPage() {
   }, []);
 
   const columns = useMemo(() => [
-    { key: 'staff', header: 'Staff', render: (r: any) => (
+    { key: 'staff', header: 'Staff', exportValue: (r: any) => `${r.staff?.full_name ?? ''} ${r.staff?.email ?? ''}`, render: (r: any) => (
       <div>
         <p className="font-medium">{r.staff?.full_name}</p>
         <p className="text-xs text-muted-foreground">{r.staff?.email}</p>
       </div>
     )},
-    { key: 'classroom', header: 'Classroom', render: (r: any) => r.classrooms?.name },
-    { key: 'role', header: 'Role', render: (r: any) => <Badge variant="outline">{r.staff_type === 'teaching' ? 'Teaching' : 'Non-Teaching'}</Badge> },
+    { key: 'classroom', header: 'Classroom', exportValue: (r: any) => r.classrooms?.name, render: (r: any) => r.classrooms?.name },
+    { key: 'role', header: 'Role', exportValue: (r: any) => r.staff_type === 'teaching' ? 'Teaching' : 'Non-Teaching', render: (r: any) => <Badge variant="outline">{r.staff_type === 'teaching' ? 'Teaching' : 'Non-Teaching'}</Badge> },
     { key: 'status', header: 'Status', render: (r: any) => {
       switch (r.status) {
         case 'pending': return <Badge variant="secondary" className="text-blue-500 bg-blue-500/10"><Clock className="h-3 w-3 mr-1"/> Pending</Badge>;
@@ -116,14 +125,14 @@ export default function StaffInvitationsAdminPage() {
         default: return <Badge>{r.status}</Badge>;
       }
     }},
-    { key: 'dates', header: 'Dates', render: (r: any) => (
+    { key: 'dates', header: 'Dates', exportValue: () => '', render: (r: any) => (
       <div className="text-xs">
         <p>Sent: {new Date(r.created_at).toLocaleDateString('en-NG')}</p>
         {r.status === 'pending' && <p className="text-muted-foreground">Expires: {new Date(r.expires_at).toLocaleDateString('en-NG')}</p>}
         {r.status === 'accepted' && <p className="text-success">Accepted: {new Date(r.accepted_at).toLocaleDateString('en-NG')}</p>}
       </div>
     )},
-    { key: 'actions', header: '', render: (r: any) => (
+    { key: 'actions', header: '', exportable: false, exportValue: () => '', render: (r: any) => (
       <div className="flex gap-2 justify-end">
         {(r.status === 'pending' || r.status === 'expired') && (
           <>
@@ -135,18 +144,43 @@ export default function StaffInvitationsAdminPage() {
           </>
         )}
         {r.status === 'accepted' && (
-          <Button size="sm" variant="outline" onClick={() => handlePromoteToAdmin(r)}>
+          <Button size="sm" variant="outline" onClick={() => setPromoteTarget(r)}>
             <ShieldCheck className="h-4 w-4 mr-1" /> Promote to Admin
           </Button>
         )}
       </div>
     )}
-  ], [handlePromoteToAdmin, handleResend, handleRevoke, resending]);
+  ], [handleResend, handleRevoke, resending]);
 
   return (
     <div>
       <PageHeader title="Staff Invitations" description="Manage classroom invitations sent to staff" />
-      <DataTable columns={columns} data={invitations} />
+      <DataTable
+        columns={columns}
+        data={invitations}
+        searchable
+        searchPlaceholder="Search by name, email, classroom or status..."
+        pageSize={10}
+        emptyMessage={loading ? 'Loading...' : 'No invitations found'}
+      />
+
+      <Dialog open={!!promoteTarget} onOpenChange={open => { if (!open && !promoting) setPromoteTarget(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Promote to admin?</DialogTitle>
+            <DialogDescription>
+              {promoteTarget?.staff?.full_name} will get full admin access to this hub.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" disabled={promoting} onClick={() => setPromoteTarget(null)}>Cancel</Button>
+            <Button disabled={promoting} onClick={handlePromoteToAdmin}>
+              {promoting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <ShieldCheck className="h-4 w-4 mr-1" />}
+              {promoting ? 'Promoting...' : 'Promote to Admin'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -35,6 +35,7 @@ import {
   RefreshCw,
   RotateCcw,
   School,
+  Search,
   Trash2,
   UserMinus,
   UserPlus,
@@ -244,6 +245,22 @@ function ManageStudentsDialog({ cohort, classroomId, onChanged }: { cohort: any;
   const [memberRows, setMemberRows] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<'all' | 'not_added' | 'added'>('not_added');
+
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const digits = q.replace(/\D/g, '');
+    return enrolled.filter(s => {
+      const inCohort = memberRows.has(s.user_id);
+      if (filter === 'added' && !inCohort) return false;
+      if (filter === 'not_added' && inCohort) return false;
+      if (!q) return true;
+      return (s.full_name ?? '').toLowerCase().includes(q)
+        || (s.email ?? '').toLowerCase().includes(q)
+        || (digits.length >= 4 && String(s.phone ?? '').replace(/\D/g, '').includes(digits));
+    });
+  }, [enrolled, memberRows, search, filter]);
 
   const load = async () => {
     setLoading(true);
@@ -289,14 +306,46 @@ function ManageStudentsDialog({ cohort, classroomId, onChanged }: { cohort: any;
     }
   };
 
+  const FILTERS = [
+    { key: 'not_added', label: 'Not in cohort' },
+    { key: 'added', label: `In cohort (${memberRows.size}${cohort.capacity ? `/${cohort.capacity}` : ''})` },
+    { key: 'all', label: 'All' },
+  ] as const;
+
   return (
-    <div className="space-y-3 mt-2 max-h-[60vh] overflow-y-auto">
+    <div className="space-y-3 mt-2">
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          autoFocus
+          placeholder="Search by name, email or phone..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="pl-9"
+        />
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {FILTERS.map(f => (
+          <Button
+            key={f.key}
+            size="sm"
+            variant={filter === f.key ? 'default' : 'outline'}
+            className="h-7 text-xs"
+            onClick={() => setFilter(f.key)}
+          >
+            {f.label}
+          </Button>
+        ))}
+      </div>
+    <div className="space-y-3 max-h-[55vh] overflow-y-auto">
       {loading ? (
         <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
       ) : enrolled.length === 0 ? (
         <p className="text-sm text-muted-foreground text-center py-6">No classroom students available.</p>
+      ) : visible.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-6">No students match.</p>
       ) : (
-        enrolled.map(student => {
+        visible.map(student => {
           const inCohort = memberRows.has(student.user_id);
           return (
             <div key={student.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
@@ -315,6 +364,7 @@ function ManageStudentsDialog({ cohort, classroomId, onChanged }: { cohort: any;
           );
         })
       )}
+    </div>
     </div>
   );
 }

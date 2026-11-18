@@ -1,6 +1,7 @@
 // @ts-nocheck — pre-existing schema/typegen mismatch (LMS tables not in DB); unblocks build.
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { fetchPeopleNames } from '@/lib/peopleNames';
 import { useAuth } from '@/hooks/useAuth';
 import { enrichSchedules, SCHEDULE_COLUMNS } from '@/hooks/useSchedules';
 
@@ -118,32 +119,26 @@ export function useAttendanceSession(sessionId: string) {
       // A failed records query must not render as "everyone absent"
       if (recordsRes.error) throw recordsRes.error;
       const rows = recordsRes.data || [];
-      const recordStudentIds = [...new Set(rows.map((r: any) => r.student_id).filter(Boolean))];
-      const { data: recordProfiles } = recordStudentIds.length
-        ? await supabase.from('profiles').select('user_id, full_name, email').in('user_id', recordStudentIds)
-        : { data: [] };
-      const recordProfilesById = new Map((recordProfiles || []).map((p: any) => [p.user_id, p]));
-      const attended = rows.map((r: any) => ({ ...r, profiles: recordProfilesById.get(r.student_id) || null }));
-
       const session = sessionRes.data;
-      let absentStudents: any[] = [];
 
+      let enrolledRows: any[] = [];
       if (session) {
-        const attendedIds = new Set(attended.map((r: any) => r.student_id));
         const enrolledQuery = session.cohort_id
           ? supabase.from('cohort_students').select('student_id').eq('cohort_id', session.cohort_id)
           : supabase.from('classroom_students').select('student_id').eq('classroom_id', session.classroom_id);
         const { data: enrolled } = await enrolledQuery;
-        const enrolledRows = enrolled || [];
-        const enrolledIds = [...new Set(enrolledRows.map((s: any) => s.student_id).filter(Boolean))];
-        const { data: enrolledProfiles } = enrolledIds.length
-          ? await supabase.from('profiles').select('user_id, full_name, email').in('user_id', enrolledIds)
-          : { data: [] };
-        const enrolledProfilesById = new Map((enrolledProfiles || []).map((p: any) => [p.user_id, p]));
-        absentStudents = enrolledRows
-          .filter((s: any) => !attendedIds.has(s.student_id))
-          .map((s: any) => ({ ...s, profiles: enrolledProfilesById.get(s.student_id) || null }));
+        enrolledRows = enrolled || [];
       }
+
+      const names = await fetchPeopleNames(
+        [...rows.map((r: any) => r.student_id), ...enrolledRows.map((s: any) => s.student_id)],
+        { classroomId: session?.classroom_id },
+      );
+      const attended = rows.map((r: any) => ({ ...r, profiles: names.get(r.student_id) || null }));
+      const attendedIds = new Set(attended.map((r: any) => r.student_id));
+      const absentStudents = enrolledRows
+        .filter((s: any) => !attendedIds.has(s.student_id))
+        .map((s: any) => ({ ...s, profiles: names.get(s.student_id) || null }));
 
       return { records: attended, absentStudents };
     },
@@ -180,14 +175,13 @@ export function useAttendanceReport(sessionId: string) {
   const { data: records = [], isLoading: loading } = useQuery({
     queryKey: ['attendance-report', sessionId],
     queryFn: async () => {
-      const { data } = await supabase.from('attendance_records').select('id, session_id, student_id, attendance_status, marked_at, student_lat, student_lng').eq('session_id', sessionId);
+      const [{ data }, { data: session }] = await Promise.all([
+        supabase.from('attendance_records').select('id, session_id, student_id, attendance_status, marked_at, student_lat, student_lng').eq('session_id', sessionId),
+        supabase.from('attendance_sessions').select('classroom_id').eq('id', sessionId).maybeSingle(),
+      ]);
       const rows = data || [];
-      const studentIds = [...new Set(rows.map((r: any) => r.student_id).filter(Boolean))];
-      const { data: profileRows } = studentIds.length
-        ? await supabase.from('profiles').select('user_id, full_name, email').in('user_id', studentIds)
-        : { data: [] };
-      const profilesById = new Map((profileRows || []).map((p: any) => [p.user_id, p]));
-      return rows.map((r: any) => ({ ...r, profiles: profilesById.get(r.student_id) || null }));
+      const names = await fetchPeopleNames(rows.map((r: any) => r.student_id), { classroomId: session?.classroom_id });
+      return rows.map((r: any) => ({ ...r, profiles: names.get(r.student_id) || null }));
     },
     enabled: Boolean(sessionId),
   });

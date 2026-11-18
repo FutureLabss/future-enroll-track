@@ -135,16 +135,16 @@ describe('useAttendanceSession', () => {
     expect(result.current.loading).toBe(true);
   });
 
-  it('loads present records with enriched profiles', async () => {
-    // Call order: attendance_records, attendance_sessions, profiles (records), classroom_students, profiles (enrolled)
+  it('loads present records with names from the classroom roster, not profiles', async () => {
+    // Tutors can't read other users' profiles rows (RLS), so names must come from
+    // get_classroom_students. Call order: attendance_records, attendance_sessions, classroom_students
     mockFrom
       .mockReturnValueOnce(makeChain([
         { id: 'rec-1', student_id: 'stu-a', attendance_status: 'present', marked_at: '2026-06-01T10:00:00Z', lat: null },
       ]))
       .mockReturnValueOnce(makeChain({ cohort_id: null, classroom_id: 'cls-1' }))
-      .mockReturnValueOnce(makeChain([{ user_id: 'stu-a', full_name: 'Alice', email: 'alice@test.com' }]))
-      .mockReturnValueOnce(makeChain([{ student_id: 'stu-a' }]))
-      .mockReturnValueOnce(makeChain([{ user_id: 'stu-a', full_name: 'Alice', email: 'alice@test.com' }]));
+      .mockReturnValueOnce(makeChain([{ student_id: 'stu-a' }]));
+    mockRpc.mockResolvedValueOnce({ data: [{ id: 'enr-a', user_id: 'stu-a', full_name: 'Alice', email: 'alice@test.com' }], error: null });
 
     const { result } = renderHook(() => useAttendanceSession('session-1'), { wrapper: createQueryWrapper() });
 
@@ -152,6 +152,27 @@ describe('useAttendanceSession', () => {
 
     expect(result.current.records).toHaveLength(1);
     expect(result.current.records[0].attendance_status).toBe('present');
+    expect(result.current.records[0].profiles?.full_name).toBe('Alice');
+    expect(mockRpc).toHaveBeenCalledWith('get_classroom_students', { p_classroom_id: 'cls-1' });
+    expect(mockFrom.mock.calls.map(([table]: [string]) => table)).not.toContain('profiles');
+  });
+
+  it('falls back to profiles for anyone the classroom roster does not name', async () => {
+    // Call order: attendance_records, attendance_sessions, classroom_students, classroom_staff, profiles
+    mockFrom
+      .mockReturnValueOnce(makeChain([
+        { id: 'rec-1', student_id: 'stu-a', attendance_status: 'present', marked_at: '2026-06-01T10:00:00Z', lat: null },
+      ]))
+      .mockReturnValueOnce(makeChain({ cohort_id: null, classroom_id: 'cls-1' }))
+      .mockReturnValueOnce(makeChain([{ student_id: 'stu-a' }]))
+      .mockReturnValueOnce(makeChain([]))
+      .mockReturnValueOnce(makeChain([{ user_id: 'stu-a', full_name: 'Alice', email: 'alice@test.com' }]));
+    mockRpc.mockResolvedValueOnce({ data: [], error: null });
+
+    const { result } = renderHook(() => useAttendanceSession('session-1'), { wrapper: createQueryWrapper() });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
     expect(result.current.records[0].profiles?.full_name).toBe('Alice');
   });
 
@@ -162,12 +183,14 @@ describe('useAttendanceSession', () => {
         { id: 'rec-1', student_id: 'stu-a', attendance_status: 'present', marked_at: '2026-06-01T10:00:00Z', lat: null },
       ]))
       .mockReturnValueOnce(makeChain({ cohort_id: null, classroom_id: 'cls-1' }))
-      .mockReturnValueOnce(makeChain([{ user_id: 'stu-a', full_name: 'Alice', email: 'alice@test.com' }]))
-      .mockReturnValueOnce(makeChain([{ student_id: 'stu-a' }, { student_id: 'stu-b' }]))
-      .mockReturnValueOnce(makeChain([
-        { user_id: 'stu-a', full_name: 'Alice', email: 'alice@test.com' },
-        { user_id: 'stu-b', full_name: 'Bob',   email: 'bob@test.com'   },
-      ]));
+      .mockReturnValueOnce(makeChain([{ student_id: 'stu-a' }, { student_id: 'stu-b' }]));
+    mockRpc.mockResolvedValueOnce({
+      data: [
+        { id: 'enr-a', user_id: 'stu-a', full_name: 'Alice', email: 'alice@test.com' },
+        { id: 'enr-b', user_id: 'stu-b', full_name: 'Bob',   email: 'bob@test.com'   },
+      ],
+      error: null,
+    });
 
     const { result } = renderHook(() => useAttendanceSession('session-1'), { wrapper: createQueryWrapper() });
 

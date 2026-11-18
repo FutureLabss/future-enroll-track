@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,6 +14,7 @@ type Step = 'loading' | 'set-password' | 'sign-in' | 'accepting' | 'error';
 export default function AcceptInvitationPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  const { refreshRoles } = useAuth();
   const token = params.get('token') || '';
 
   // Capture invite flag before Supabase JS clears the hash
@@ -108,6 +110,7 @@ export default function AcceptInvitationPage() {
       p_user_id: userId,
     });
     if (error) { setStep('error'); setErrorMsg(error.message); return; }
+    await refreshRoles();
     if (isInviteRef.current && inv) {
       setInvitation(inv);
       setStep('set-password');

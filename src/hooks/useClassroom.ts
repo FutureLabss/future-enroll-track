@@ -19,7 +19,7 @@ export interface Classroom {
   cohorts?: { id: string; cohort_label: string; status: string }[];
 }
 
-export function useClassrooms() {
+export function useClassrooms({ enabled = true }: { enabled?: boolean } = {}) {
   const queryClient = useQueryClient();
 
   const { data: classrooms = [], isLoading: loading } = useQuery({
@@ -32,6 +32,7 @@ export function useClassrooms() {
       if (error) throw error;
       return (data as any[]) || [];
     },
+    enabled,
     staleTime: 30_000,
   });
 

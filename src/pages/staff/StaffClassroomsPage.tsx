@@ -12,7 +12,7 @@ export default function StaffClassroomsPage() {
   const { isHubManager } = useAuth();
 
   const staffResult = useStaffClassrooms();
-  const managerResult = useClassrooms();
+  const managerResult = useClassrooms({ enabled: isHubManager });
 
   const loading = isHubManager ? managerResult.loading : staffResult.loading;
 

@@ -10,7 +10,7 @@ import { Mail, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function StaffInvitationsPage() {
-  const { user } = useAuth();
+  const { user, refreshRoles } = useAuth();
   const navigate = useNavigate();
   const [invitations, setInvitations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,7 +55,7 @@ export default function StaffInvitationsPage() {
       if (error) throw error;
       toast.success('Invitation accepted!');
       fetchInvitations();
-      // Optional: navigate to classroom
+      await refreshRoles();
     } catch (e: any) {
       toast.error(e.message);
     } finally {

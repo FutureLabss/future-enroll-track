@@ -1,6 +1,7 @@
 // @ts-nocheck — pre-existing schema/typegen mismatch (LMS tables not in DB); unblocks build.
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { fetchPeopleNames } from '@/lib/peopleNames';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 
@@ -197,18 +198,17 @@ export function useSubmissions(assignmentId: string) {
   const { data: submissions = [], isLoading: loading } = useQuery({
     queryKey: ['submissions', assignmentId],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('assignment_submissions')
-        .select('*')
-        .eq('assignment_id', assignmentId)
-        .order('submitted_at', { ascending: false });
+      const [{ data }, { data: assignment }] = await Promise.all([
+        supabase
+          .from('assignment_submissions')
+          .select('*')
+          .eq('assignment_id', assignmentId)
+          .order('submitted_at', { ascending: false }),
+        supabase.from('assignments').select('classroom_id').eq('id', assignmentId).maybeSingle(),
+      ]);
       const rows = data || [];
-      const studentIds = [...new Set(rows.map((r: any) => r.student_id).filter(Boolean))];
-      const { data: profileRows } = studentIds.length
-        ? await supabase.from('profiles').select('user_id, full_name, email').in('user_id', studentIds)
-        : { data: [] };
-      const profilesById = new Map((profileRows || []).map((p: any) => [p.user_id, p]));
-      return rows.map((r: any) => ({ ...r, profiles: profilesById.get(r.student_id) || null }));
+      const names = await fetchPeopleNames(rows.map((r: any) => r.student_id), { classroomId: assignment?.classroom_id });
+      return rows.map((r: any) => ({ ...r, profiles: names.get(r.student_id) || null }));
     },
     enabled: Boolean(assignmentId),
   });

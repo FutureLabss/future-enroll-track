@@ -1,6 +1,7 @@
 // @ts-nocheck — pre-existing schema/typegen mismatch (LMS tables not in DB); unblocks build.
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { fetchPeopleNames } from '@/lib/peopleNames';
 import { useAuth } from '@/hooks/useAuth';
 import { notifySchedule } from '@/hooks/useSchedules';
 import { toast } from 'sonner';
@@ -176,12 +177,7 @@ export function usePresentationRoster(presentationId: string, cohortId: string) 
       ]);
 
       const memberRows = members || [];
-      const studentIds = memberRows.map((m: any) => m.student_id);
-      const { data: profileRows } = studentIds.length
-        ? await supabase.from('profiles').select('user_id, full_name, email').in('user_id', studentIds)
-        : { data: [] as any[] };
-
-      const profilesById = new Map((profileRows || []).map((p: any) => [p.user_id, p]));
+      const profilesById = await fetchPeopleNames(memberRows.map((m: any) => m.student_id), { cohortId });
       const gradesByStudent = new Map((grades || []).map((g: any) => [g.student_id, g]));
 
       return memberRows.map((m: any) => {

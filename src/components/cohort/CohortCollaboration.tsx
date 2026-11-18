@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { fetchPeopleNames } from '@/lib/peopleNames';
 import { untypedRpc } from '@/lib/untypedRpc';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -244,12 +245,7 @@ export function CohortAnnouncementsTab({ cohortId }: { cohortId: string }) {
         .order('pinned', { ascending: false })
         .order('created_at', { ascending: false });
       if (error) throw error;
-      const authorIds = [...new Set((data || []).map((r: any) => r.author_id).filter(Boolean))];
-      const authorMap = new Map<string, any>();
-      if (authorIds.length) {
-        const { data: profs } = await supabase.from('profiles').select('user_id, full_name, email').in('user_id', authorIds);
-        (profs || []).forEach((p: any) => authorMap.set(p.user_id, p));
-      }
+      const authorMap = await fetchPeopleNames((data || []).map((r: any) => r.author_id), { cohortId });
       return (data || []).map((r: any) => ({ ...r, author: r.author_id ? authorMap.get(r.author_id) : null }));
     },
   });
@@ -402,12 +398,7 @@ export function CohortChatTab({ cohortId }: { cohortId: string }) {
         .order('created_at', { ascending: true })
         .limit(500);
       if (error) throw error;
-      const uids = [...new Set((data || []).map((r: any) => r.user_id).filter(Boolean))];
-      const profMap = new Map<string, any>();
-      if (uids.length) {
-        const { data: profs } = await supabase.from('profiles').select('user_id, full_name, email').in('user_id', uids);
-        (profs || []).forEach((p: any) => profMap.set(p.user_id, p));
-      }
+      const profMap = await fetchPeopleNames((data || []).map((r: any) => r.user_id), { cohortId });
       return (data || []).map((r: any) => ({ ...r, author: profMap.get(r.user_id) || null }));
     },
   });

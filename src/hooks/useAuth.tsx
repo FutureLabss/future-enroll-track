@@ -33,6 +33,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
+  refreshRoles: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -48,14 +49,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [rolesReady, setRolesReady] = useState(false);
   const currentUserRef = useRef<{ id: string; email?: string } | null>(null);
+  const rolesRequestRef = useRef(0);
 
   const fetchRoles = async (userId: string) => {
+    // A slower, older fetch must not overwrite roles from a newer one (e.g. the
+    // initial load finishing after refreshRoles() picked up a just-granted role).
+    const requestId = ++rolesRequestRef.current;
     try {
       const [rolesRes, saRes, memberRes] = await Promise.all([
         supabase.from('user_roles').select('role').eq('user_id', userId),
         supabase.from('superadmins').select('user_id').eq('user_id', userId).maybeSingle(),
         supabase.from('hub_members').select('hub_id, hub_role, demo_expires_at').eq('user_id', userId).maybeSingle(),
       ]);
+      if (requestId !== rolesRequestRef.current) return;
       if (!rolesRes.error && rolesRes.data) {
         setRoles(rolesRes.data.map(r => r.role as AppRole));
       }
@@ -138,6 +144,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
   };
 
+  // Roles otherwise load only when the signed-in user changes, so a role granted
+  // mid-session (accepting a staff invitation) stays invisible until a reload.
+  const refreshRoles = async () => {
+    const userId = currentUserRef.current?.id;
+    if (userId) await fetchRoles(userId);
+  };
+
   const value = useMemo<AuthContextType>(() => ({
     user,
     session,
@@ -156,7 +169,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signIn,
     signOut,
     signUp,
-  // signIn/signOut/signUp are defined once and never change
+    refreshRoles,
+  // signIn/signOut/signUp/refreshRoles only read refs and setters, so they never go stale
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [user, session, roles, loading, rolesReady, hubId, isSuperadmin, isHubManager, demoExpiresAt]);
 

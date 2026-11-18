@@ -12,19 +12,31 @@ export default function SetPasswordPage() {
   const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const next = searchParams.get('next') || '/';
 
   useEffect(() => {
-    // Supabase processes the invite hash on mount and fires SIGNED_IN.
-    // We wait for the session before showing the form so updateUser() can run.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    // Supabase puts a failed link's error in the hash (implicit) or query (PKCE).
+    // Read it before the client clears the URL.
+    const hashParams = new URLSearchParams(window.location.hash.slice(1));
+    const queryParams = new URLSearchParams(window.location.search);
+    const urlError = hashParams.get('error_code') || hashParams.get('error') || queryParams.get('error_code') || queryParams.get('error');
+    const urlErrorDescription = hashParams.get('error_description') || queryParams.get('error_description');
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) setReady(true);
     });
-    // In case the session was already established before the listener registered.
+    // getSession() resolves only after the client has processed the link, so no
+    // session here means the link failed: without this the spinner never ends.
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) setReady(true);
+      if (session) { setReady(true); return; }
+      setLinkError(
+        urlError === 'otp_expired' || !urlErrorDescription
+          ? 'This link has expired or has already been used. Ask your admin to resend your invitation.'
+          : urlErrorDescription
+      );
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -45,6 +57,23 @@ export default function SetPasswordPage() {
       setLoading(false);
     }
   };
+
+  if (linkError && !ready) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="max-w-md text-center">
+          <h1 className="text-xl font-bold mb-2">Link no longer valid</h1>
+          <p className="text-muted-foreground mb-6">{linkError}</p>
+          <p className="text-sm text-muted-foreground mb-4">
+            Already set a password? Sign in instead.
+          </p>
+          <Button variant="outline" onClick={() => navigate('/login', { replace: true })}>
+            Go to Login
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (!ready) {
     return (

@@ -605,20 +605,28 @@ export default function ClassroomWorkspacePage() {
       .select('id, student_id')
       .eq('cohort_id', cohort.id);
     const members = rows || [];
-    const ids = members.map((r: any) => r.student_id).filter(Boolean);
-    const profilesById = new Map<string, any>();
-    if (ids.length) {
+    // Names come from get_classroom_students (SECURITY DEFINER): profiles RLS lets
+    // only hub admins read other users' rows, so tutors got blank names from it.
+    const namesById = new Map<string, { full_name: string | null; email: string | null }>();
+    students.forEach((s: any) => {
+      if (s.user_id) namesById.set(s.user_id, {
+        full_name: s.profiles?.full_name || s.full_name || null,
+        email: s.profiles?.email || s.email || null,
+      });
+    });
+    const missingIds = members.map((r: any) => r.student_id).filter((sid: string) => sid && !namesById.get(sid)?.full_name);
+    if (missingIds.length) {
       const { data: profiles } = await supabase
         .from('profiles')
         .select('user_id, full_name, email')
-        .in('user_id', ids);
-      (profiles || []).forEach((p: any) => profilesById.set(p.user_id, p));
+        .in('user_id', missingIds);
+      (profiles || []).forEach((p: any) => namesById.set(p.user_id, { full_name: p.full_name, email: p.email }));
     }
     setCohortMembers(members.map((r: any) => ({
       id: r.id,
       student_id: r.student_id,
-      full_name: profilesById.get(r.student_id)?.full_name ?? null,
-      email: profilesById.get(r.student_id)?.email ?? null,
+      full_name: namesById.get(r.student_id)?.full_name ?? null,
+      email: namesById.get(r.student_id)?.email ?? null,
     })));
     setCohortStudentsLoading(false);
   };
